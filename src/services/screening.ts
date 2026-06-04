@@ -16,11 +16,12 @@ const BLOCK_LIST = [
 	"+18888888888"
 ];
 
-export function screenPhoneNumber(phoneNumber: string): ScreeningResult {
+function calculateRiskScore(phoneNumber: string): {
+	score: number;
+	reason: string;
+} {
 	if (ALLOW_LIST.includes(phoneNumber)) {
 		return {
-			phoneNumber,
-			decision: "allow",
 			score: 0,
 			reason: "allow_list"
 		};
@@ -28,17 +29,24 @@ export function screenPhoneNumber(phoneNumber: string): ScreeningResult {
 
 	if (BLOCK_LIST.includes(phoneNumber)) {
 		return {
-			phoneNumber,
-			decision: "block",
 			score: 95,
 			reason: "block_list"
 		};
 	}
 
 	return {
-		phoneNumber,
-		decision: "allow",
 		score: 5,
 		reason: "not_found"
+	};
+}
+
+export function screenPhoneNumber(phoneNumber: string): ScreeningResult {
+	const { score, reason } = calculateRiskScore(phoneNumber);
+
+	return {
+		phoneNumber,
+		decision: score >= 80 ? "block" : "allow",
+		score,
+		reason
 	};
 }
