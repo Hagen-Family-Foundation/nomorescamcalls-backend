@@ -30,7 +30,10 @@ export default {
 
 			const phoneNumber = body.phoneNumber ?? "";
 
-			const result = screenPhoneNumber(phoneNumber);
+			const result = await screenPhoneNumber(
+				phoneNumber,
+				env.nomorescamcalls_db
+			);
 
 			return Response.json(result);
 		}
