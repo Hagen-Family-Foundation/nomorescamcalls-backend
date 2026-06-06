@@ -11,12 +11,17 @@
 		"nodejs_compat",
 		"global_fetch_strictly_public"
 	],
-	
-	
 	"observability": {
 		"enabled": true
 	},
 	"upload_source_maps": true,
+	"d1_databases": [
+		{
+			"binding": "nomorescamcalls_db",
+			"database_name": "nomorescamcalls-db",
+			"database_id": "8af912a0-f133-4731-8cc2-7d1962423dca"
+		}
+	],
 	/**
 	 * Smart Placement
 	 * https://developers.cloudflare.com/workers/configuration/smart-placement/#smart-placement
