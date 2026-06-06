@@ -1,7 +1,7 @@
 import { screenPhoneNumber } from "./services/screening";
 
 export default {
-	async fetch(request: Request): Promise<Response> {
+	async fetch(request: Request, env: Env): Promise<Response> {
 		const url = new URL(request.url);
 
 		// Health Check
@@ -11,6 +11,15 @@ export default {
 				status: "ok",
 				version: "0.1.0"
 			});
+		}
+
+		// Database Test Endpoint
+		if (request.method === "GET" && url.pathname === "/db-test") {
+			const result = await env.nomorescamcalls_db
+				.prepare("SELECT * FROM block_list")
+				.all();
+
+			return Response.json(result);
 		}
 
 		// Simple screening endpoint
