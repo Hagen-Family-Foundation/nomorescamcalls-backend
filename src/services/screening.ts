@@ -7,21 +7,23 @@ export interface ScreeningResult {
 	reason: string;
 }
 
-const ALLOW_LIST = [
-	"+19135551234"
-];
-
 export async function screenPhoneNumber(
 	phoneNumber: string,
 	db: D1Database
 ): Promise<ScreeningResult> {
+	const allowed = await db
+		.prepare(
+			"SELECT reason FROM allow_list WHERE phone_number = ?"
+		)
+		.bind(phoneNumber)
+		.first<{ reason: string }>();
 
-	if (ALLOW_LIST.includes(phoneNumber)) {
+	if (allowed) {
 		return {
 			phoneNumber,
 			decision: "allow",
 			score: 0,
-			reason: "allow_list"
+			reason: allowed.reason
 		};
 	}
 
