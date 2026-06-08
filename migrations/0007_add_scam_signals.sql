@@ -1,0 +1,8 @@
+CREATE TABLE scam_signals (
+	id INTEGER PRIMARY KEY AUTOINCREMENT,
+	caller_hash TEXT NOT NULL,
+	signal_type TEXT NOT NULL,
+	confidence REAL NOT NULL DEFAULT 1.0,
+	source TEXT NOT NULL DEFAULT 'system',
+	created_at TEXT DEFAULT CURRENT_TIMESTAMP
+);
