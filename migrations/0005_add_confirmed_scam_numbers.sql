@@ -1,0 +1,10 @@
+CREATE TABLE confirmed_scam_numbers (
+	id INTEGER PRIMARY KEY AUTOINCREMENT,
+	caller_number TEXT NOT NULL UNIQUE,
+	reason TEXT NOT NULL,
+	evidence_level TEXT NOT NULL DEFAULT 'high',
+	risk_score INTEGER NOT NULL DEFAULT 95,
+	attempt_count INTEGER NOT NULL DEFAULT 1,
+	first_seen TEXT DEFAULT CURRENT_TIMESTAMP,
+	last_seen TEXT DEFAULT CURRENT_TIMESTAMP
+);
