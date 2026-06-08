@@ -1,4 +1,5 @@
 import { screenPhoneNumber } from "./services/screening";
+import { hashPhoneNumber } from "./utils/hash";
 
 export default {
 	async fetch(request: Request, env: Env): Promise<Response> {
@@ -10,6 +11,26 @@ export default {
 				service: "nomorescamcalls",
 				status: "ok",
 				version: "0.1.0"
+			});
+		}
+
+		// Hash Test Endpoint
+		if (request.method === "GET" && url.pathname === "/hash-test") {
+			const phoneNumber = url.searchParams.get("phone") ?? "";
+
+			if (!phoneNumber) {
+				return Response.json({
+					error: "Missing phone query parameter"
+				}, {
+					status: 400
+				});
+			}
+
+			const callerHash = await hashPhoneNumber(phoneNumber);
+
+			return Response.json({
+				phoneNumber,
+				callerHash
 			});
 		}
 

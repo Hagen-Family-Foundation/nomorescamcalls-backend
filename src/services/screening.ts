@@ -1,3 +1,5 @@
+import { updateCallerReputation } from "./reputation";
+
 export type ScreeningDecision = "allow" | "block";
 
 export interface ScreeningResult {
@@ -5,6 +7,11 @@ export interface ScreeningResult {
 	decision: ScreeningDecision;
 	score: number;
 	reason: string;
+	reputation?: {
+		status: string;
+		riskScore: number;
+		attemptCount: number;
+	};
 }
 
 export async function screenPhoneNumber(
@@ -43,10 +50,17 @@ export async function screenPhoneNumber(
 		};
 	}
 
+	const reputation = await updateCallerReputation(phoneNumber, db);
+
 	return {
 		phoneNumber,
 		decision: "allow",
 		score: 5,
-		reason: "not_found"
+		reason: "not_found",
+		reputation: {
+			status: reputation.status,
+			riskScore: reputation.riskScore,
+			attemptCount: reputation.attemptCount
+		}
 	};
 }
