@@ -1,4 +1,5 @@
 import { screenPhoneNumber } from "./services/screening";
+import { recordScamSignal } from "./services/signals";
 import { hashPhoneNumber } from "./utils/hash";
 
 export default {
@@ -57,6 +58,45 @@ export default {
 			);
 
 			return Response.json(result);
+		}
+
+		// Scam Signal Endpoint
+		if (request.method === "POST" && url.pathname === "/signal") {
+			const body = await request.json() as {
+				phoneNumber?: string;
+				signalType?: string;
+				confidence?: number;
+				source?: string;
+			};
+
+			const phoneNumber = body.phoneNumber ?? "";
+			const signalType = body.signalType ?? "";
+			const confidence = body.confidence ?? 1.0;
+			const source = body.source ?? "manual_test";
+
+			if (!phoneNumber || !signalType) {
+				return Response.json({
+					error: "phoneNumber and signalType are required"
+				}, {
+					status: 400
+				});
+			}
+
+			await recordScamSignal(
+				env.nomorescamcalls_db,
+				phoneNumber,
+				signalType,
+				confidence,
+				source
+			);
+
+			return Response.json({
+				received: true,
+				phoneNumber,
+				signalType,
+				confidence,
+				source
+			});
 		}
 
 		// Telnyx webhook endpoint
