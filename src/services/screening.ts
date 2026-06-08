@@ -52,11 +52,15 @@ export async function screenPhoneNumber(
 
 	const reputation = await updateCallerReputation(phoneNumber, db);
 
+	const reason = reputation.status === "watchlist"
+		? "reputation_watchlist"
+		: "not_found";
+
 	return {
 		phoneNumber,
 		decision: "allow",
-		score: 5,
-		reason: "not_found",
+		score: reputation.riskScore,
+		reason,
 		reputation: {
 			status: reputation.status,
 			riskScore: reputation.riskScore,
