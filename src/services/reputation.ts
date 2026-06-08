@@ -7,6 +7,37 @@ export interface ReputationResult {
 	attemptCount: number;
 }
 
+function calculateReputationScore(attemptCount: number): {
+	status: string;
+	riskScore: number;
+} {
+	if (attemptCount >= 10) {
+		return {
+			status: "watchlist",
+			riskScore: 55
+		};
+	}
+
+	if (attemptCount >= 6) {
+		return {
+			status: "watchlist",
+			riskScore: 35
+		};
+	}
+
+	if (attemptCount >= 3) {
+		return {
+			status: "unknown",
+			riskScore: 15
+		};
+	}
+
+	return {
+		status: "unknown",
+		riskScore: 0
+	};
+}
+
 export async function updateCallerReputation(
 	phoneNumber: string,
 	db: D1Database
@@ -27,33 +58,45 @@ export async function updateCallerReputation(
 
 	if (existing) {
 		const newAttemptCount = existing.attempt_count + 1;
+		const reputation = calculateReputationScore(newAttemptCount);
 
 		await db
 			.prepare(
-				"UPDATE caller_reputation SET attempt_count = ?, last_seen = CURRENT_TIMESTAMP WHERE caller_hash = ?"
+				"UPDATE caller_reputation SET attempt_count = ?, status = ?, risk_score = ?, last_seen = CURRENT_TIMESTAMP WHERE caller_hash = ?"
 			)
-			.bind(newAttemptCount, callerHash)
+			.bind(
+				newAttemptCount,
+				reputation.status,
+				reputation.riskScore,
+				callerHash
+			)
 			.run();
 
 		return {
 			callerHash,
-			status: existing.status,
-			riskScore: existing.risk_score,
+			status: reputation.status,
+			riskScore: reputation.riskScore,
 			attemptCount: newAttemptCount
 		};
 	}
 
+	const reputation = calculateReputationScore(1);
+
 	await db
 		.prepare(
-			"INSERT INTO caller_reputation (caller_hash, status, risk_score, attempt_count) VALUES (?, 'unknown', 0, 1)"
+			"INSERT INTO caller_reputation (caller_hash, status, risk_score, attempt_count) VALUES (?, ?, ?, 1)"
 		)
-		.bind(callerHash)
+		.bind(
+			callerHash,
+			reputation.status,
+			reputation.riskScore
+		)
 		.run();
 
 	return {
 		callerHash,
-		status: "unknown",
-		riskScore: 0,
+		status: reputation.status,
+		riskScore: reputation.riskScore,
 		attemptCount: 1
 	};
 }
