@@ -1,0 +1,9 @@
+CREATE TABLE call_events (
+	id INTEGER PRIMARY KEY AUTOINCREMENT,
+	user_id INTEGER,
+	caller_hash TEXT NOT NULL,
+	decision TEXT NOT NULL,
+	score INTEGER NOT NULL,
+	reason TEXT NOT NULL,
+	created_at TEXT DEFAULT CURRENT_TIMESTAMP
+);

@@ -1,4 +1,6 @@
+import { recordCallEvent } from "./events";
 import { updateCallerReputation } from "./reputation";
+import { hashPhoneNumber } from "../utils/hash";
 
 export type ScreeningDecision = "allow" | "block";
 
@@ -18,6 +20,8 @@ export async function screenPhoneNumber(
 	phoneNumber: string,
 	db: D1Database
 ): Promise<ScreeningResult> {
+	const callerHash = await hashPhoneNumber(phoneNumber);
+
 	const allowed = await db
 		.prepare(
 			"SELECT reason FROM allow_list WHERE phone_number = ?"
@@ -26,12 +30,22 @@ export async function screenPhoneNumber(
 		.first<{ reason: string }>();
 
 	if (allowed) {
-		return {
+		const result: ScreeningResult = {
 			phoneNumber,
 			decision: "allow",
 			score: 0,
 			reason: allowed.reason
 		};
+
+		await recordCallEvent(
+			db,
+			callerHash,
+			result.decision,
+			result.score,
+			result.reason
+		);
+
+		return result;
 	}
 
 	const blocked = await db
@@ -42,12 +56,22 @@ export async function screenPhoneNumber(
 		.first<{ reason: string }>();
 
 	if (blocked) {
-		return {
+		const result: ScreeningResult = {
 			phoneNumber,
 			decision: "block",
 			score: 95,
 			reason: blocked.reason
 		};
+
+		await recordCallEvent(
+			db,
+			callerHash,
+			result.decision,
+			result.score,
+			result.reason
+		);
+
+		return result;
 	}
 
 	const reputation = await updateCallerReputation(phoneNumber, db);
@@ -56,7 +80,7 @@ export async function screenPhoneNumber(
 		? "reputation_watchlist"
 		: "not_found";
 
-	return {
+	const result: ScreeningResult = {
 		phoneNumber,
 		decision: "allow",
 		score: reputation.riskScore,
@@ -67,4 +91,14 @@ export async function screenPhoneNumber(
 			attemptCount: reputation.attemptCount
 		}
 	};
+
+	await recordCallEvent(
+		db,
+		callerHash,
+		result.decision,
+		result.score,
+		result.reason
+	);
+
+	return result;
 }
