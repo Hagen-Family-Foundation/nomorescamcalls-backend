@@ -1,3 +1,4 @@
+import { decideAction, type ScreeningAction } from "./decision";
 import { recordCallEvent } from "./events";
 import { updateCallerReputation } from "./reputation";
 import { hashPhoneNumber } from "../utils/hash";
@@ -7,8 +8,10 @@ export type ScreeningDecision = "allow" | "block";
 export interface ScreeningResult {
 	phoneNumber: string;
 	decision: ScreeningDecision;
+	action: ScreeningAction;
 	score: number;
 	reason: string;
+	actionReason: string;
 	reputation?: {
 		status: string;
 		riskScore: number;
@@ -32,11 +35,15 @@ export async function screenPhoneNumber(
 		.first<{ reason: string }>();
 
 	if (allowed) {
+		const action = decideAction(0);
+
 		const result: ScreeningResult = {
 			phoneNumber,
 			decision: "allow",
+			action: action.action,
 			score: 0,
-			reason: allowed.reason
+			reason: allowed.reason,
+			actionReason: action.reason
 		};
 
 		await recordCallEvent(
@@ -58,11 +65,15 @@ export async function screenPhoneNumber(
 		.first<{ reason: string }>();
 
 	if (blocked) {
+		const action = decideAction(95);
+
 		const result: ScreeningResult = {
 			phoneNumber,
 			decision: "block",
+			action: action.action,
 			score: 95,
-			reason: blocked.reason
+			reason: blocked.reason,
+			actionReason: action.reason
 		};
 
 		await recordCallEvent(
@@ -82,11 +93,15 @@ export async function screenPhoneNumber(
 		? "reputation_watchlist"
 		: "not_found";
 
+	const action = decideAction(reputation.riskScore);
+
 	const result: ScreeningResult = {
 		phoneNumber,
-		decision: "allow",
+		decision: action.action === "block" ? "block" : "allow",
+		action: action.action,
 		score: reputation.riskScore,
 		reason,
+		actionReason: action.reason,
 		reputation: {
 			status: reputation.status,
 			riskScore: reputation.riskScore,
