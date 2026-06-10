@@ -3,6 +3,7 @@ import { recordScamSignal } from "./services/signals";
 import { planTelnyxAction } from "./services/telnyxActions";
 import { normalizeTelnyxEvent } from "./services/telnyxEvents";
 import { planTelnyxCommand } from "./services/telnyxCommands";
+import { recordTelnyxWebhookEvent } from "./services/telnyxAudit";
 import { hashPhoneNumber } from "./utils/hash";
 
 export default {
@@ -156,6 +157,13 @@ export default {
 			const plannedTelnyxCommand = planTelnyxCommand(
 				telnyxEvent,
 				plannedTelnyxAction
+			);
+
+			await recordTelnyxWebhookEvent(
+				env.nomorescamcalls_db,
+				telnyxEvent,
+				plannedTelnyxAction.action,
+				plannedTelnyxCommand.command
 			);
 
 			return Response.json({
