@@ -1,23 +1,8 @@
 import { screenPhoneNumber } from "./services/screening";
 import { recordScamSignal } from "./services/signals";
 import { planTelnyxAction } from "./services/telnyxActions";
+import { normalizeTelnyxEvent } from "./services/telnyxEvents";
 import { hashPhoneNumber } from "./utils/hash";
-
-function extractTelnyxCallerNumber(payload: unknown): string {
-	const data = payload as {
-		data?: {
-			event_type?: string;
-			payload?: {
-				from?: string;
-				to?: string;
-				call_control_id?: string;
-				call_session_id?: string;
-			};
-		};
-	};
-
-	return data.data?.payload?.from ?? "";
-}
 
 export default {
 	async fetch(request: Request, env: Env): Promise<Response> {
@@ -150,7 +135,8 @@ export default {
 
 			console.log("TELNYX WEBHOOK:", JSON.stringify(payload));
 
-			const callerNumber = extractTelnyxCallerNumber(payload);
+			const telnyxEvent = normalizeTelnyxEvent(payload);
+			const callerNumber = telnyxEvent.from;
 
 			if (!callerNumber) {
 				return Response.json({
@@ -171,6 +157,7 @@ export default {
 				received: true,
 				screened: true,
 				callerNumber,
+				telnyxEvent,
 				screening,
 				plannedTelnyxAction
 			});
