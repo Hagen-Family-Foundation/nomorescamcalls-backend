@@ -4,8 +4,9 @@ export interface ReputationResult {
 	callerHash: string;
 	status: string;
 	riskScore: number;
-	attemptCount: number;
+	behaviorScore: number;
 	signalScore: number;
+	attemptCount: number;
 }
 
 function calculateBehaviorScore(attemptCount: number): number {
@@ -113,8 +114,9 @@ export async function updateCallerReputation(
 			callerHash,
 			status,
 			riskScore,
-			attemptCount: newAttemptCount,
-			signalScore
+			behaviorScore,
+			signalScore,
+			attemptCount: newAttemptCount
 		};
 	}
 
@@ -138,7 +140,8 @@ export async function updateCallerReputation(
 		callerHash,
 		status,
 		riskScore,
-		attemptCount: 1,
-		signalScore
+		behaviorScore,
+		signalScore,
+		attemptCount: 1
 	};
 }

@@ -12,6 +12,7 @@ export interface ScreeningResult {
 	reputation?: {
 		status: string;
 		riskScore: number;
+		behaviorScore: number;
 		signalScore: number;
 		attemptCount: number;
 	};
@@ -89,6 +90,7 @@ export async function screenPhoneNumber(
 		reputation: {
 			status: reputation.status,
 			riskScore: reputation.riskScore,
+			behaviorScore: reputation.behaviorScore,
 			signalScore: reputation.signalScore,
 			attemptCount: reputation.attemptCount
 		}
