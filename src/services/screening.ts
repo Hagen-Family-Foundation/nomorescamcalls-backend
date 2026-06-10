@@ -1,3 +1,4 @@
+import { getChallengeProfile, type ChallengeProfile } from "./challenges";
 import { decideAction, type ScreeningAction } from "./decision";
 import { recordCallEvent } from "./events";
 import { updateCallerReputation } from "./reputation";
@@ -12,6 +13,7 @@ export interface ScreeningResult {
 	score: number;
 	reason: string;
 	actionReason: string;
+	challengeProfile?: ChallengeProfile;
 	reputation?: {
 		status: string;
 		riskScore: number;
@@ -110,6 +112,10 @@ export async function screenPhoneNumber(
 			attemptCount: reputation.attemptCount
 		}
 	};
+
+	if (action.action === "challenge") {
+		result.challengeProfile = getChallengeProfile(reputation.riskScore);
+	}
 
 	await recordCallEvent(
 		db,
