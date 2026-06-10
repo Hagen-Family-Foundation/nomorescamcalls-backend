@@ -2,6 +2,7 @@ import { screenPhoneNumber } from "./services/screening";
 import { recordScamSignal } from "./services/signals";
 import { planTelnyxAction } from "./services/telnyxActions";
 import { normalizeTelnyxEvent } from "./services/telnyxEvents";
+import { planTelnyxCommand } from "./services/telnyxCommands";
 import { hashPhoneNumber } from "./utils/hash";
 
 export default {
@@ -152,6 +153,10 @@ export default {
 			);
 
 			const plannedTelnyxAction = planTelnyxAction(screening.action);
+			const plannedTelnyxCommand = planTelnyxCommand(
+				telnyxEvent,
+				plannedTelnyxAction
+			);
 
 			return Response.json({
 				received: true,
@@ -159,7 +164,8 @@ export default {
 				callerNumber,
 				telnyxEvent,
 				screening,
-				plannedTelnyxAction
+				plannedTelnyxAction,
+				plannedTelnyxCommand
 			});
 		}
 
