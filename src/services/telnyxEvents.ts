@@ -27,3 +27,8 @@ export function normalizeTelnyxEvent(payload: unknown): TelnyxCallEvent {
 		to: data.data?.payload?.to ?? ""
 	};
 }
+
+
+export function shouldScreenTelnyxEvent(event: TelnyxCallEvent): boolean {
+	return event.eventType === "call.initiated";
+}

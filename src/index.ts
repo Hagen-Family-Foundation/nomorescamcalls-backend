@@ -1,7 +1,7 @@
 import { screenPhoneNumber } from "./services/screening";
 import { recordScamSignal } from "./services/signals";
 import { planTelnyxAction } from "./services/telnyxActions";
-import { normalizeTelnyxEvent } from "./services/telnyxEvents";
+import { normalizeTelnyxEvent, shouldScreenTelnyxEvent } from "./services/telnyxEvents";
 import { planTelnyxCommand } from "./services/telnyxCommands";
 import { recordTelnyxWebhookEvent } from "./services/telnyxAudit";
 import { hashPhoneNumber } from "./utils/hash";
@@ -139,6 +139,22 @@ export default {
 
 			const telnyxEvent = normalizeTelnyxEvent(payload);
 			const callerNumber = telnyxEvent.from;
+
+			if (!shouldScreenTelnyxEvent(telnyxEvent)) {
+				await recordTelnyxWebhookEvent(
+					env.nomorescamcalls_db,
+					telnyxEvent,
+					"none",
+					"noop"
+				);
+
+				return Response.json({
+					received: true,
+					screened: false,
+					reason: "event_type_not_screened",
+					telnyxEvent
+				});
+			}
 
 			if (!callerNumber) {
 				return Response.json({
