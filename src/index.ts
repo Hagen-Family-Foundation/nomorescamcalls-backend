@@ -1,5 +1,6 @@
 import { screenPhoneNumber } from "./services/screening";
 import { recordScamSignal } from "./services/signals";
+import { planTelnyxAction } from "./services/telnyxActions";
 import { hashPhoneNumber } from "./utils/hash";
 
 function extractTelnyxCallerNumber(payload: unknown): string {
@@ -164,11 +165,14 @@ export default {
 				env.nomorescamcalls_db
 			);
 
+			const plannedTelnyxAction = planTelnyxAction(screening.action);
+
 			return Response.json({
 				received: true,
 				screened: true,
 				callerNumber,
-				screening
+				screening,
+				plannedTelnyxAction
 			});
 		}
 
