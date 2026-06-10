@@ -4,6 +4,7 @@ import { planTelnyxAction } from "./services/telnyxActions";
 import { normalizeTelnyxEvent, shouldScreenTelnyxEvent } from "./services/telnyxEvents";
 import { planTelnyxCommand } from "./services/telnyxCommands";
 import { recordTelnyxWebhookEvent } from "./services/telnyxAudit";
+import { planChallengePrompt } from "./services/challengePrompts";
 import { hashPhoneNumber } from "./utils/hash";
 
 export default {
@@ -174,6 +175,9 @@ export default {
 				telnyxEvent,
 				plannedTelnyxAction
 			);
+			const plannedChallengePrompt = planChallengePrompt(
+				screening.challengeProfile
+			);
 
 			await recordTelnyxWebhookEvent(
 				env.nomorescamcalls_db,
@@ -189,7 +193,8 @@ export default {
 				telnyxEvent,
 				screening,
 				plannedTelnyxAction,
-				plannedTelnyxCommand
+				plannedTelnyxCommand,
+				plannedChallengePrompt
 			});
 		}
 
