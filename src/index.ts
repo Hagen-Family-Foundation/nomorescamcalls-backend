@@ -35,6 +35,34 @@ export default {
 			});
 		}
 
+		// Signal Summary Endpoint
+		if (request.method === "GET" && url.pathname === "/signals") {
+			const phoneNumber = url.searchParams.get("phone") ?? "";
+
+			if (!phoneNumber) {
+				return Response.json({
+					error: "Missing phone query parameter"
+				}, {
+					status: 400
+				});
+			}
+
+			const callerHash = await hashPhoneNumber(phoneNumber);
+
+			const signals = await env.nomorescamcalls_db
+				.prepare(
+					"SELECT signal_type, confidence, source, created_at FROM scam_signals WHERE caller_hash = ? ORDER BY created_at DESC"
+				)
+				.bind(callerHash)
+				.all();
+
+			return Response.json({
+				phoneNumber,
+				callerHash,
+				signals: signals.results
+			});
+		}
+
 		// Database Test Endpoint
 		if (request.method === "GET" && url.pathname === "/db-test") {
 			const result = await env.nomorescamcalls_db
