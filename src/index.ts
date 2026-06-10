@@ -2,6 +2,22 @@ import { screenPhoneNumber } from "./services/screening";
 import { recordScamSignal } from "./services/signals";
 import { hashPhoneNumber } from "./utils/hash";
 
+function extractTelnyxCallerNumber(payload: unknown): string {
+	const data = payload as {
+		data?: {
+			event_type?: string;
+			payload?: {
+				from?: string;
+				to?: string;
+				call_control_id?: string;
+				call_session_id?: string;
+			};
+		};
+	};
+
+	return data.data?.payload?.from ?? "";
+}
+
 export default {
 	async fetch(request: Request, env: Env): Promise<Response> {
 		const url = new URL(request.url);
@@ -133,8 +149,26 @@ export default {
 
 			console.log("TELNYX WEBHOOK:", JSON.stringify(payload));
 
+			const callerNumber = extractTelnyxCallerNumber(payload);
+
+			if (!callerNumber) {
+				return Response.json({
+					received: true,
+					screened: false,
+					reason: "missing_caller_number"
+				});
+			}
+
+			const screening = await screenPhoneNumber(
+				callerNumber,
+				env.nomorescamcalls_db
+			);
+
 			return Response.json({
-				received: true
+				received: true,
+				screened: true,
+				callerNumber,
+				screening
 			});
 		}
 
