@@ -6,6 +6,7 @@ export interface ChallengePromptPlan {
 	mode: "simulated";
 	type: ChallengePromptType;
 	prompt: string;
+	profilePrompts: string[];
 	expectedInput: string;
 	maxAttempts: number;
 	timeoutSeconds: number;
@@ -24,6 +25,7 @@ export function planChallengePrompt(
 			mode: "simulated",
 			type: "strict_verification",
 			prompt: "Please press 5 to complete your call.",
+			profilePrompts: challengeProfile.prompts,
 			expectedInput: "5",
 			maxAttempts: 1,
 			timeoutSeconds: 6,
@@ -36,6 +38,7 @@ export function planChallengePrompt(
 			mode: "simulated",
 			type: "dtmf_press_with_retry",
 			prompt: "Please press 5 to continue.",
+			profilePrompts: challengeProfile.prompts,
 			expectedInput: "5",
 			maxAttempts: 2,
 			timeoutSeconds: 6,
@@ -47,6 +50,7 @@ export function planChallengePrompt(
 		mode: "simulated",
 		type: "dtmf_press",
 		prompt: "Please press 5 to continue.",
+		profilePrompts: challengeProfile.prompts,
 		expectedInput: "5",
 		maxAttempts: 1,
 		timeoutSeconds: 5,
