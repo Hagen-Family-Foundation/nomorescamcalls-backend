@@ -1,13 +1,7 @@
 import { screenPhoneNumber } from "./services/screening";
 import { recordScamSignal } from "./services/signals";
-import { planTelnyxAction } from "./services/telnyxActions";
-import { normalizeTelnyxEvent, shouldScreenTelnyxEvent } from "./services/telnyxEvents";
-import { planTelnyxCommand } from "./services/telnyxCommands";
-import { recordTelnyxWebhookEvent } from "./services/telnyxAudit";
-import { planChallengePrompt } from "./services/challengePrompts";
-import { buildTelnyxRequest } from "./services/telnyxRequests";
-import { executeTelnyxRequest } from "./services/telnyxExecutor";
 import { hashPhoneNumber } from "./utils/hash";
+import { handleTelnyxWebhook } from "./services/telnyxWebhookHandler";
 
 export default {
 	async fetch(request: Request, env: Env): Promise<Response> {
@@ -138,75 +132,10 @@ export default {
 		if (request.method === "POST" && url.pathname === "/webhooks/telnyx") {
 			const payload = await request.json();
 
-			console.log("TELNYX WEBHOOK:", JSON.stringify(payload));
-
-			const telnyxEvent = normalizeTelnyxEvent(payload);
-			const callerNumber = telnyxEvent.from;
-
-			if (!shouldScreenTelnyxEvent(telnyxEvent)) {
-				await recordTelnyxWebhookEvent(
-					env.nomorescamcalls_db,
-					telnyxEvent,
-					"none",
-					"noop"
-				);
-
-				return Response.json({
-					received: true,
-					screened: false,
-					reason: "event_type_not_screened",
-					telnyxEvent
-				});
-			}
-
-			if (!callerNumber) {
-				return Response.json({
-					received: true,
-					screened: false,
-					reason: "missing_caller_number"
-				});
-			}
-
-			const screening = await screenPhoneNumber(
-				callerNumber,
+			return handleTelnyxWebhook(
+				payload,
 				env.nomorescamcalls_db
 			);
-
-			const plannedTelnyxAction = planTelnyxAction(screening.action);
-			const plannedTelnyxCommand = planTelnyxCommand(
-				telnyxEvent,
-				plannedTelnyxAction
-			);
-			const plannedChallengePrompt = planChallengePrompt(
-				screening.challengeProfile
-			);
-			const simulatedTelnyxRequest = buildTelnyxRequest(
-				plannedTelnyxCommand,
-				plannedChallengePrompt
-			);
-			const telnyxExecution = await executeTelnyxRequest(
-				simulatedTelnyxRequest
-			);
-
-			await recordTelnyxWebhookEvent(
-				env.nomorescamcalls_db,
-				telnyxEvent,
-				plannedTelnyxAction.action,
-				plannedTelnyxCommand.command
-			);
-
-			return Response.json({
-				received: true,
-				screened: true,
-				callerNumber,
-				telnyxEvent,
-				screening,
-				plannedTelnyxAction,
-				plannedTelnyxCommand,
-				plannedChallengePrompt,
-				simulatedTelnyxRequest,
-				telnyxExecution
-			});
 		}
 
 		return new Response("Not Found", {
