@@ -163,4 +163,20 @@ describe("NoMoreScamCalls Worker", () => {
 		expect(body.telnyxExecution.mode).toBe("disabled");
 		expect(body.telnyxExecution.executed).toBe(false);
 	});
+	it("returns recent Telnyx audit events", async () => {
+		const response = await SELF.fetch("http://example.com/audit/telnyx?limit=5");
+
+		expect(response.status).toBe(200);
+
+		const body = await response.json<{
+			events: Array<{
+				event_type: string;
+				planned_action: string | null;
+				planned_command: string | null;
+			}>;
+		}>();
+
+		expect(Array.isArray(body.events)).toBe(true);
+	});
+
 });

@@ -2,6 +2,7 @@ import { screenPhoneNumber } from "./services/screening";
 import { recordScamSignal } from "./services/signals";
 import { hashPhoneNumber } from "./utils/hash";
 import { handleTelnyxWebhook } from "./services/telnyxWebhookHandler";
+import { listRecentTelnyxWebhookEvents } from "./services/telnyxAudit";
 
 export default {
 	async fetch(request: Request, env: Env): Promise<Response> {
@@ -125,6 +126,19 @@ export default {
 				signalType,
 				confidence,
 				source
+			});
+		}
+
+		// Telnyx Audit Endpoint
+		if (request.method === "GET" && url.pathname === "/audit/telnyx") {
+			const limit = Number(url.searchParams.get("limit") ?? "25");
+			const events = await listRecentTelnyxWebhookEvents(
+				env.nomorescamcalls_db,
+				limit
+			);
+
+			return Response.json({
+				events
 			});
 		}
 
