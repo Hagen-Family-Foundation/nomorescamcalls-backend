@@ -4,6 +4,8 @@ import { recordCallEvent } from "./events";
 import { updateCallerReputation } from "./reputation";
 import { hashPhoneNumber } from "../utils/hash";
 import { findConfirmedScamNumber } from "./confirmedScams";
+import { decideScamPromotion } from "./scamPromotionRules";
+import { promoteConfirmedScamNumber } from "./scamPromotion";
 
 export type ScreeningDecision = "allow" | "block";
 
@@ -123,6 +125,20 @@ export async function screenPhoneNumber(
 	const reason = reputation.status === "watchlist"
 		? "reputation_watchlist"
 		: "not_found";
+
+	const promotion = decideScamPromotion(reputation);
+
+	if (promotion.shouldPromote) {
+		await promoteConfirmedScamNumber(
+			db,
+			{
+				phoneNumber,
+				reason: promotion.reason,
+				evidenceLevel: promotion.evidenceLevel,
+				riskScore: promotion.riskScore
+			}
+		);
+	}
 
 	const action = decideAction(reputation.riskScore);
 
