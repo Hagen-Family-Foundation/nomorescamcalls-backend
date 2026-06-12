@@ -3,13 +3,15 @@ export async function recordCallEvent(
 	callerHash: string,
 	decision: string,
 	score: number,
-	reason: string
+	reason: string,
+	userId: number | null = null
 ): Promise<void> {
 	await db
 		.prepare(
-			"INSERT INTO call_events (caller_hash, decision, score, reason) VALUES (?, ?, ?, ?)"
+			"INSERT INTO call_events (user_id, caller_hash, decision, score, reason) VALUES (?, ?, ?, ?, ?)"
 		)
 		.bind(
+			userId,
 			callerHash,
 			decision,
 			score,

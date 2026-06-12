@@ -57,7 +57,8 @@ export async function screenPhoneNumber(
 			callerHash,
 			result.decision,
 			result.score,
-			result.reason
+			result.reason,
+			userId
 		);
 
 		return result;
@@ -85,7 +86,8 @@ export async function screenPhoneNumber(
 			callerHash,
 			result.decision,
 			result.score,
-			result.reason
+			result.reason,
+			userId
 		);
 
 		return result;
@@ -115,7 +117,8 @@ export async function screenPhoneNumber(
 			callerHash,
 			result.decision,
 			result.score,
-			result.reason
+			result.reason,
+			userId
 		);
 
 		return result;
@@ -168,7 +171,8 @@ export async function screenPhoneNumber(
 		callerHash,
 		result.decision,
 		result.score,
-		result.reason
+		result.reason,
+		userId
 	);
 
 	return result;
