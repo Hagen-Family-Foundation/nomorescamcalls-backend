@@ -178,6 +178,97 @@ describe("NoMoreScamCalls Worker", () => {
 		expect(body.telnyxExecution.mode).toBe("disabled");
 		expect(body.telnyxExecution.executed).toBe(false);
 	});
+	it("adds and lists allow-list entries", async () => {
+		const addResponse = await SELF.fetch("http://example.com/allow-list/add", {
+			method: "POST",
+			headers: {
+				"content-type": "application/json"
+			},
+			body: JSON.stringify({
+				phoneNumber: "+18165550100",
+				reason: "family_member"
+			})
+		});
+
+		expect(addResponse.status).toBe(200);
+
+		const addBody = await addResponse.json<{
+			added: boolean;
+			list: string;
+			phoneNumber: string;
+			reason: string;
+		}>();
+
+		expect(addBody.added).toBe(true);
+		expect(addBody.list).toBe("allow");
+		expect(addBody.phoneNumber).toBe("+18165550100");
+		expect(addBody.reason).toBe("family_member");
+
+		const listResponse = await SELF.fetch("http://example.com/allow-list?limit=5");
+
+		expect(listResponse.status).toBe(200);
+
+		const listBody = await listResponse.json<{
+			entries: Array<{
+				phone_number: string;
+				reason: string;
+			}>;
+		}>();
+
+		expect(Array.isArray(listBody.entries)).toBe(true);
+		expect(listBody.entries.some((entry) => entry.phone_number === "+18165550100")).toBe(true);
+	});
+
+	it("adds, lists, and removes block-list entries", async () => {
+		const addResponse = await SELF.fetch("http://example.com/block-list/add", {
+			method: "POST",
+			headers: {
+				"content-type": "application/json"
+			},
+			body: JSON.stringify({
+				phoneNumber: "+18165550200",
+				reason: "unwanted_business"
+			})
+		});
+
+		expect(addResponse.status).toBe(200);
+
+		const listResponse = await SELF.fetch("http://example.com/block-list?limit=5");
+
+		expect(listResponse.status).toBe(200);
+
+		const listBody = await listResponse.json<{
+			entries: Array<{
+				phone_number: string;
+				reason: string;
+			}>;
+		}>();
+
+		expect(listBody.entries.some((entry) => entry.phone_number === "+18165550200")).toBe(true);
+
+		const removeResponse = await SELF.fetch("http://example.com/block-list/remove", {
+			method: "POST",
+			headers: {
+				"content-type": "application/json"
+			},
+			body: JSON.stringify({
+				phoneNumber: "+18165550200"
+			})
+		});
+
+		expect(removeResponse.status).toBe(200);
+
+		const removeBody = await removeResponse.json<{
+			removed: boolean;
+			list: string;
+			phoneNumber: string;
+		}>();
+
+		expect(removeBody.removed).toBe(true);
+		expect(removeBody.list).toBe("block");
+		expect(removeBody.phoneNumber).toBe("+18165550200");
+	});
+
 	it("returns caller intelligence", async () => {
 		const response = await SELF.fetch("http://example.com/caller?phone=%2B18165551234");
 

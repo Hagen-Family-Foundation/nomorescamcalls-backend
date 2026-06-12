@@ -7,6 +7,7 @@ import { verifyTelnyxWebhook } from "./services/telnyxSecurity";
 import { listConfirmedScamNumbers, removeConfirmedScamNumber } from "./services/confirmedScams";
 import { promoteConfirmedScamNumber } from "./services/scamPromotion";
 import { getCallerIntelligence } from "./services/callerLookup";
+import { addCallerListEntry, listCallerListEntries, removeCallerListEntry } from "./services/callerLists";
 
 export default {
 	async fetch(request: Request, env: Env): Promise<Response> {
@@ -130,6 +131,129 @@ export default {
 				signalType,
 				confidence,
 				source
+			});
+		}
+
+		// Allow List Endpoint
+		if (request.method === "GET" && url.pathname === "/allow-list") {
+			const limit = Number(url.searchParams.get("limit") ?? "25");
+			const entries = await listCallerListEntries(
+				env.nomorescamcalls_db,
+				"allow",
+				limit
+			);
+
+			return Response.json({
+				entries
+			});
+		}
+
+		// Add Allow List Entry Endpoint
+		if (request.method === "POST" && url.pathname === "/allow-list/add") {
+			const body = await request.json() as {
+				phoneNumber?: string;
+				reason?: string;
+			};
+
+			const phoneNumber = body.phoneNumber ?? "";
+			const reason = body.reason ?? "manual_allow";
+
+			if (!phoneNumber) {
+				return Response.json({
+					error: "phoneNumber is required"
+				}, {
+					status: 400
+				});
+			}
+
+			await addCallerListEntry(
+				env.nomorescamcalls_db,
+				"allow",
+				phoneNumber,
+				reason
+			);
+
+			return Response.json({
+				added: true,
+				list: "allow",
+				phoneNumber,
+				reason
+			});
+		}
+
+		// Block List Endpoint
+		if (request.method === "GET" && url.pathname === "/block-list") {
+			const limit = Number(url.searchParams.get("limit") ?? "25");
+			const entries = await listCallerListEntries(
+				env.nomorescamcalls_db,
+				"block",
+				limit
+			);
+
+			return Response.json({
+				entries
+			});
+		}
+
+		// Add Block List Entry Endpoint
+		if (request.method === "POST" && url.pathname === "/block-list/add") {
+			const body = await request.json() as {
+				phoneNumber?: string;
+				reason?: string;
+			};
+
+			const phoneNumber = body.phoneNumber ?? "";
+			const reason = body.reason ?? "manual_block";
+
+			if (!phoneNumber) {
+				return Response.json({
+					error: "phoneNumber is required"
+				}, {
+					status: 400
+				});
+			}
+
+			await addCallerListEntry(
+				env.nomorescamcalls_db,
+				"block",
+				phoneNumber,
+				reason
+			);
+
+			return Response.json({
+				added: true,
+				list: "block",
+				phoneNumber,
+				reason
+			});
+		}
+
+		// Remove Block List Entry Endpoint
+		if (request.method === "POST" && url.pathname === "/block-list/remove") {
+			const body = await request.json() as {
+				phoneNumber?: string;
+			};
+
+			const phoneNumber = body.phoneNumber ?? "";
+
+			if (!phoneNumber) {
+				return Response.json({
+					error: "phoneNumber is required"
+				}, {
+					status: 400
+				});
+			}
+
+			const removed = await removeCallerListEntry(
+				env.nomorescamcalls_db,
+				"block",
+				phoneNumber
+			);
+
+			return Response.json({
+				removed,
+				list: "block",
+				phoneNumber
 			});
 		}
 
