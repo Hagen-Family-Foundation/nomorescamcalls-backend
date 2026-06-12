@@ -81,3 +81,18 @@ export async function listConfirmedScamNumbers(
 
 	return result.results;
 }
+
+
+export async function removeConfirmedScamNumber(
+	db: D1Database,
+	phoneNumber: string
+): Promise<boolean> {
+	const result = await db
+		.prepare(
+			"DELETE FROM confirmed_scam_numbers WHERE caller_number = ?"
+		)
+		.bind(phoneNumber)
+		.run();
+
+	return result.meta.changes > 0;
+}

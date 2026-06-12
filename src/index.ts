@@ -4,7 +4,7 @@ import { hashPhoneNumber } from "./utils/hash";
 import { handleTelnyxWebhook } from "./services/telnyxWebhookHandler";
 import { listRecentTelnyxWebhookEvents } from "./services/telnyxAudit";
 import { verifyTelnyxWebhook } from "./services/telnyxSecurity";
-import { listConfirmedScamNumbers } from "./services/confirmedScams";
+import { listConfirmedScamNumbers, removeConfirmedScamNumber } from "./services/confirmedScams";
 import { promoteConfirmedScamNumber } from "./services/scamPromotion";
 
 export default {
@@ -183,6 +183,33 @@ export default {
 				reason,
 				evidenceLevel,
 				riskScore
+			});
+		}
+
+		// Manual Confirmed Scam Removal Endpoint
+		if (request.method === "POST" && url.pathname === "/confirmed-scams/remove") {
+			const body = await request.json() as {
+				phoneNumber?: string;
+			};
+
+			const phoneNumber = body.phoneNumber ?? "";
+
+			if (!phoneNumber) {
+				return Response.json({
+					error: "phoneNumber is required"
+				}, {
+					status: 400
+				});
+			}
+
+			const removed = await removeConfirmedScamNumber(
+				env.nomorescamcalls_db,
+				phoneNumber
+			);
+
+			return Response.json({
+				removed,
+				phoneNumber
 			});
 		}
 

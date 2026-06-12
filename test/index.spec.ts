@@ -206,6 +206,40 @@ describe("NoMoreScamCalls Worker", () => {
 		expect(body.riskScore).toBe(95);
 	});
 
+	it("removes a confirmed scam number", async () => {
+		await SELF.fetch("http://example.com/confirmed-scams/promote", {
+			method: "POST",
+			headers: {
+				"content-type": "application/json"
+			},
+			body: JSON.stringify({
+				phoneNumber: "+18165558888",
+				reason: "manual_admin_review",
+				riskScore: 95
+			})
+		});
+
+		const response = await SELF.fetch("http://example.com/confirmed-scams/remove", {
+			method: "POST",
+			headers: {
+				"content-type": "application/json"
+			},
+			body: JSON.stringify({
+				phoneNumber: "+18165558888"
+			})
+		});
+
+		expect(response.status).toBe(200);
+
+		const body = await response.json<{
+			removed: boolean;
+			phoneNumber: string;
+		}>();
+
+		expect(body.removed).toBe(true);
+		expect(body.phoneNumber).toBe("+18165558888");
+	});
+
 	it("returns confirmed scam numbers", async () => {
 		const response = await SELF.fetch("http://example.com/confirmed-scams?limit=5");
 
