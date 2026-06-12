@@ -1,12 +1,13 @@
 import { screenPhoneNumber } from "./screening";
 import { planTelnyxAction } from "./telnyxActions";
-import { normalizeTelnyxEvent, shouldScreenTelnyxEvent } from "./telnyxEvents";
+import { normalizeTelnyxEvent, shouldHandleTelnyxChallengeResponse, shouldScreenTelnyxEvent } from "./telnyxEvents";
 import { planTelnyxCommand } from "./telnyxCommands";
 import { recordTelnyxWebhookEvent } from "./telnyxAudit";
 import { planChallengePrompt } from "./challengePrompts";
 import { buildTelnyxRequest } from "./telnyxRequests";
 import { executeTelnyxRequest } from "./telnyxExecutor";
 import { planChallengeOutcome } from "./challengeOutcomes";
+import { handleTelnyxChallengeResponse } from "./telnyxChallengeHandler";
 
 export async function handleTelnyxWebhook(
 	payload: unknown,
@@ -16,6 +17,13 @@ export async function handleTelnyxWebhook(
 
 	const telnyxEvent = normalizeTelnyxEvent(payload);
 	const callerNumber = telnyxEvent.from;
+
+	if (shouldHandleTelnyxChallengeResponse(telnyxEvent)) {
+		return handleTelnyxChallengeResponse(
+			telnyxEvent,
+			db
+		);
+	}
 
 	if (!shouldScreenTelnyxEvent(telnyxEvent)) {
 		await recordTelnyxWebhookEvent(
