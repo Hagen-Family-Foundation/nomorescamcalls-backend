@@ -4,6 +4,7 @@ import { hashPhoneNumber } from "./utils/hash";
 import { handleTelnyxWebhook } from "./services/telnyxWebhookHandler";
 import { listRecentTelnyxWebhookEvents } from "./services/telnyxAudit";
 import { verifyTelnyxWebhook } from "./services/telnyxSecurity";
+import { listConfirmedScamNumbers } from "./services/confirmedScams";
 
 export default {
 	async fetch(request: Request, env: Env): Promise<Response> {
@@ -127,6 +128,19 @@ export default {
 				signalType,
 				confidence,
 				source
+			});
+		}
+
+		// Confirmed Scam Numbers Endpoint
+		if (request.method === "GET" && url.pathname === "/confirmed-scams") {
+			const limit = Number(url.searchParams.get("limit") ?? "25");
+			const numbers = await listConfirmedScamNumbers(
+				env.nomorescamcalls_db,
+				limit
+			);
+
+			return Response.json({
+				numbers
 			});
 		}
 

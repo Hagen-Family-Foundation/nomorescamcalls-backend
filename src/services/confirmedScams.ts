@@ -42,3 +42,42 @@ export async function findConfirmedScamNumber(
 		attemptCount: row.attempt_count
 	};
 }
+
+
+export interface ConfirmedScamNumberRow {
+	id: number;
+	caller_number: string;
+	reason: string;
+	evidence_level: string;
+	risk_score: number;
+	attempt_count: number;
+	first_seen: string;
+	last_seen: string;
+}
+
+export async function listConfirmedScamNumbers(
+	db: D1Database,
+	limit = 25
+): Promise<ConfirmedScamNumberRow[]> {
+	const safeLimit = Math.max(1, Math.min(limit, 100));
+
+	const result = await db
+		.prepare(`
+			SELECT
+				id,
+				caller_number,
+				reason,
+				evidence_level,
+				risk_score,
+				attempt_count,
+				first_seen,
+				last_seen
+			FROM confirmed_scam_numbers
+			ORDER BY id DESC
+			LIMIT ?
+		`)
+		.bind(safeLimit)
+		.all<ConfirmedScamNumberRow>();
+
+	return result.results;
+}
