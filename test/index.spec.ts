@@ -385,6 +385,51 @@ describe("NoMoreScamCalls Worker", () => {
 		expect(Array.isArray(body.numbers)).toBe(true);
 	});
 
+	it("handles a Telnyx challenge response webhook", async () => {
+		const response = await SELF.fetch("http://example.com/webhooks/telnyx", {
+			method: "POST",
+			headers: {
+				"content-type": "application/json"
+			},
+			body: JSON.stringify({
+				data: {
+					event_type: "call.gather.ended",
+					payload: {
+						call_control_id: "test-call-control-id",
+						call_session_id: "test-call-session-id",
+						from: "+18165551234",
+						to: "+18165550000",
+						digits: "5"
+					}
+				}
+			})
+		});
+
+		expect(response.status).toBe(200);
+
+		const body = await response.json<{
+			received: boolean;
+			challengeHandled: boolean;
+			plannedChallengeOutcome: {
+				outcome: string;
+				nextCommand: string;
+			};
+			plannedTelnyxCommand: {
+				command: string;
+			};
+			telnyxExecution: {
+				executed: boolean;
+			};
+		}>();
+
+		expect(body.received).toBe(true);
+		expect(body.challengeHandled).toBe(true);
+		expect(body.plannedChallengeOutcome.outcome).toBe("passed");
+		expect(body.plannedChallengeOutcome.nextCommand).toBe("bridge");
+		expect(body.plannedTelnyxCommand.command).toBe("bridge");
+		expect(body.telnyxExecution.executed).toBe(false);
+	});
+
 	it("returns recent Telnyx audit events", async () => {
 		const response = await SELF.fetch("http://example.com/audit/telnyx?limit=5");
 
