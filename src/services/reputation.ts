@@ -145,3 +145,36 @@ export async function updateCallerReputation(
 		attemptCount: 1
 	};
 }
+
+export interface CallerReputationRow {
+	id: number;
+	caller_hash: string;
+	status: string;
+	risk_score: number;
+	attempt_count: number;
+	first_seen: string;
+	last_seen: string;
+}
+
+export async function getCallerReputation(
+	db: D1Database,
+	callerHash: string
+): Promise<CallerReputationRow | null> {
+	const row = await db
+		.prepare(`
+			SELECT
+				id,
+				caller_hash,
+				status,
+				risk_score,
+				attempt_count,
+				first_seen,
+				last_seen
+			FROM caller_reputation
+			WHERE caller_hash = ?
+		`)
+		.bind(callerHash)
+		.first<CallerReputationRow>();
+
+	return row ?? null;
+}

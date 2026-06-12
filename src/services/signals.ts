@@ -21,3 +21,40 @@ export async function recordScamSignal(
 		)
 		.run();
 }
+
+
+export interface ScamSignalRow {
+	id: number;
+	caller_hash: string;
+	signal_type: string;
+	confidence: number;
+	source: string;
+	created_at: string;
+}
+
+export async function listSignalsForCaller(
+	db: D1Database,
+	callerHash: string,
+	limit = 25
+): Promise<ScamSignalRow[]> {
+	const safeLimit = Math.max(1, Math.min(limit, 100));
+
+	const result = await db
+		.prepare(`
+			SELECT
+				id,
+				caller_hash,
+				signal_type,
+				confidence,
+				source,
+				created_at
+			FROM scam_signals
+			WHERE caller_hash = ?
+			ORDER BY id DESC
+			LIMIT ?
+		`)
+		.bind(callerHash, safeLimit)
+		.all<ScamSignalRow>();
+
+	return result.results;
+}

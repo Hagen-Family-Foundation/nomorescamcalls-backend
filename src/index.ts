@@ -6,6 +6,7 @@ import { listRecentTelnyxWebhookEvents } from "./services/telnyxAudit";
 import { verifyTelnyxWebhook } from "./services/telnyxSecurity";
 import { listConfirmedScamNumbers, removeConfirmedScamNumber } from "./services/confirmedScams";
 import { promoteConfirmedScamNumber } from "./services/scamPromotion";
+import { getCallerIntelligence } from "./services/callerLookup";
 
 export default {
 	async fetch(request: Request, env: Env): Promise<Response> {
@@ -129,6 +130,28 @@ export default {
 				signalType,
 				confidence,
 				source
+			});
+		}
+
+		// Caller Intelligence Endpoint
+		if (request.method === "GET" && url.pathname === "/caller") {
+			const phoneNumber = url.searchParams.get("phone") ?? "";
+
+			if (!phoneNumber) {
+				return Response.json({
+					error: "Missing phone query parameter"
+				}, {
+					status: 400
+				});
+			}
+
+			const caller = await getCallerIntelligence(
+				env.nomorescamcalls_db,
+				phoneNumber
+			);
+
+			return Response.json({
+				caller
 			});
 		}
 

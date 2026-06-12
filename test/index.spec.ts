@@ -178,6 +178,28 @@ describe("NoMoreScamCalls Worker", () => {
 		expect(body.telnyxExecution.mode).toBe("disabled");
 		expect(body.telnyxExecution.executed).toBe(false);
 	});
+	it("returns caller intelligence", async () => {
+		const response = await SELF.fetch("http://example.com/caller?phone=%2B18165551234");
+
+		expect(response.status).toBe(200);
+
+		const body = await response.json<{
+			caller: {
+				phoneNumber: string;
+				callerHash: string;
+				confirmedScam: unknown;
+				reputation: unknown;
+				signals: unknown[];
+				recentCalls: unknown[];
+			};
+		}>();
+
+		expect(body.caller.phoneNumber).toBe("+18165551234");
+		expect(typeof body.caller.callerHash).toBe("string");
+		expect(Array.isArray(body.caller.signals)).toBe(true);
+		expect(Array.isArray(body.caller.recentCalls)).toBe(true);
+	});
+
 	it("manually promotes a confirmed scam number", async () => {
 		const response = await SELF.fetch("http://example.com/confirmed-scams/promote", {
 			method: "POST",
