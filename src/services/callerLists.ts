@@ -2,6 +2,7 @@ export type CallerListType = "allow" | "block";
 
 export interface CallerListRow {
 	id: number;
+	user_id: number | null;
 	phone_number: string;
 	reason: string;
 	created_at: string;
@@ -25,6 +26,7 @@ export async function listCallerListEntries(
 		.prepare(`
 			SELECT
 				id,
+				user_id,
 				phone_number,
 				reason,
 				created_at
@@ -42,21 +44,25 @@ export async function addCallerListEntry(
 	db: D1Database,
 	listType: CallerListType,
 	phoneNumber: string,
-	reason: string
+	reason: string,
+	userId: number | null = null
 ): Promise<void> {
 	const tableName = tableNameForList(listType);
 
 	await db
 		.prepare(`
 			INSERT INTO ${tableName} (
+				user_id,
 				phone_number,
 				reason
 			)
-			VALUES (?, ?)
+			VALUES (?, ?, ?)
 			ON CONFLICT(phone_number) DO UPDATE SET
+				user_id = excluded.user_id,
 				reason = excluded.reason
 		`)
 		.bind(
+			userId,
 			phoneNumber,
 			reason
 		)
