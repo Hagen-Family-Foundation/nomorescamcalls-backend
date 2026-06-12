@@ -40,6 +40,21 @@ async function ensureTestSchema(): Promise<void> {
 
 	await env.nomorescamcalls_db
 		.prepare(`
+			CREATE TABLE IF NOT EXISTS confirmed_scam_numbers (
+				id INTEGER PRIMARY KEY AUTOINCREMENT,
+				caller_number TEXT NOT NULL UNIQUE,
+				reason TEXT NOT NULL,
+				evidence_level TEXT NOT NULL DEFAULT 'high',
+				risk_score INTEGER NOT NULL DEFAULT 95,
+				attempt_count INTEGER NOT NULL DEFAULT 1,
+				first_seen TEXT DEFAULT CURRENT_TIMESTAMP,
+				last_seen TEXT DEFAULT CURRENT_TIMESTAMP
+			)
+		`)
+		.run();
+
+	await env.nomorescamcalls_db
+		.prepare(`
 			CREATE TABLE IF NOT EXISTS call_events (
 				id INTEGER PRIMARY KEY AUTOINCREMENT,
 				user_id INTEGER,

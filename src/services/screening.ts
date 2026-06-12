@@ -3,6 +3,7 @@ import { decideAction, type ScreeningAction } from "./decision";
 import { recordCallEvent } from "./events";
 import { updateCallerReputation } from "./reputation";
 import { hashPhoneNumber } from "../utils/hash";
+import { findConfirmedScamNumber } from "./confirmedScams";
 
 export type ScreeningDecision = "allow" | "block";
 
@@ -45,6 +46,34 @@ export async function screenPhoneNumber(
 			action: action.action,
 			score: 0,
 			reason: allowed.reason,
+			actionReason: action.reason
+		};
+
+		await recordCallEvent(
+			db,
+			callerHash,
+			result.decision,
+			result.score,
+			result.reason
+		);
+
+		return result;
+	}
+
+	const confirmedScam = await findConfirmedScamNumber(
+		db,
+		phoneNumber
+	);
+
+	if (confirmedScam) {
+		const action = decideAction(confirmedScam.riskScore);
+
+		const result: ScreeningResult = {
+			phoneNumber,
+			decision: "block",
+			action: action.action,
+			score: confirmedScam.riskScore,
+			reason: confirmedScam.reason,
 			actionReason: action.reason
 		};
 
