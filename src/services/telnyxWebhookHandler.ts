@@ -6,6 +6,7 @@ import { recordTelnyxWebhookEvent } from "./telnyxAudit";
 import { planChallengePrompt } from "./challengePrompts";
 import { buildTelnyxRequest } from "./telnyxRequests";
 import { executeTelnyxRequest } from "./telnyxExecutor";
+import { planChallengeOutcome } from "./challengeOutcomes";
 
 export async function handleTelnyxWebhook(
 	payload: unknown,
@@ -53,6 +54,9 @@ export async function handleTelnyxWebhook(
 	const plannedChallengePrompt = planChallengePrompt(
 		screening.challengeProfile
 	);
+	const plannedChallengeOutcome = planChallengeOutcome(
+		plannedChallengePrompt
+	);
 	const simulatedTelnyxRequest = buildTelnyxRequest(
 		plannedTelnyxCommand,
 		plannedChallengePrompt
@@ -77,6 +81,7 @@ export async function handleTelnyxWebhook(
 		plannedTelnyxAction,
 		plannedTelnyxCommand,
 		plannedChallengePrompt,
+		plannedChallengeOutcome,
 		simulatedTelnyxRequest,
 		telnyxExecution
 	});
