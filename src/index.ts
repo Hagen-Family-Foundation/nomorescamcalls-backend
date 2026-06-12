@@ -5,6 +5,7 @@ import { handleTelnyxWebhook } from "./services/telnyxWebhookHandler";
 import { listRecentTelnyxWebhookEvents } from "./services/telnyxAudit";
 import { verifyTelnyxWebhook } from "./services/telnyxSecurity";
 import { listConfirmedScamNumbers } from "./services/confirmedScams";
+import { promoteConfirmedScamNumber } from "./services/scamPromotion";
 
 export default {
 	async fetch(request: Request, env: Env): Promise<Response> {
@@ -141,6 +142,47 @@ export default {
 
 			return Response.json({
 				numbers
+			});
+		}
+
+		// Manual Confirmed Scam Promotion Endpoint
+		if (request.method === "POST" && url.pathname === "/confirmed-scams/promote") {
+			const body = await request.json() as {
+				phoneNumber?: string;
+				reason?: string;
+				evidenceLevel?: string;
+				riskScore?: number;
+			};
+
+			const phoneNumber = body.phoneNumber ?? "";
+			const reason = body.reason ?? "manual_admin_review";
+			const evidenceLevel = body.evidenceLevel ?? "high";
+			const riskScore = body.riskScore ?? 95;
+
+			if (!phoneNumber) {
+				return Response.json({
+					error: "phoneNumber is required"
+				}, {
+					status: 400
+				});
+			}
+
+			await promoteConfirmedScamNumber(
+				env.nomorescamcalls_db,
+				{
+					phoneNumber,
+					reason,
+					evidenceLevel,
+					riskScore
+				}
+			);
+
+			return Response.json({
+				promoted: true,
+				phoneNumber,
+				reason,
+				evidenceLevel,
+				riskScore
 			});
 		}
 
