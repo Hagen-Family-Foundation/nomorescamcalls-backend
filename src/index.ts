@@ -3,6 +3,7 @@ import { recordScamSignal } from "./services/signals";
 import { hashPhoneNumber } from "./utils/hash";
 import { handleTelnyxWebhook } from "./services/telnyxWebhookHandler";
 import { listRecentTelnyxWebhookEvents } from "./services/telnyxAudit";
+import { verifyTelnyxWebhook } from "./services/telnyxSecurity";
 
 export default {
 	async fetch(request: Request, env: Env): Promise<Response> {
@@ -144,6 +145,21 @@ export default {
 
 		// Telnyx webhook endpoint
 		if (request.method === "POST" && url.pathname === "/webhooks/telnyx") {
+			const security = await verifyTelnyxWebhook(
+				request,
+				env.TELNYX_WEBHOOK_SIGNING_SECRET
+			);
+
+			if (security.enforced && !security.verified) {
+				return Response.json({
+					received: false,
+					error: "telnyx_webhook_signature_verification_failed",
+					security
+				}, {
+					status: 401
+				});
+			}
+
 			const payload = await request.json();
 
 			return handleTelnyxWebhook(

@@ -3,6 +3,7 @@
 // Runtime types generated with workerd@1.20260601.1 2026-06-04 global_fetch_strictly_public,nodejs_compat
 interface __BaseEnv_Env {
 	nomorescamcalls_db: D1Database;
+	TELNYX_WEBHOOK_SIGNING_SECRET?: string;
 }
 declare namespace Cloudflare {
 	interface GlobalProps {
