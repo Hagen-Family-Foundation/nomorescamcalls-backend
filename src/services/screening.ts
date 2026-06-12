@@ -28,15 +28,16 @@ export interface ScreeningResult {
 
 export async function screenPhoneNumber(
 	phoneNumber: string,
-	db: D1Database
+	db: D1Database,
+	userId: number | null = null
 ): Promise<ScreeningResult> {
 	const callerHash = await hashPhoneNumber(phoneNumber);
 
 	const allowed = await db
 		.prepare(
-			"SELECT reason FROM allow_list WHERE phone_number = ?"
+			"SELECT reason FROM allow_list WHERE phone_number = ? AND user_id IS ?"
 		)
-		.bind(phoneNumber)
+		.bind(phoneNumber, userId)
 		.first<{ reason: string }>();
 
 	if (allowed) {
@@ -92,9 +93,9 @@ export async function screenPhoneNumber(
 
 	const blocked = await db
 		.prepare(
-			"SELECT reason FROM block_list WHERE phone_number = ?"
+			"SELECT reason FROM block_list WHERE phone_number = ? AND user_id IS ?"
 		)
-		.bind(phoneNumber)
+		.bind(phoneNumber, userId)
 		.first<{ reason: string }>();
 
 	if (blocked) {
