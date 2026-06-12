@@ -5,6 +5,7 @@ import { recordTelnyxWebhookEvent } from "./telnyxAudit";
 import type { TelnyxCallEvent } from "./telnyxEvents";
 import type { TelnyxPlannedCommand } from "./telnyxCommands";
 import type { ChallengePromptPlan } from "./challengePrompts";
+import { getTelnyxChallenge, updateTelnyxChallengeStatus } from "./telnyxChallenges";
 
 const defaultChallengePrompt: ChallengePromptPlan = {
 	mode: "simulated",
@@ -21,9 +22,27 @@ export async function handleTelnyxChallengeResponse(
 	event: TelnyxCallEvent,
 	db: D1Database
 ): Promise<Response> {
+	const storedChallenge = await getTelnyxChallenge(
+		db,
+		event.callSessionId
+	);
+
+	const challengePrompt = storedChallenge
+		? {
+			...defaultChallengePrompt,
+			expectedInput: storedChallenge.expectedInput
+		}
+		: defaultChallengePrompt;
+
 	const plannedChallengeOutcome = planChallengeOutcome(
-		defaultChallengePrompt,
+		challengePrompt,
 		event.digits
+	);
+
+	await updateTelnyxChallengeStatus(
+		db,
+		event.callSessionId,
+		plannedChallengeOutcome.outcome
 	);
 
 	const plannedTelnyxCommand: TelnyxPlannedCommand = {

@@ -8,6 +8,7 @@ import { buildTelnyxRequest } from "./telnyxRequests";
 import { executeTelnyxRequest } from "./telnyxExecutor";
 import { planChallengeOutcome } from "./challengeOutcomes";
 import { handleTelnyxChallengeResponse } from "./telnyxChallengeHandler";
+import { saveTelnyxChallenge } from "./telnyxChallenges";
 
 export async function handleTelnyxWebhook(
 	payload: unknown,
@@ -65,6 +66,18 @@ export async function handleTelnyxWebhook(
 	const plannedChallengeOutcome = planChallengeOutcome(
 		plannedChallengePrompt
 	);
+	if (
+		plannedTelnyxCommand.command === "gather" &&
+		plannedChallengePrompt
+	) {
+		await saveTelnyxChallenge(
+			db,
+			telnyxEvent.callSessionId,
+			telnyxEvent.callControlId,
+			plannedChallengePrompt.expectedInput
+		);
+	}
+
 	const simulatedTelnyxRequest = buildTelnyxRequest(
 		plannedTelnyxCommand,
 		plannedChallengePrompt
