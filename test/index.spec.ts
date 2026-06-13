@@ -399,6 +399,60 @@ describe("NoMoreScamCalls Worker", () => {
 		expect(Array.isArray(body.numbers)).toBe(true);
 	});
 
+	it("resolves protected user from Telnyx destination number", async () => {
+		await env.nomorescamcalls_db
+			.prepare(`
+				INSERT INTO users (
+					phone_number,
+					screening_number,
+					status
+				)
+				VALUES (?, ?, 'active')
+				ON CONFLICT(phone_number) DO UPDATE SET
+					screening_number = excluded.screening_number,
+					status = 'active'
+			`)
+			.bind(
+				"+18165550001",
+				"+18165550000"
+			)
+			.run();
+
+		const response = await SELF.fetch("http://example.com/webhooks/telnyx", {
+			method: "POST",
+			headers: {
+				"content-type": "application/json"
+			},
+			body: JSON.stringify({
+				data: {
+					event_type: "call.initiated",
+					payload: {
+						call_control_id: "test-user-call-control-id",
+						call_session_id: "test-user-call-session-id",
+						from: "+18165551235",
+						to: "+18165550000"
+					}
+				}
+			})
+		});
+
+		expect(response.status).toBe(200);
+
+		const body = await response.json<{
+			protectedUser: {
+				id: number;
+				phoneNumber: string;
+				screeningNumber: string;
+				status: string;
+			} | null;
+		}>();
+
+		expect(body.protectedUser).not.toBeNull();
+		expect(body.protectedUser?.phoneNumber).toBe("+18165550001");
+		expect(body.protectedUser?.screeningNumber).toBe("+18165550000");
+		expect(body.protectedUser?.status).toBe("active");
+	});
+
 	it("handles a Telnyx challenge response webhook", async () => {
 		const response = await SELF.fetch("http://example.com/webhooks/telnyx", {
 			method: "POST",
