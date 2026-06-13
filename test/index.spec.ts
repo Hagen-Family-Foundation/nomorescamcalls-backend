@@ -509,7 +509,9 @@ describe("NoMoreScamCalls Worker", () => {
 			simulatedTelnyxRequest: {
 				body: {
 					destinationType?: string;
-					destination?: string | null;
+					appIdentity?: string | null;
+					simulatedDestination?: string | null;
+					liveApiReady?: boolean;
 				};
 			} | null;
 		}>();
@@ -522,7 +524,9 @@ describe("NoMoreScamCalls Worker", () => {
 		expect(body.approvedDestination.destinationType).toBe("app");
 		expect(body.approvedDestination.destination).toBe("user_18165550001");
 		expect(body.simulatedTelnyxRequest?.body.destinationType).toBe("app");
-		expect(body.simulatedTelnyxRequest?.body.destination).toBe("user_18165550001");
+		expect(body.simulatedTelnyxRequest?.body.appIdentity).toBe("user_18165550001");
+		expect(body.simulatedTelnyxRequest?.body.simulatedDestination).toBe("telnyx_app:user_18165550001");
+		expect(body.simulatedTelnyxRequest?.body.liveApiReady).toBe(false);
 	});
 
 	it("handles a Telnyx challenge response webhook", async () => {

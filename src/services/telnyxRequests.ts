@@ -1,6 +1,7 @@
 import type { TelnyxPlannedCommand } from "./telnyxCommands";
 import type { ChallengePromptPlan } from "./challengePrompts";
 import type { ApprovedCallDestination } from "./routing";
+import { planTelnyxAppDestination } from "./telnyxAppDestination";
 
 export type TelnyxHttpMethod = "POST";
 
@@ -22,14 +23,20 @@ export function buildTelnyxRequest(
 	}
 
 	if (command.command === "bridge") {
+		const telnyxAppDestination = planTelnyxAppDestination(
+			approvedDestination
+		);
+
 		return {
 			mode: "simulated",
 			method: "POST",
 			endpoint: `/calls/${command.callControlId}/actions/bridge`,
 			body: {
-				destinationType: approvedDestination?.destinationType ?? "unavailable",
-				destination: approvedDestination?.destination ?? null,
-				routingReason: approvedDestination?.reason ?? "No approved destination was planned."
+				destinationType: telnyxAppDestination.destinationType,
+				appIdentity: telnyxAppDestination.appIdentity,
+				simulatedDestination: telnyxAppDestination.simulatedDestination,
+				liveApiReady: telnyxAppDestination.liveApiReady,
+				routingReason: telnyxAppDestination.reason
 			},
 			safetyNote: "Request is simulated only. No Telnyx bridge API call is sent."
 		};
