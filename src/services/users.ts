@@ -69,6 +69,34 @@ export async function createUser(
 	return user;
 }
 
+export async function findUserById(
+	db: D1Database,
+	id: number
+): Promise<UserRecord | null> {
+	const row = await db
+		.prepare(`
+			SELECT
+				id,
+				phone_number,
+				screening_number,
+				app_identity,
+				status
+			FROM users
+			WHERE id = ?
+				AND status = 'active'
+		`)
+		.bind(id)
+		.first<{
+			id: number;
+			phone_number: string;
+			screening_number: string | null;
+			app_identity: string | null;
+			status: string;
+		}>();
+
+	return row ? mapUserRow(row) : null;
+}
+
 export async function findUserByPhoneNumber(
 	db: D1Database,
 	phoneNumber: string

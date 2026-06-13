@@ -6,6 +6,8 @@ import type { TelnyxCallEvent } from "./telnyxEvents";
 import type { TelnyxPlannedCommand } from "./telnyxCommands";
 import type { ChallengePromptPlan } from "./challengePrompts";
 import { getTelnyxChallenge, updateTelnyxChallengeStatus } from "./telnyxChallenges";
+import { findUserById } from "./users";
+import { planApprovedCallDestination } from "./routing";
 
 const defaultChallengePrompt: ChallengePromptPlan = {
 	mode: "simulated",
@@ -54,9 +56,21 @@ export async function handleTelnyxChallengeResponse(
 		safetyNote: "Challenge response command is simulation-only and disabled."
 	};
 
+	const protectedUser = storedChallenge?.userId
+		? await findUserById(
+			db,
+			storedChallenge.userId
+		)
+		: null;
+
+	const approvedDestination = planApprovedCallDestination(
+		protectedUser
+	);
+
 	const simulatedTelnyxRequest = buildTelnyxRequest(
 		plannedTelnyxCommand,
-		null
+		null,
+		approvedDestination
 	);
 
 	const telnyxExecution = await executeTelnyxRequest(
@@ -77,6 +91,8 @@ export async function handleTelnyxChallengeResponse(
 		telnyxEvent: event,
 		plannedChallengeOutcome,
 		plannedTelnyxCommand,
+		protectedUser,
+		approvedDestination,
 		simulatedTelnyxRequest,
 		telnyxExecution
 	});
