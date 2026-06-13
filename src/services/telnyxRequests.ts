@@ -1,5 +1,6 @@
 import type { TelnyxPlannedCommand } from "./telnyxCommands";
 import type { ChallengePromptPlan } from "./challengePrompts";
+import type { ApprovedCallDestination } from "./routing";
 
 export type TelnyxHttpMethod = "POST";
 
@@ -13,7 +14,8 @@ export interface SimulatedTelnyxRequest {
 
 export function buildTelnyxRequest(
 	command: TelnyxPlannedCommand,
-	challengePrompt: ChallengePromptPlan | null
+	challengePrompt: ChallengePromptPlan | null,
+	approvedDestination: ApprovedCallDestination | null = null
 ): SimulatedTelnyxRequest | null {
 	if (command.command === "noop") {
 		return null;
@@ -25,7 +27,9 @@ export function buildTelnyxRequest(
 			method: "POST",
 			endpoint: `/calls/${command.callControlId}/actions/bridge`,
 			body: {
-				destination: "future_app_webrtc_endpoint"
+				destinationType: approvedDestination?.destinationType ?? "unavailable",
+				destination: approvedDestination?.destination ?? null,
+				routingReason: approvedDestination?.reason ?? "No approved destination was planned."
 			},
 			safetyNote: "Request is simulated only. No Telnyx bridge API call is sent."
 		};

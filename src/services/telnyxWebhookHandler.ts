@@ -10,6 +10,7 @@ import { planChallengeOutcome } from "./challengeOutcomes";
 import { handleTelnyxChallengeResponse } from "./telnyxChallengeHandler";
 import { saveTelnyxChallenge } from "./telnyxChallenges";
 import { findUserByScreeningNumber } from "./users";
+import { planApprovedCallDestination } from "./routing";
 
 export async function handleTelnyxWebhook(
 	payload: unknown,
@@ -88,9 +89,14 @@ export async function handleTelnyxWebhook(
 		);
 	}
 
+	const approvedDestination = planApprovedCallDestination(
+		protectedUser
+	);
+
 	const simulatedTelnyxRequest = buildTelnyxRequest(
 		plannedTelnyxCommand,
-		plannedChallengePrompt
+		plannedChallengePrompt,
+		approvedDestination
 	);
 	const telnyxExecution = await executeTelnyxRequest(
 		simulatedTelnyxRequest
@@ -114,6 +120,7 @@ export async function handleTelnyxWebhook(
 		plannedTelnyxCommand,
 		plannedChallengePrompt,
 		plannedChallengeOutcome,
+		approvedDestination,
 		simulatedTelnyxRequest,
 		telnyxExecution
 	});

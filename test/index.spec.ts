@@ -192,6 +192,11 @@ describe("NoMoreScamCalls Worker", () => {
 				mode: string;
 				method: string;
 				endpoint: string;
+				body: {
+					destinationType?: string;
+					destination?: string | null;
+					routingReason?: string;
+				};
 			} | null;
 			telnyxExecution: {
 				mode: string;
@@ -453,16 +458,19 @@ describe("NoMoreScamCalls Worker", () => {
 				INSERT INTO users (
 					phone_number,
 					screening_number,
+					app_identity,
 					status
 				)
-				VALUES (?, ?, 'active')
+				VALUES (?, ?, ?, 'active')
 				ON CONFLICT(phone_number) DO UPDATE SET
 					screening_number = excluded.screening_number,
+					app_identity = excluded.app_identity,
 					status = 'active'
 			`)
 			.bind(
 				"+18165550001",
-				"+18165550000"
+				"+18165550000",
+				"user_18165550001"
 			)
 			.run();
 
@@ -491,14 +499,30 @@ describe("NoMoreScamCalls Worker", () => {
 				id: number;
 				phoneNumber: string;
 				screeningNumber: string;
+				appIdentity: string;
 				status: string;
+			} | null;
+			approvedDestination: {
+				destinationType: string;
+				destination: string | null;
+			};
+			simulatedTelnyxRequest: {
+				body: {
+					destinationType?: string;
+					destination?: string | null;
+				};
 			} | null;
 		}>();
 
 		expect(body.protectedUser).not.toBeNull();
 		expect(body.protectedUser?.phoneNumber).toBe("+18165550001");
 		expect(body.protectedUser?.screeningNumber).toBe("+18165550000");
+		expect(body.protectedUser?.appIdentity).toBe("user_18165550001");
 		expect(body.protectedUser?.status).toBe("active");
+		expect(body.approvedDestination.destinationType).toBe("app");
+		expect(body.approvedDestination.destination).toBe("user_18165550001");
+		expect(body.simulatedTelnyxRequest?.body.destinationType).toBe("app");
+		expect(body.simulatedTelnyxRequest?.body.destination).toBe("user_18165550001");
 	});
 
 	it("handles a Telnyx challenge response webhook", async () => {
