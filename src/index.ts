@@ -8,6 +8,7 @@ import { listConfirmedScamNumbers, removeConfirmedScamNumber } from "./services/
 import { promoteConfirmedScamNumber } from "./services/scamPromotion";
 import { getCallerIntelligence } from "./services/callerLookup";
 import { addCallerListEntry, listCallerListEntries, removeCallerListEntry } from "./services/callerLists";
+import { createUser, listUsers } from "./services/users";
 
 export default {
 	async fetch(request: Request, env: Env): Promise<Response> {
@@ -131,6 +132,53 @@ export default {
 				signalType,
 				confidence,
 				source
+			});
+		}
+
+		// Users Endpoint
+		if (request.method === "GET" && url.pathname === "/users") {
+			const limit = Number(url.searchParams.get("limit") ?? "25");
+			const users = await listUsers(
+				env.nomorescamcalls_db,
+				limit
+			);
+
+			return Response.json({
+				users
+			});
+		}
+
+		// Create or Update User Endpoint
+		if (request.method === "POST" && url.pathname === "/users") {
+			const body = await request.json() as {
+				phoneNumber?: string;
+				screeningNumber?: string | null;
+				appIdentity?: string | null;
+				status?: string;
+			};
+
+			const phoneNumber = body.phoneNumber ?? "";
+
+			if (!phoneNumber) {
+				return Response.json({
+					error: "phoneNumber is required"
+				}, {
+					status: 400
+				});
+			}
+
+			const user = await createUser(
+				env.nomorescamcalls_db,
+				{
+					phoneNumber,
+					screeningNumber: body.screeningNumber ?? null,
+					appIdentity: body.appIdentity ?? null,
+					status: body.status ?? "active"
+				}
+			);
+
+			return Response.json({
+				user
 			});
 		}
 

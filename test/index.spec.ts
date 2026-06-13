@@ -401,6 +401,52 @@ describe("NoMoreScamCalls Worker", () => {
 		expect(Array.isArray(body.numbers)).toBe(true);
 	});
 
+	it("creates and lists user routing records", async () => {
+		const createResponse = await SELF.fetch("http://example.com/users", {
+			method: "POST",
+			headers: {
+				"content-type": "application/json"
+			},
+			body: JSON.stringify({
+				phoneNumber: "+18165550002",
+				screeningNumber: "+18165550003",
+				appIdentity: "user_18165550002",
+				status: "active"
+			})
+		});
+
+		expect(createResponse.status).toBe(200);
+
+		const createBody = await createResponse.json<{
+			user: {
+				phoneNumber: string;
+				screeningNumber: string;
+				appIdentity: string;
+				status: string;
+			};
+		}>();
+
+		expect(createBody.user.phoneNumber).toBe("+18165550002");
+		expect(createBody.user.screeningNumber).toBe("+18165550003");
+		expect(createBody.user.appIdentity).toBe("user_18165550002");
+		expect(createBody.user.status).toBe("active");
+
+		const listResponse = await SELF.fetch("http://example.com/users?limit=10");
+
+		expect(listResponse.status).toBe(200);
+
+		const listBody = await listResponse.json<{
+			users: Array<{
+				phoneNumber: string;
+				screeningNumber: string | null;
+				appIdentity: string | null;
+				status: string;
+			}>;
+		}>();
+
+		expect(listBody.users.some((user) => user.phoneNumber === "+18165550002")).toBe(true);
+	});
+
 	it("resolves protected user from Telnyx destination number", async () => {
 		await env.nomorescamcalls_db
 			.prepare(`
