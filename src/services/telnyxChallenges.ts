@@ -1,4 +1,5 @@
 export interface TelnyxChallengeRecord {
+	userId: number | null;
 	callSessionId: string;
 	callControlId: string;
 	expectedInput: string;
@@ -9,24 +10,28 @@ export async function saveTelnyxChallenge(
 	db: D1Database,
 	callSessionId: string,
 	callControlId: string,
-	expectedInput: string
+	expectedInput: string,
+	userId: number | null = null
 ): Promise<void> {
 	await db
 		.prepare(`
 			INSERT INTO telnyx_challenges (
+				user_id,
 				call_session_id,
 				call_control_id,
 				expected_input,
 				status
 			)
-			VALUES (?, ?, ?, 'pending')
+			VALUES (?, ?, ?, ?, 'pending')
 			ON CONFLICT(call_session_id) DO UPDATE SET
+				user_id = excluded.user_id,
 				call_control_id = excluded.call_control_id,
 				expected_input = excluded.expected_input,
 				status = 'pending',
 				updated_at = CURRENT_TIMESTAMP
 		`)
 		.bind(
+			userId,
 			callSessionId,
 			callControlId,
 			expectedInput
@@ -41,6 +46,7 @@ export async function getTelnyxChallenge(
 	const row = await db
 		.prepare(`
 			SELECT
+				user_id,
 				call_session_id,
 				call_control_id,
 				expected_input,
@@ -50,6 +56,7 @@ export async function getTelnyxChallenge(
 		`)
 		.bind(callSessionId)
 		.first<{
+			user_id: number | null;
 			call_session_id: string;
 			call_control_id: string;
 			expected_input: string;
@@ -61,6 +68,7 @@ export async function getTelnyxChallenge(
 	}
 
 	return {
+		userId: row.user_id,
 		callSessionId: row.call_session_id,
 		callControlId: row.call_control_id,
 		expectedInput: row.expected_input,

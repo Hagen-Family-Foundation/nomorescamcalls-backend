@@ -98,6 +98,7 @@ async function ensureTestSchema(): Promise<void> {
 		.prepare(`
 			CREATE TABLE IF NOT EXISTS telnyx_challenges (
 				id INTEGER PRIMARY KEY AUTOINCREMENT,
+				user_id INTEGER,
 				call_session_id TEXT NOT NULL UNIQUE,
 				call_control_id TEXT NOT NULL,
 				expected_input TEXT NOT NULL,
