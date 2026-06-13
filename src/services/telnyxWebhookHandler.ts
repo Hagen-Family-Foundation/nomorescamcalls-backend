@@ -83,7 +83,8 @@ export async function handleTelnyxWebhook(
 			db,
 			telnyxEvent.callSessionId,
 			telnyxEvent.callControlId,
-			plannedChallengePrompt.expectedInput
+			plannedChallengePrompt.expectedInput,
+			protectedUser?.id ?? null
 		);
 	}
 

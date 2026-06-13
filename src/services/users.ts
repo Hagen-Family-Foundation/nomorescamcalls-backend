@@ -2,6 +2,7 @@ export interface UserRecord {
 	id: number;
 	phoneNumber: string;
 	screeningNumber: string | null;
+	appIdentity: string | null;
 	status: string;
 }
 
@@ -15,6 +16,7 @@ export async function findUserByScreeningNumber(
 				id,
 				phone_number,
 				screening_number,
+				app_identity,
 				status
 			FROM users
 			WHERE screening_number = ?
@@ -25,6 +27,7 @@ export async function findUserByScreeningNumber(
 			id: number;
 			phone_number: string;
 			screening_number: string | null;
+			app_identity: string | null;
 			status: string;
 		}>();
 
@@ -36,6 +39,7 @@ export async function findUserByScreeningNumber(
 		id: row.id,
 		phoneNumber: row.phone_number,
 		screeningNumber: row.screening_number,
+		appIdentity: row.app_identity,
 		status: row.status
 	};
 }

@@ -8,6 +8,7 @@ async function ensureTestSchema(): Promise<void> {
 				id INTEGER PRIMARY KEY AUTOINCREMENT,
 				phone_number TEXT NOT NULL UNIQUE,
 				screening_number TEXT UNIQUE,
+				app_identity TEXT UNIQUE,
 				status TEXT NOT NULL DEFAULT 'active',
 				created_at TEXT DEFAULT CURRENT_TIMESTAMP
 			)
