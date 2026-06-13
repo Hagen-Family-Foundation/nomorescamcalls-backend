@@ -9,6 +9,7 @@ import { executeTelnyxRequest } from "./telnyxExecutor";
 import { planChallengeOutcome } from "./challengeOutcomes";
 import { handleTelnyxChallengeResponse } from "./telnyxChallengeHandler";
 import { saveTelnyxChallenge } from "./telnyxChallenges";
+import { findUserByScreeningNumber } from "./users";
 
 export async function handleTelnyxWebhook(
 	payload: unknown,
@@ -50,9 +51,17 @@ export async function handleTelnyxWebhook(
 		});
 	}
 
+	const protectedUser = telnyxEvent.to
+		? await findUserByScreeningNumber(
+			db,
+			telnyxEvent.to
+		)
+		: null;
+
 	const screening = await screenPhoneNumber(
 		callerNumber,
-		db
+		db,
+		protectedUser?.id ?? null
 	);
 
 	const plannedTelnyxAction = planTelnyxAction(screening.action);
@@ -97,6 +106,7 @@ export async function handleTelnyxWebhook(
 		received: true,
 		screened: true,
 		callerNumber,
+		protectedUser,
 		telnyxEvent,
 		screening,
 		plannedTelnyxAction,

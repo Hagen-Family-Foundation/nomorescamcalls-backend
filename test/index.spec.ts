@@ -4,6 +4,18 @@ import { beforeAll, describe, it, expect } from "vitest";
 async function ensureTestSchema(): Promise<void> {
 	await env.nomorescamcalls_db
 		.prepare(`
+			CREATE TABLE IF NOT EXISTS users (
+				id INTEGER PRIMARY KEY AUTOINCREMENT,
+				phone_number TEXT NOT NULL UNIQUE,
+				screening_number TEXT UNIQUE,
+				status TEXT NOT NULL DEFAULT 'active',
+				created_at TEXT DEFAULT CURRENT_TIMESTAMP
+			)
+		`)
+		.run();
+
+	await env.nomorescamcalls_db
+		.prepare(`
 			CREATE TABLE IF NOT EXISTS block_list (
 				id INTEGER PRIMARY KEY AUTOINCREMENT,
 				user_id INTEGER,
