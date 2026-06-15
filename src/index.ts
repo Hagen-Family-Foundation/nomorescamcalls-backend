@@ -9,6 +9,7 @@ import { promoteConfirmedScamNumber } from "./services/scamPromotion";
 import { getCallerIntelligence } from "./services/callerLookup";
 import { addCallerListEntry, listCallerListEntries, removeCallerListEntry } from "./services/callerLists";
 import { createUser, listUsers } from "./services/users";
+import { getTelnyxExecutionPolicy } from "./services/telnyxExecutionPolicy";
 
 export default {
 	async fetch(request: Request, env: Env): Promise<Response> {
@@ -439,10 +440,12 @@ export default {
 			}
 
 			const payload = await request.json();
+			const executionPolicy = getTelnyxExecutionPolicy(env);
 
 			return handleTelnyxWebhook(
 				payload,
-				env.nomorescamcalls_db
+				env.nomorescamcalls_db,
+				executionPolicy
 			);
 		}
 

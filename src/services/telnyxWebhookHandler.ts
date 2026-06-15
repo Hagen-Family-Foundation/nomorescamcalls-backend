@@ -11,10 +11,12 @@ import { handleTelnyxChallengeResponse } from "./telnyxChallengeHandler";
 import { saveTelnyxChallenge } from "./telnyxChallenges";
 import { findUserByScreeningNumber } from "./users";
 import { planApprovedCallDestination } from "./routing";
+import type { TelnyxExecutionPolicy } from "./telnyxExecutionPolicy";
 
 export async function handleTelnyxWebhook(
 	payload: unknown,
-	db: D1Database
+	db: D1Database,
+	executionPolicy: TelnyxExecutionPolicy
 ): Promise<Response> {
 	console.log("TELNYX WEBHOOK:", JSON.stringify(payload));
 
@@ -24,7 +26,8 @@ export async function handleTelnyxWebhook(
 	if (shouldHandleTelnyxChallengeResponse(telnyxEvent)) {
 		return handleTelnyxChallengeResponse(
 			telnyxEvent,
-			db
+			db,
+			executionPolicy
 		);
 	}
 
@@ -99,7 +102,8 @@ export async function handleTelnyxWebhook(
 		approvedDestination
 	);
 	const telnyxExecution = await executeTelnyxRequest(
-		simulatedTelnyxRequest
+		simulatedTelnyxRequest,
+		executionPolicy
 	);
 
 	await recordTelnyxWebhookEvent(

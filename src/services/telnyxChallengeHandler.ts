@@ -8,6 +8,7 @@ import type { ChallengePromptPlan } from "./challengePrompts";
 import { getTelnyxChallenge, updateTelnyxChallengeStatus } from "./telnyxChallenges";
 import { findUserById } from "./users";
 import { planApprovedCallDestination } from "./routing";
+import type { TelnyxExecutionPolicy } from "./telnyxExecutionPolicy";
 
 const defaultChallengePrompt: ChallengePromptPlan = {
 	mode: "simulated",
@@ -22,7 +23,8 @@ const defaultChallengePrompt: ChallengePromptPlan = {
 
 export async function handleTelnyxChallengeResponse(
 	event: TelnyxCallEvent,
-	db: D1Database
+	db: D1Database,
+	executionPolicy: TelnyxExecutionPolicy
 ): Promise<Response> {
 	const storedChallenge = await getTelnyxChallenge(
 		db,
@@ -74,7 +76,8 @@ export async function handleTelnyxChallengeResponse(
 	);
 
 	const telnyxExecution = await executeTelnyxRequest(
-		simulatedTelnyxRequest
+		simulatedTelnyxRequest,
+		executionPolicy
 	);
 
 	await recordTelnyxWebhookEvent(

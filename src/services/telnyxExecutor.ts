@@ -1,19 +1,33 @@
 import type { SimulatedTelnyxRequest } from "./telnyxRequests";
+import type { TelnyxExecutionPolicy } from "./telnyxExecutionPolicy";
 
 export interface TelnyxExecutionResult {
-	mode: "disabled";
+	mode: "disabled" | "live_not_implemented";
 	executed: false;
 	reason: string;
 	request: SimulatedTelnyxRequest | null;
+	policy: TelnyxExecutionPolicy;
 }
 
 export async function executeTelnyxRequest(
-	request: SimulatedTelnyxRequest | null
+	request: SimulatedTelnyxRequest | null,
+	policy: TelnyxExecutionPolicy
 ): Promise<TelnyxExecutionResult> {
+	if (!policy.liveExecutionAllowed) {
+		return {
+			mode: "disabled",
+			executed: false,
+			reason: policy.reason,
+			request,
+			policy
+		};
+	}
+
 	return {
-		mode: "disabled",
+		mode: "live_not_implemented",
 		executed: false,
-		reason: "Telnyx execution is intentionally disabled. No live API request was sent.",
-		request
+		reason: "Live Telnyx execution was requested, but the live API client is not implemented yet.",
+		request,
+		policy
 	};
 }
