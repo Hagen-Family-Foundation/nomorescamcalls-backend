@@ -4,6 +4,7 @@
 interface __BaseEnv_Env {
 	nomorescamcalls_db: D1Database;
 	TELNYX_WEBHOOK_SIGNING_SECRET?: string;
+	TELNYX_LIVE_EXECUTION?: string;
 }
 declare namespace Cloudflare {
 	interface GlobalProps {
