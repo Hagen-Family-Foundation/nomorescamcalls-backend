@@ -15,6 +15,9 @@
 		"enabled": true
 	},
 	"upload_source_maps": true,
+	"vars": {
+		"TELNYX_LIVE_EXECUTION": "false"
+	},
 	"d1_databases": [
 		{
 			"binding": "nomorescamcalls_db",
