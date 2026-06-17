@@ -32,13 +32,18 @@ export function buildTelnyxRequest(
 			method: "POST",
 			endpoint: `/calls/${command.callControlId}/actions/bridge`,
 			body: {
+				// IMPORTANT:
+				// This is intentionally NOT a Telnyx live API payload yet.
+				// The exact Call Control payload for bridging to a Telnyx
+				// WebRTC/App identity must be confirmed before live execution.
+				payloadFormat: "internal_simulation_only",
 				destinationType: telnyxAppDestination.destinationType,
 				appIdentity: telnyxAppDestination.appIdentity,
 				simulatedDestination: telnyxAppDestination.simulatedDestination,
 				liveApiReady: telnyxAppDestination.liveApiReady,
 				routingReason: telnyxAppDestination.reason
 			},
-			safetyNote: "Request is simulated only. No Telnyx bridge API call is sent."
+			safetyNote: "Bridge request body is internal simulation format only. Do not enable live Telnyx bridge execution until the official Telnyx WebRTC/App bridge payload is confirmed."
 		};
 	}
 
