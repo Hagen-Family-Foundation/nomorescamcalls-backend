@@ -16,7 +16,8 @@
 	},
 	"upload_source_maps": true,
 	"vars": {
-		"TELNYX_LIVE_EXECUTION": "false"
+		"TELNYX_LIVE_EXECUTION": "false",
+		"TELNYX_API_BASE_URL": "https://api.telnyx.com/v2"
 	},
 	"d1_databases": [
 		{
