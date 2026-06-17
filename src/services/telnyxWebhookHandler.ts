@@ -6,6 +6,7 @@ import { recordTelnyxWebhookEvent } from "./telnyxAudit";
 import { planChallengePrompt } from "./challengePrompts";
 import { buildTelnyxRequest } from "./telnyxRequests";
 import { executeTelnyxRequest } from "./telnyxExecutor";
+import type { TelnyxApiConfig } from "./telnyxExecutor";
 import { planChallengeOutcome } from "./challengeOutcomes";
 import { handleTelnyxChallengeResponse } from "./telnyxChallengeHandler";
 import { saveTelnyxChallenge } from "./telnyxChallenges";
@@ -16,7 +17,8 @@ import type { TelnyxExecutionPolicy } from "./telnyxExecutionPolicy";
 export async function handleTelnyxWebhook(
 	payload: unknown,
 	db: D1Database,
-	executionPolicy: TelnyxExecutionPolicy
+	executionPolicy: TelnyxExecutionPolicy,
+	telnyxApiConfig: TelnyxApiConfig = {}
 ): Promise<Response> {
 	console.log("TELNYX WEBHOOK:", JSON.stringify(payload));
 
@@ -27,7 +29,8 @@ export async function handleTelnyxWebhook(
 		return handleTelnyxChallengeResponse(
 			telnyxEvent,
 			db,
-			executionPolicy
+			executionPolicy,
+			telnyxApiConfig
 		);
 	}
 
@@ -103,7 +106,8 @@ export async function handleTelnyxWebhook(
 	);
 	const telnyxExecution = await executeTelnyxRequest(
 		simulatedTelnyxRequest,
-		executionPolicy
+		executionPolicy,
+		telnyxApiConfig
 	);
 
 	await recordTelnyxWebhookEvent(

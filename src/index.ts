@@ -445,7 +445,11 @@ export default {
 			return handleTelnyxWebhook(
 				payload,
 				env.nomorescamcalls_db,
-				executionPolicy
+				executionPolicy,
+				{
+					apiKey: env.TELNYX_API_KEY,
+					baseUrl: env.TELNYX_API_BASE_URL
+				}
 			);
 		}
 
