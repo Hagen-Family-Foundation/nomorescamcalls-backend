@@ -114,7 +114,8 @@ export async function handleTelnyxWebhook(
 		db,
 		telnyxEvent,
 		plannedTelnyxAction.action,
-		plannedTelnyxCommand.command
+		plannedTelnyxCommand.command,
+		approvedDestination.destination
 	);
 
 	return Response.json({

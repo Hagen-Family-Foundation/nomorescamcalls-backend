@@ -87,7 +87,8 @@ export async function handleTelnyxChallengeResponse(
 		db,
 		event,
 		"challenge_response",
-		plannedTelnyxCommand.command
+		plannedTelnyxCommand.command,
+		approvedDestination.destination
 	);
 
 	return Response.json({

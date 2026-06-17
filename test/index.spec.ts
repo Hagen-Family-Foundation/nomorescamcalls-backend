@@ -122,6 +122,7 @@ async function ensureTestSchema(): Promise<void> {
 				to_number TEXT,
 				planned_action TEXT,
 				planned_command TEXT,
+				approved_app_identity TEXT,
 				created_at TEXT DEFAULT CURRENT_TIMESTAMP
 			)
 		`)
