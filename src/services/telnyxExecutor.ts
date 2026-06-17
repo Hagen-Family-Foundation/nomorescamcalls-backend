@@ -41,6 +41,16 @@ export async function executeTelnyxRequest(
 		};
 	}
 
+	if (request.body.liveApiReady === false) {
+		return {
+			mode: "disabled",
+			executed: false,
+			reason: "Telnyx live execution was requested, but this request body is not marked liveApiReady.",
+			request,
+			policy
+		};
+	}
+
 	if (!apiConfig.apiKey) {
 		return {
 			mode: "live_config_missing",
