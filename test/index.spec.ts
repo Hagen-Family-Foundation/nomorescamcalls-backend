@@ -527,7 +527,7 @@ describe("NoMoreScamCalls Worker", () => {
 		expect(body.simulatedTelnyxRequest?.body.destinationType).toBe("app");
 		expect(body.simulatedTelnyxRequest?.body.appIdentity).toBe("user_18165550001");
 		expect(body.simulatedTelnyxRequest?.body.to).toBe("sip:user_18165550001@sip.telnyx.com");
-		expect(body.simulatedTelnyxRequest?.body.liveApiReady).toBe(false);
+		expect(body.simulatedTelnyxRequest?.body.liveApiReady).toBe(true);
 		expect(body.simulatedTelnyxRequest?.body.from).toBe("+18165550000");
 	});
 

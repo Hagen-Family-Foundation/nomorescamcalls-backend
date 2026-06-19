@@ -5,7 +5,7 @@ export interface TelnyxAppDestinationPlan {
 	destinationType: "app" | "unavailable";
 	appIdentity: string | null;
 	simulatedDestination: string | null;
-	liveApiReady: false;
+	liveApiReady: boolean;
 	reason: string;
 }
 
@@ -28,7 +28,7 @@ export function planTelnyxAppDestination(
 		destinationType: "app",
 		appIdentity: approvedDestination.destination,
 		simulatedDestination: `telnyx_app:${approvedDestination.destination}`,
-		liveApiReady: false,
-		reason: "Approved caller should be routed to this Telnyx app/WebRTC identity after live API format is confirmed."
+		liveApiReady: true,
+		reason: "Approved caller should be routed to this Telnyx app/WebRTC identity using Telnyx Call Control transfer."
 	};
 }

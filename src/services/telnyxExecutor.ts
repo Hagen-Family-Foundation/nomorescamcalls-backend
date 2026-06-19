@@ -63,6 +63,13 @@ export async function executeTelnyxRequest(
 
 	const baseUrl = apiConfig.baseUrl ?? "https://api.telnyx.com/v2";
 	const url = `${baseUrl}${request.endpoint}`;
+	const {
+		liveApiReady,
+		destinationType,
+		appIdentity,
+		routingReason,
+		...liveRequestBody
+	} = request.body;
 
 	try {
 		const response = await fetch(url, {
@@ -71,7 +78,7 @@ export async function executeTelnyxRequest(
 				"authorization": `Bearer ${apiConfig.apiKey}`,
 				"content-type": "application/json"
 			},
-			body: JSON.stringify(request.body)
+			body: JSON.stringify(liveRequestBody)
 		});
 
 		const responseText = await response.text();
