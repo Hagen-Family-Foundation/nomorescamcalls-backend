@@ -1,7 +1,7 @@
 import type { TelnyxCallEvent } from "./telnyxEvents";
 import type { TelnyxPlannedAction } from "./telnyxActions";
 
-export type TelnyxCommandType = "bridge" | "gather" | "hangup" | "noop";
+export type TelnyxCommandType = "transfer" | "gather" | "hangup" | "noop";
 
 export interface TelnyxPlannedCommand {
 	mode: "simulated";
@@ -30,11 +30,11 @@ export function planTelnyxCommand(
 	if (plannedAction.action === "allow") {
 		return {
 			mode: "simulated",
-			command: "bridge",
+			command: "transfer",
 			callControlId: event.callControlId,
 			callSessionId: event.callSessionId,
-			reason: "Approved caller would be bridged to the protected user's app/WebRTC endpoint.",
-			safetyNote: "Bridge is simulation-only and disabled."
+			reason: "Approved caller would be transferred to the protected user's Telnyx WebRTC app identity.",
+			safetyNote: "Transfer is guarded by TELNYX_LIVE_EXECUTION and remains disabled unless explicitly enabled."
 		};
 	}
 

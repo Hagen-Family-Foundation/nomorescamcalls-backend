@@ -5,7 +5,7 @@ export type ChallengeOutcome = "passed" | "failed" | "timeout" | "not_applicable
 export interface ChallengeOutcomePlan {
 	mode: "simulated";
 	outcome: ChallengeOutcome;
-	nextCommand: "bridge" | "hangup" | "noop";
+	nextCommand: "transfer" | "hangup" | "noop";
 	reason: string;
 }
 
@@ -35,7 +35,7 @@ export function planChallengeOutcome(
 		return {
 			mode: "simulated",
 			outcome: "passed",
-			nextCommand: "bridge",
+			nextCommand: "transfer",
 			reason: "Caller provided the expected challenge input."
 		};
 	}

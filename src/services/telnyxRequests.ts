@@ -22,7 +22,7 @@ export function buildTelnyxRequest(
 		return null;
 	}
 
-	if (command.command === "bridge") {
+	if (command.command === "transfer") {
 		const telnyxAppDestination = planTelnyxAppDestination(
 			approvedDestination
 		);
@@ -30,20 +30,19 @@ export function buildTelnyxRequest(
 		return {
 			mode: "simulated",
 			method: "POST",
-			endpoint: `/calls/${command.callControlId}/actions/bridge`,
+			endpoint: `/calls/${command.callControlId}/actions/transfer`,
 			body: {
-				// IMPORTANT:
-				// This is intentionally NOT a Telnyx live API payload yet.
-				// The exact Call Control payload for bridging to a Telnyx
-				// WebRTC/App identity must be confirmed before live execution.
-				payloadFormat: "internal_simulation_only",
+				to: `sip:${telnyxAppDestination.appIdentity}@sip.telnyx.com`,
+				from: approvedDestination?.screeningNumber ?? "",
+				from_display_name: "NoMoreScamCalls",
+				timeout_secs: 60,
+				media_encryption: "SRTP",
 				destinationType: telnyxAppDestination.destinationType,
 				appIdentity: telnyxAppDestination.appIdentity,
-				simulatedDestination: telnyxAppDestination.simulatedDestination,
 				liveApiReady: telnyxAppDestination.liveApiReady,
 				routingReason: telnyxAppDestination.reason
 			},
-			safetyNote: "Bridge request body is internal simulation format only. Do not enable live Telnyx bridge execution until the official Telnyx WebRTC/App bridge payload is confirmed."
+			safetyNote: "Transfer request uses Telnyx-confirmed WebRTC SIP URI format but is still simulated unless TELNYX_LIVE_EXECUTION is enabled."
 		};
 	}
 

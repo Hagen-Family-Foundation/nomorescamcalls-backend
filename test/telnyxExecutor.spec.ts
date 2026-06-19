@@ -8,7 +8,7 @@ describe("Telnyx executor", () => {
 		const request: SimulatedTelnyxRequest = {
 			mode: "simulated",
 			method: "POST",
-			endpoint: "/calls/test-call-control-id/actions/bridge",
+			endpoint: "/calls/test-call-control-id/actions/transfer",
 			body: {
 				payloadFormat: "internal_simulation_only",
 				liveApiReady: false

@@ -526,8 +526,9 @@ describe("NoMoreScamCalls Worker", () => {
 		expect(body.approvedDestination.destination).toBe("user_18165550001");
 		expect(body.simulatedTelnyxRequest?.body.destinationType).toBe("app");
 		expect(body.simulatedTelnyxRequest?.body.appIdentity).toBe("user_18165550001");
-		expect(body.simulatedTelnyxRequest?.body.simulatedDestination).toBe("telnyx_app:user_18165550001");
+		expect(body.simulatedTelnyxRequest?.body.to).toBe("sip:user_18165550001@sip.telnyx.com");
 		expect(body.simulatedTelnyxRequest?.body.liveApiReady).toBe(false);
+		expect(body.simulatedTelnyxRequest?.body.from).toBe("+18165550000");
 	});
 
 	it("handles a Telnyx challenge response webhook", async () => {
@@ -570,8 +571,8 @@ describe("NoMoreScamCalls Worker", () => {
 		expect(body.received).toBe(true);
 		expect(body.challengeHandled).toBe(true);
 		expect(body.plannedChallengeOutcome.outcome).toBe("passed");
-		expect(body.plannedChallengeOutcome.nextCommand).toBe("bridge");
-		expect(body.plannedTelnyxCommand.command).toBe("bridge");
+		expect(body.plannedChallengeOutcome.nextCommand).toBe("transfer");
+		expect(body.plannedTelnyxCommand.command).toBe("transfer");
 		expect(body.telnyxExecution.executed).toBe(false);
 	});
 

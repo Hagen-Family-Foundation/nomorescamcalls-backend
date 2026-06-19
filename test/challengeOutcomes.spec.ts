@@ -21,11 +21,11 @@ describe("challenge outcome planning", () => {
 		expect(result.nextCommand).toBe("noop");
 	});
 
-	it("bridges the call when the caller passes the challenge", () => {
+	it("transfers the call when the caller passes the challenge", () => {
 		const result = planChallengeOutcome(challengePrompt, "5");
 
 		expect(result.outcome).toBe("passed");
-		expect(result.nextCommand).toBe("bridge");
+		expect(result.nextCommand).toBe("transfer");
 	});
 
 	it("hangs up when the caller fails the challenge", () => {
