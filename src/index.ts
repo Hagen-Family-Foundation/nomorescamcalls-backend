@@ -11,6 +11,7 @@ import { addCallerListEntry, listCallerListEntries, removeCallerListEntry } from
 import { createUser, listUsers } from "./services/users";
 import { getTelnyxExecutionPolicy } from "./services/telnyxExecutionPolicy";
 import { provisionSubscriber } from "./services/provisioning";
+import { syncTelnyxInventory } from "./services/telnyxInventorySync";
 
 export default {
 	async fetch(request: Request, env: Env): Promise<Response> {
@@ -147,6 +148,35 @@ export default {
 
 			return Response.json({
 				users
+			});
+		}
+
+		// Telnyx Inventory Sync Endpoint
+		if (request.method === "POST" && url.pathname === "/telnyx/inventory/sync") {
+			const body = await request.json() as {
+				numbers?: string[];
+			};
+
+			const numbers = body.numbers ?? [];
+
+			if (!Array.isArray(numbers) || numbers.length === 0) {
+				return Response.json({
+					error: "numbers array is required"
+				}, {
+					status: 400
+				});
+			}
+
+			const sync = await syncTelnyxInventory(
+				env.nomorescamcalls_db,
+				{
+					numbers,
+					source: "admin_request"
+				}
+			);
+
+			return Response.json({
+				sync
 			});
 		}
 
