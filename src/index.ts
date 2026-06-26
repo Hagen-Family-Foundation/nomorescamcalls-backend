@@ -156,17 +156,15 @@ export default {
 				fullName?: string;
 				email?: string;
 				phoneNumber?: string;
-				screeningNumber?: string;
 			};
 
 			const fullName = body.fullName ?? "";
 			const email = body.email ?? "";
 			const phoneNumber = body.phoneNumber ?? "";
-			const screeningNumber = body.screeningNumber ?? "";
 
-			if (!fullName || !email || !phoneNumber || !screeningNumber) {
+			if (!fullName || !email || !phoneNumber) {
 				return Response.json({
-					error: "fullName, email, phoneNumber, and screeningNumber are required"
+					error: "fullName, email, and phoneNumber are required"
 				}, {
 					status: 400
 				});
@@ -177,8 +175,7 @@ export default {
 				{
 					fullName,
 					email,
-					phoneNumber,
-					screeningNumber
+					phoneNumber
 				}
 			);
 

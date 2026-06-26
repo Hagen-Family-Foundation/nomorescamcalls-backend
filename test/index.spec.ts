@@ -432,6 +432,18 @@ describe("NoMoreScamCalls Worker", () => {
 	});
 
 	it("provisions a subscriber with active coverage", async () => {
+		await env.nomorescamcalls_db
+			.prepare(`
+				INSERT INTO screening_number_inventory (phone_number, status)
+				VALUES (?, 'available')
+				ON CONFLICT(phone_number) DO UPDATE SET
+					status = 'available',
+					assigned_user_id = NULL,
+					assigned_at = NULL
+			`)
+			.bind("+19139562000")
+			.run();
+
 		const response = await SELF.fetch("http://example.com/provisioning/subscribers", {
 			method: "POST",
 			headers: {
@@ -440,8 +452,7 @@ describe("NoMoreScamCalls Worker", () => {
 			body: JSON.stringify({
 				fullName: "Mary Example",
 				email: "mary@example.com",
-				phoneNumber: "+18165550100",
-				screeningNumber: "+19139562000"
+				phoneNumber: "+18165550100"
 			})
 		});
 
@@ -476,6 +487,7 @@ describe("NoMoreScamCalls Worker", () => {
 		expect(body.provisioning.user.appIdentity.startsWith("nmcs_app_")).toBe(true);
 		expect(body.provisioning.user.status).toBe("active");
 		expect(body.provisioning.user.coverageStatus).toBe("active");
+		expect(body.provisioning.steps.map((step) => step.name)).toContain("screening_number_reserved_from_inventory");
 		expect(body.provisioning.steps.map((step) => step.name)).toContain("coverage_activated");
 	});
 

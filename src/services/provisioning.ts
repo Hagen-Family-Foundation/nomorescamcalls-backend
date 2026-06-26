@@ -1,11 +1,11 @@
 import { hashPhoneNumber } from "../utils/hash";
-import { createUser, type UserRecord } from "./users";
+import { createUser, findUserByPhoneNumber, type UserRecord } from "./users";
+import { reserveAvailableScreeningNumber } from "./screeningNumberInventory";
 
 export interface ProvisionSubscriberInput {
 	fullName: string;
 	email: string;
 	phoneNumber: string;
-	screeningNumber: string;
 }
 
 export interface ProvisionSubscriberResult {
@@ -29,7 +29,44 @@ export async function provisionSubscriber(
 	db: D1Database,
 	input: ProvisionSubscriberInput
 ): Promise<ProvisionSubscriberResult> {
+	const existingUser = await findUserByPhoneNumber(db, input.phoneNumber);
+
+	if (existingUser?.screeningNumber) {
+		return {
+			user: existingUser,
+			coverageStatus: existingUser.coverageStatus,
+			provisioningStatus: "active",
+			steps: [
+				{
+					name: "existing_subscriber_found",
+					status: "complete"
+				},
+				{
+					name: "coverage_active",
+					status: "complete"
+				}
+			]
+		};
+	}
+
 	const appIdentity = await createInternalAppIdentity(input.phoneNumber);
+
+	const pendingUser = await createUser(
+		db,
+		{
+			fullName: input.fullName,
+			email: input.email,
+			phoneNumber: input.phoneNumber,
+			appIdentity,
+			status: "provisioning",
+			coverageStatus: "pending"
+		}
+	);
+
+	const reservedNumber = await reserveAvailableScreeningNumber(
+		db,
+		pendingUser.id
+	);
 
 	const user = await createUser(
 		db,
@@ -37,7 +74,7 @@ export async function provisionSubscriber(
 			fullName: input.fullName,
 			email: input.email,
 			phoneNumber: input.phoneNumber,
-			screeningNumber: input.screeningNumber,
+			screeningNumber: reservedNumber.phoneNumber,
 			appIdentity,
 			status: "active",
 			coverageStatus: "active"
@@ -54,7 +91,7 @@ export async function provisionSubscriber(
 				status: "complete"
 			},
 			{
-				name: "screening_number_assigned",
+				name: "screening_number_reserved_from_inventory",
 				status: "complete"
 			},
 			{
