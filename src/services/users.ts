@@ -1,31 +1,43 @@
 export interface UserRecord {
 	id: number;
+	fullName: string | null;
+	email: string | null;
 	phoneNumber: string;
 	screeningNumber: string | null;
 	appIdentity: string | null;
 	status: string;
+	coverageStatus: string;
 }
 
 export interface CreateUserInput {
+	fullName?: string | null;
+	email?: string | null;
 	phoneNumber: string;
 	screeningNumber?: string | null;
 	appIdentity?: string | null;
 	status?: string;
+	coverageStatus?: string;
 }
 
 function mapUserRow(row: {
 	id: number;
+	full_name?: string | null;
+	email?: string | null;
 	phone_number: string;
 	screening_number: string | null;
 	app_identity: string | null;
 	status: string;
+	coverage_status?: string | null;
 }): UserRecord {
 	return {
 		id: row.id,
+		fullName: row.full_name ?? null,
+		email: row.email ?? null,
 		phoneNumber: row.phone_number,
 		screeningNumber: row.screening_number,
 		appIdentity: row.app_identity,
-		status: row.status
+		status: row.status,
+		coverageStatus: row.coverage_status ?? row.status
 	};
 }
 
@@ -34,26 +46,36 @@ export async function createUser(
 	input: CreateUserInput
 ): Promise<UserRecord> {
 	const status = input.status ?? "active";
+	const coverageStatus = input.coverageStatus ?? status;
 
 	await db
 		.prepare(`
 			INSERT INTO users (
+				full_name,
+				email,
 				phone_number,
 				screening_number,
 				app_identity,
-				status
+				status,
+				coverage_status
 			)
-			VALUES (?, ?, ?, ?)
+			VALUES (?, ?, ?, ?, ?, ?, ?)
 			ON CONFLICT(phone_number) DO UPDATE SET
+				full_name = excluded.full_name,
+				email = excluded.email,
 				screening_number = excluded.screening_number,
 				app_identity = excluded.app_identity,
-				status = excluded.status
+				status = excluded.status,
+				coverage_status = excluded.coverage_status
 		`)
 		.bind(
+			input.fullName ?? null,
+			input.email ?? null,
 			input.phoneNumber,
 			input.screeningNumber ?? null,
 			input.appIdentity ?? null,
-			status
+			status,
+			coverageStatus
 		)
 		.run();
 
@@ -77,10 +99,13 @@ export async function findUserById(
 		.prepare(`
 			SELECT
 				id,
+				full_name,
+				email,
 				phone_number,
 				screening_number,
 				app_identity,
-				status
+				status,
+				coverage_status
 			FROM users
 			WHERE id = ?
 				AND status = 'active'
@@ -88,10 +113,13 @@ export async function findUserById(
 		.bind(id)
 		.first<{
 			id: number;
+			full_name: string | null;
+			email: string | null;
 			phone_number: string;
 			screening_number: string | null;
 			app_identity: string | null;
 			status: string;
+			coverage_status: string | null;
 		}>();
 
 	return row ? mapUserRow(row) : null;
@@ -105,20 +133,26 @@ export async function findUserByPhoneNumber(
 		.prepare(`
 			SELECT
 				id,
+				full_name,
+				email,
 				phone_number,
 				screening_number,
 				app_identity,
-				status
+				status,
+				coverage_status
 			FROM users
 			WHERE phone_number = ?
 		`)
 		.bind(phoneNumber)
 		.first<{
 			id: number;
+			full_name: string | null;
+			email: string | null;
 			phone_number: string;
 			screening_number: string | null;
 			app_identity: string | null;
 			status: string;
+			coverage_status: string | null;
 		}>();
 
 	return row ? mapUserRow(row) : null;
@@ -132,10 +166,13 @@ export async function findUserByScreeningNumber(
 		.prepare(`
 			SELECT
 				id,
+				full_name,
+				email,
 				phone_number,
 				screening_number,
 				app_identity,
-				status
+				status,
+				coverage_status
 			FROM users
 			WHERE screening_number = ?
 				AND status = 'active'
@@ -143,10 +180,13 @@ export async function findUserByScreeningNumber(
 		.bind(screeningNumber)
 		.first<{
 			id: number;
+			full_name: string | null;
+			email: string | null;
 			phone_number: string;
 			screening_number: string | null;
 			app_identity: string | null;
 			status: string;
+			coverage_status: string | null;
 		}>();
 
 	return row ? mapUserRow(row) : null;
@@ -160,10 +200,13 @@ export async function listUsers(
 		.prepare(`
 			SELECT
 				id,
+				full_name,
+				email,
 				phone_number,
 				screening_number,
 				app_identity,
-				status
+				status,
+				coverage_status
 			FROM users
 			ORDER BY id DESC
 			LIMIT ?
@@ -171,10 +214,13 @@ export async function listUsers(
 		.bind(limit)
 		.all<{
 			id: number;
+			full_name: string | null;
+			email: string | null;
 			phone_number: string;
 			screening_number: string | null;
 			app_identity: string | null;
 			status: string;
+			coverage_status: string | null;
 		}>();
 
 	return result.results.map(mapUserRow);

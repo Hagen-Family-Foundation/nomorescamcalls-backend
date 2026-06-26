@@ -6,10 +6,13 @@ async function ensureTestSchema(): Promise<void> {
 		.prepare(`
 			CREATE TABLE IF NOT EXISTS users (
 				id INTEGER PRIMARY KEY AUTOINCREMENT,
+				full_name TEXT,
+				email TEXT UNIQUE,
 				phone_number TEXT NOT NULL UNIQUE,
 				screening_number TEXT UNIQUE,
 				app_identity TEXT UNIQUE,
 				status TEXT NOT NULL DEFAULT 'active',
+				coverage_status TEXT NOT NULL DEFAULT 'active',
 				created_at TEXT DEFAULT CURRENT_TIMESTAMP
 			)
 		`)
@@ -405,6 +408,54 @@ describe("NoMoreScamCalls Worker", () => {
 		}>();
 
 		expect(Array.isArray(body.numbers)).toBe(true);
+	});
+
+	it("provisions a subscriber with active coverage", async () => {
+		const response = await SELF.fetch("http://example.com/provisioning/subscribers", {
+			method: "POST",
+			headers: {
+				"content-type": "application/json"
+			},
+			body: JSON.stringify({
+				fullName: "Mary Example",
+				email: "mary@example.com",
+				phoneNumber: "+18165550100",
+				screeningNumber: "+19139562000"
+			})
+		});
+
+		expect(response.status).toBe(200);
+
+		const body = await response.json<{
+			provisioning: {
+				coverageStatus: string;
+				provisioningStatus: string;
+				user: {
+					fullName: string;
+					email: string;
+					phoneNumber: string;
+					screeningNumber: string;
+					appIdentity: string;
+					status: string;
+					coverageStatus: string;
+				};
+				steps: Array<{
+					name: string;
+					status: string;
+				}>;
+			};
+		}>();
+
+		expect(body.provisioning.provisioningStatus).toBe("active");
+		expect(body.provisioning.coverageStatus).toBe("active");
+		expect(body.provisioning.user.fullName).toBe("Mary Example");
+		expect(body.provisioning.user.email).toBe("mary@example.com");
+		expect(body.provisioning.user.phoneNumber).toBe("+18165550100");
+		expect(body.provisioning.user.screeningNumber).toBe("+19139562000");
+		expect(body.provisioning.user.appIdentity.startsWith("nmcs_app_")).toBe(true);
+		expect(body.provisioning.user.status).toBe("active");
+		expect(body.provisioning.user.coverageStatus).toBe("active");
+		expect(body.provisioning.steps.map((step) => step.name)).toContain("coverage_activated");
 	});
 
 	it("creates and lists user routing records", async () => {

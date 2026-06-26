@@ -10,6 +10,7 @@ import { getCallerIntelligence } from "./services/callerLookup";
 import { addCallerListEntry, listCallerListEntries, removeCallerListEntry } from "./services/callerLists";
 import { createUser, listUsers } from "./services/users";
 import { getTelnyxExecutionPolicy } from "./services/telnyxExecutionPolicy";
+import { provisionSubscriber } from "./services/provisioning";
 
 export default {
 	async fetch(request: Request, env: Env): Promise<Response> {
@@ -146,6 +147,43 @@ export default {
 
 			return Response.json({
 				users
+			});
+		}
+
+		// Provision Subscriber Endpoint
+		if (request.method === "POST" && url.pathname === "/provisioning/subscribers") {
+			const body = await request.json() as {
+				fullName?: string;
+				email?: string;
+				phoneNumber?: string;
+				screeningNumber?: string;
+			};
+
+			const fullName = body.fullName ?? "";
+			const email = body.email ?? "";
+			const phoneNumber = body.phoneNumber ?? "";
+			const screeningNumber = body.screeningNumber ?? "";
+
+			if (!fullName || !email || !phoneNumber || !screeningNumber) {
+				return Response.json({
+					error: "fullName, email, phoneNumber, and screeningNumber are required"
+				}, {
+					status: 400
+				});
+			}
+
+			const provisioning = await provisionSubscriber(
+				env.nomorescamcalls_db,
+				{
+					fullName,
+					email,
+					phoneNumber,
+					screeningNumber
+				}
+			);
+
+			return Response.json({
+				provisioning
 			});
 		}
 
