@@ -140,6 +140,11 @@ async function ensureTestSchema(): Promise<void> {
 				status TEXT NOT NULL DEFAULT 'available',
 				assigned_user_id INTEGER,
 				assigned_at TEXT,
+				provider TEXT NOT NULL DEFAULT 'telnyx',
+				provider_number_id TEXT,
+				voice_application_id TEXT,
+				connection_id TEXT,
+				last_synced_at TEXT,
 				created_at TEXT DEFAULT CURRENT_TIMESTAMP
 			)
 		`)
@@ -149,6 +154,20 @@ async function ensureTestSchema(): Promise<void> {
 		.prepare(`
 			CREATE INDEX IF NOT EXISTS idx_screening_number_inventory_status
 			ON screening_number_inventory(status)
+		`)
+		.run();
+
+	await env.nomorescamcalls_db
+		.prepare(`
+			CREATE INDEX IF NOT EXISTS idx_screening_number_inventory_provider
+			ON screening_number_inventory(provider)
+		`)
+		.run();
+
+	await env.nomorescamcalls_db
+		.prepare(`
+			CREATE INDEX IF NOT EXISTS idx_screening_number_inventory_provider_number_id
+			ON screening_number_inventory(provider_number_id)
 		`)
 		.run();
 }
