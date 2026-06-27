@@ -1,35 +1,57 @@
 import { addScreeningNumberToInventory } from "./screeningNumberInventory";
+import {
+	fetchTelnyxPhoneNumbers,
+	type TelnyxPhoneNumbersClientConfig
+} from "./telnyxPhoneNumbersClient";
 
 export interface TelnyxInventorySyncInput {
-	numbers: string[];
-	source?: string;
+	telnyxConfig: TelnyxPhoneNumbersClientConfig;
+	voiceApplicationId?: string | null;
+	connectionId?: string | null;
 }
 
 export interface TelnyxInventorySyncResult {
-	mode: "simulated";
-	source: string;
+	mode: "simulated" | "live" | "live_failed";
+	source: "telnyx_account";
 	importedCount: number;
 	numbers: string[];
+	reason: string;
+	status?: number;
 }
 
 export async function syncTelnyxInventory(
 	db: D1Database,
 	input: TelnyxInventorySyncInput
 ): Promise<TelnyxInventorySyncResult> {
-	const uniqueNumbers = [...new Set(
-		input.numbers
-			.map((number) => number.trim())
-			.filter((number) => number.length > 0)
-	)];
+	const fetched = await fetchTelnyxPhoneNumbers(input.telnyxConfig);
 
-	for (const number of uniqueNumbers) {
-		await addScreeningNumberToInventory(db, number);
+	const uniqueRecords = Array.from(
+		new Map(
+			fetched.numbers
+				.filter((record) => record.phoneNumber.trim().length > 0)
+				.map((record) => [record.phoneNumber.trim(), record])
+		).values()
+	);
+
+	for (const record of uniqueRecords) {
+		await addScreeningNumberToInventory(
+			db,
+			{
+				phoneNumber: record.phoneNumber,
+				provider: "telnyx",
+				providerNumberId: record.providerNumberId,
+				voiceApplicationId: record.voiceApplicationId ?? input.voiceApplicationId ?? null,
+				connectionId: record.connectionId ?? input.connectionId ?? null
+			}
+		);
 	}
 
 	return {
-		mode: "simulated",
-		source: input.source ?? "manual_sync_request",
-		importedCount: uniqueNumbers.length,
-		numbers: uniqueNumbers
+		mode: fetched.mode,
+		source: "telnyx_account",
+		importedCount: uniqueRecords.length,
+		numbers: uniqueRecords.map((record) => record.phoneNumber),
+		reason: fetched.reason,
+		status: fetched.status
 	};
 }

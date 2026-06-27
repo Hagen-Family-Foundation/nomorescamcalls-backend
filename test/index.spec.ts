@@ -450,19 +450,13 @@ describe("NoMoreScamCalls Worker", () => {
 		expect(Array.isArray(body.numbers)).toBe(true);
 	});
 
-	it("syncs Telnyx inventory numbers into available screening inventory", async () => {
+	it("syncs Telnyx inventory from the configured Telnyx account", async () => {
 		const response = await SELF.fetch("http://example.com/telnyx/inventory/sync", {
 			method: "POST",
 			headers: {
 				"content-type": "application/json"
 			},
-			body: JSON.stringify({
-				numbers: [
-					"+19139562101",
-					"+19139562102",
-					"+19139562101"
-				]
-			})
+			body: JSON.stringify({})
 		});
 
 		expect(response.status).toBe(200);
@@ -473,16 +467,15 @@ describe("NoMoreScamCalls Worker", () => {
 				source: string;
 				importedCount: number;
 				numbers: string[];
+				reason: string;
 			};
 		}>();
 
 		expect(body.sync.mode).toBe("simulated");
-		expect(body.sync.source).toBe("admin_request");
-		expect(body.sync.importedCount).toBe(2);
-		expect(body.sync.numbers).toEqual([
-			"+19139562101",
-			"+19139562102"
-		]);
+		expect(body.sync.source).toBe("telnyx_account");
+		expect(body.sync.importedCount).toBe(0);
+		expect(body.sync.numbers).toEqual([]);
+		expect(body.sync.reason).toContain("TELNYX_API_KEY");
 	});
 
 	it("provisions a subscriber with active coverage", async () => {

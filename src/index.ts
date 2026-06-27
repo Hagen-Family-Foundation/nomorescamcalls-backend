@@ -153,25 +153,15 @@ export default {
 
 		// Telnyx Inventory Sync Endpoint
 		if (request.method === "POST" && url.pathname === "/telnyx/inventory/sync") {
-			const body = await request.json() as {
-				numbers?: string[];
-			};
-
-			const numbers = body.numbers ?? [];
-
-			if (!Array.isArray(numbers) || numbers.length === 0) {
-				return Response.json({
-					error: "numbers array is required"
-				}, {
-					status: 400
-				});
-			}
-
 			const sync = await syncTelnyxInventory(
 				env.nomorescamcalls_db,
 				{
-					numbers,
-					source: "admin_request"
+					telnyxConfig: {
+						apiKey: env.TELNYX_API_KEY,
+						baseUrl: env.TELNYX_API_BASE_URL
+					},
+					voiceApplicationId: env.TELNYX_VOICE_APPLICATION_ID,
+					connectionId: env.TELNYX_CONNECTION_ID
 				}
 			);
 
