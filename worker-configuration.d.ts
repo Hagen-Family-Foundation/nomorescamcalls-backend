@@ -7,6 +7,8 @@ interface __BaseEnv_Env {
 	TELNYX_LIVE_EXECUTION?: string;
 	TELNYX_API_BASE_URL?: string;
 	TELNYX_API_KEY?: string;
+	TELNYX_VOICE_APPLICATION_ID?: string;
+	TELNYX_CONNECTION_ID?: string;
 }
 declare namespace Cloudflare {
 	interface GlobalProps {

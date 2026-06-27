@@ -17,7 +17,9 @@
 	"upload_source_maps": true,
 	"vars": {
 		"TELNYX_LIVE_EXECUTION": "false",
-		"TELNYX_API_BASE_URL": "https://api.telnyx.com/v2"
+		"TELNYX_API_BASE_URL": "https://api.telnyx.com/v2",
+		"TELNYX_VOICE_APPLICATION_ID": "2971382184532772704",
+		"TELNYX_CONNECTION_ID": "2974341569219396688"
 	},
 	"d1_databases": [
 		{
