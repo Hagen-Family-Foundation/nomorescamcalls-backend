@@ -69,4 +69,58 @@ describe("telnyxInventorySync", () => {
 		expect(stored?.status).toBe("available");
 		expect(stored?.lastSyncedAt).toBeTruthy();
 	});
+	it("does not reset assigned inventory back to available during sync", async () => {
+		await env.nomorescamcalls_db
+			.prepare(`
+				INSERT INTO screening_number_inventory (
+					phone_number,
+					status,
+					assigned_user_id,
+					assigned_at,
+					provider
+				)
+				VALUES (?, 'assigned', 123, CURRENT_TIMESTAMP, 'telnyx')
+				ON CONFLICT(phone_number) DO UPDATE SET
+					status = 'assigned',
+					assigned_user_id = 123,
+					assigned_at = CURRENT_TIMESTAMP
+			`)
+			.bind("+19139563333")
+			.run();
+
+		vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({
+			data: [
+				{
+					id: "telnyx-number-sync-assigned",
+					phone_number: "+19139563333"
+				}
+			]
+		}), {
+			status: 200
+		})));
+
+		await syncTelnyxInventory(
+			env.nomorescamcalls_db,
+			{
+				telnyxConfig: {
+					apiKey: "test-api-key",
+					baseUrl: "https://api.telnyx.test/v2"
+				},
+				voiceApplicationId: "voice-app-default",
+				connectionId: "connection-default"
+			}
+		);
+
+		const stored = await findScreeningNumberInInventory(
+			env.nomorescamcalls_db,
+			"+19139563333"
+		);
+
+		expect(stored?.status).toBe("assigned");
+		expect(stored?.assignedUserId).toBe(123);
+		expect(stored?.providerNumberId).toBe("telnyx-number-sync-assigned");
+		expect(stored?.voiceApplicationId).toBe("voice-app-default");
+		expect(stored?.connectionId).toBe("connection-default");
+	});
+
 });
