@@ -189,3 +189,49 @@ export async function reserveAvailableScreeningNumber(
 
 	return reserved;
 }
+
+export interface ScreeningNumberInventoryHealth {
+	total: number;
+	available: number;
+	assigned: number;
+	lowInventoryThreshold: number;
+	status: "healthy" | "low_inventory" | "empty";
+}
+
+export async function getScreeningNumberInventoryHealth(
+	db: D1Database,
+	lowInventoryThreshold = 5
+): Promise<ScreeningNumberInventoryHealth> {
+	const result = await db
+		.prepare(`
+			SELECT status, COUNT(*) AS count
+			FROM screening_number_inventory
+			GROUP BY status
+		`)
+		.all<{
+			status: string;
+			count: number;
+		}>();
+
+	const counts = new Map(
+		(result.results ?? []).map((row) => [row.status, row.count])
+	);
+
+	const available = counts.get("available") ?? 0;
+	const assigned = counts.get("assigned") ?? 0;
+	const total = [...counts.values()].reduce((sum, count) => sum + count, 0);
+
+	const status = available === 0
+		? "empty"
+		: available <= lowInventoryThreshold
+			? "low_inventory"
+			: "healthy";
+
+	return {
+		total,
+		available,
+		assigned,
+		lowInventoryThreshold,
+		status
+	};
+}

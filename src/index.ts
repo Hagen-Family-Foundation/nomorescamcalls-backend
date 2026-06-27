@@ -9,6 +9,7 @@ import { promoteConfirmedScamNumber } from "./services/scamPromotion";
 import { getCallerIntelligence } from "./services/callerLookup";
 import { addCallerListEntry, listCallerListEntries, removeCallerListEntry } from "./services/callerLists";
 import { createUser, listUsers } from "./services/users";
+import { getScreeningNumberInventoryHealth } from "./services/screeningNumberInventory";
 import { getTelnyxExecutionPolicy } from "./services/telnyxExecutionPolicy";
 import { provisionSubscriber } from "./services/provisioning";
 import { syncTelnyxInventory } from "./services/telnyxInventorySync";
@@ -148,6 +149,19 @@ export default {
 
 			return Response.json({
 				users
+			});
+		}
+
+		// Screening Number Inventory Health Endpoint
+		if (request.method === "GET" && url.pathname === "/inventory/screening-numbers/health") {
+			const threshold = Number(url.searchParams.get("threshold") ?? "5");
+			const health = await getScreeningNumberInventoryHealth(
+				env.nomorescamcalls_db,
+				threshold
+			);
+
+			return Response.json({
+				health
 			});
 		}
 

@@ -450,6 +450,26 @@ describe("NoMoreScamCalls Worker", () => {
 		expect(Array.isArray(body.numbers)).toBe(true);
 	});
 
+	it("returns screening number inventory health", async () => {
+		const response = await SELF.fetch("http://example.com/inventory/screening-numbers/health?threshold=5");
+
+		expect(response.status).toBe(200);
+
+		const body = await response.json<{
+			health: {
+				total: number;
+				available: number;
+				assigned: number;
+				lowInventoryThreshold: number;
+				status: string;
+			};
+		}>();
+
+		expect(body.health.total).toBeGreaterThanOrEqual(0);
+		expect(body.health.lowInventoryThreshold).toBe(5);
+		expect(["healthy", "low_inventory", "empty"]).toContain(body.health.status);
+	});
+
 	it("syncs Telnyx inventory from the configured Telnyx account", async () => {
 		const response = await SELF.fetch("http://example.com/telnyx/inventory/sync", {
 			method: "POST",
