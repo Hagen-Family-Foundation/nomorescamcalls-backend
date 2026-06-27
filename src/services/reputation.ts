@@ -120,30 +120,17 @@ export async function updateCallerReputation(
 		};
 	}
 
-	const behaviorScore = calculateBehaviorScore(1);
-	const signalScore = await calculateSignalScore(db, callerHash);
-	const riskScore = Math.min(behaviorScore + signalScore, 95);
-	const status = calculateStatus(riskScore);
-
 	await db
 		.prepare(
-			"INSERT INTO caller_reputation (caller_hash, status, risk_score, attempt_count) VALUES (?, ?, ?, 1)"
+			"INSERT INTO caller_reputation (caller_hash, status, risk_score, attempt_count) VALUES (?, 'unknown', 0, 0) ON CONFLICT(caller_hash) DO NOTHING"
 		)
-		.bind(
-			callerHash,
-			status,
-			riskScore
-		)
+		.bind(callerHash)
 		.run();
 
-	return {
-		callerHash,
-		status,
-		riskScore,
-		behaviorScore,
-		signalScore,
-		attemptCount: 1
-	};
+	return updateCallerReputation(
+		phoneNumber,
+		db
+	);
 }
 
 export interface CallerReputationRow {
