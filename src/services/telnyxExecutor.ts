@@ -41,11 +41,11 @@ export async function executeTelnyxRequest(
 		};
 	}
 
-	if (request.body.liveApiReady === false) {
+	if (request.body.liveApiReady !== true) {
 		return {
 			mode: "disabled",
 			executed: false,
-			reason: "Telnyx live execution was requested, but this request body is not marked liveApiReady.",
+			reason: "Telnyx live execution was requested, but this request body is not explicitly marked liveApiReady.",
 			request,
 			policy
 		};

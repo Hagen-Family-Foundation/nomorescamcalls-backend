@@ -28,7 +28,7 @@ describe("Telnyx executor", () => {
 		expect(result.mode).toBe("disabled");
 		expect(result.executed).toBe(false);
 		expect(result.reason).toBe(
-			"Telnyx live execution was requested, but this request body is not marked liveApiReady."
+			"Telnyx live execution was requested, but this request body is not explicitly marked liveApiReady."
 		);
 	});
 });
