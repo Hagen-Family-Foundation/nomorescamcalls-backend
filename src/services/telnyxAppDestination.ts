@@ -3,7 +3,7 @@ import type { ApprovedCallDestination } from "./routing";
 export interface TelnyxAppDestinationPlan {
 	provider: "telnyx";
 	destinationType: "app" | "unavailable";
-	appIdentity: string | null;
+	sipUsername: string | null;
 	simulatedDestination: string | null;
 	liveApiReady: boolean;
 	reason: string;
@@ -16,7 +16,7 @@ export function planTelnyxAppDestination(
 		return {
 			provider: "telnyx",
 			destinationType: "unavailable",
-			appIdentity: null,
+			sipUsername: null,
 			simulatedDestination: null,
 			liveApiReady: false,
 			reason: approvedDestination?.reason ?? "No approved app destination was available."
@@ -26,9 +26,9 @@ export function planTelnyxAppDestination(
 	return {
 		provider: "telnyx",
 		destinationType: "app",
-		appIdentity: approvedDestination.destination,
-		simulatedDestination: `telnyx_app:${approvedDestination.destination}`,
+		sipUsername: approvedDestination.destination,
+		simulatedDestination: `telnyx_sip_username:${approvedDestination.destination}`,
 		liveApiReady: true,
-		reason: "Approved caller should be routed to this Telnyx app/WebRTC identity using Telnyx Call Control transfer."
+		reason: "Approved caller should be routed to this Telnyx SIP username using Telnyx Call Control transfer."
 	};
 }

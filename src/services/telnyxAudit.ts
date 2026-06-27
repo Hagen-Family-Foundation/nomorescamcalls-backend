@@ -6,7 +6,7 @@ export async function recordTelnyxWebhookEvent(
 	event: TelnyxCallEvent,
 	plannedAction: string,
 	plannedCommand: string,
-	approvedAppIdentity: string | null = null
+	approvedSipUsername: string | null = null
 ): Promise<void> {
 	const callerHash = event.from
 		? await hashPhoneNumber(event.from)
@@ -23,7 +23,7 @@ export async function recordTelnyxWebhookEvent(
 				to_number,
 				planned_action,
 				planned_command,
-				approved_app_identity
+				approved_sip_username
 			)
 			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
 		`)
@@ -36,7 +36,7 @@ export async function recordTelnyxWebhookEvent(
 			event.to,
 			plannedAction,
 			plannedCommand,
-			approvedAppIdentity
+			approvedSipUsername
 		)
 		.run();
 }
@@ -52,7 +52,7 @@ export interface TelnyxWebhookAuditRow {
 	to_number: string | null;
 	planned_action: string | null;
 	planned_command: string | null;
-	approved_app_identity: string | null;
+	approved_sip_username: string | null;
 	created_at: string;
 }
 
@@ -74,7 +74,7 @@ export async function listRecentTelnyxWebhookEvents(
 				to_number,
 				planned_action,
 				planned_command,
-				approved_app_identity,
+				approved_sip_username,
 				created_at
 			FROM telnyx_webhook_events
 			ORDER BY id DESC

@@ -190,15 +190,17 @@ export default {
 				fullName?: string;
 				email?: string;
 				phoneNumber?: string;
+				sipUsername?: string;
 			};
 
 			const fullName = body.fullName ?? "";
 			const email = body.email ?? "";
 			const phoneNumber = body.phoneNumber ?? "";
+			const sipUsername = body.sipUsername ?? "";
 
-			if (!fullName || !email || !phoneNumber) {
+			if (!fullName || !email || !phoneNumber || !sipUsername) {
 				return Response.json({
-					error: "fullName, email, and phoneNumber are required"
+					error: "fullName, email, phoneNumber, and sipUsername are required"
 				}, {
 					status: 400
 				});
@@ -209,7 +211,8 @@ export default {
 				{
 					fullName,
 					email,
-					phoneNumber
+					phoneNumber,
+					sipUsername
 				}
 			);
 
@@ -223,7 +226,7 @@ export default {
 			const body = await request.json() as {
 				phoneNumber?: string;
 				screeningNumber?: string | null;
-				appIdentity?: string | null;
+				sipUsername?: string | null;
 				status?: string;
 			};
 
@@ -242,7 +245,7 @@ export default {
 				{
 					phoneNumber,
 					screeningNumber: body.screeningNumber ?? null,
-					appIdentity: body.appIdentity ?? null,
+					sipUsername: body.sipUsername ?? null,
 					status: body.status ?? "active"
 				}
 			);

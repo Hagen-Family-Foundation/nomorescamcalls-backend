@@ -4,7 +4,7 @@ export interface UserRecord {
 	email: string | null;
 	phoneNumber: string;
 	screeningNumber: string | null;
-	appIdentity: string | null;
+	sipUsername: string | null;
 	status: string;
 	coverageStatus: string;
 }
@@ -14,7 +14,7 @@ export interface CreateUserInput {
 	email?: string | null;
 	phoneNumber: string;
 	screeningNumber?: string | null;
-	appIdentity?: string | null;
+	sipUsername?: string | null;
 	status?: string;
 	coverageStatus?: string;
 }
@@ -25,7 +25,7 @@ function mapUserRow(row: {
 	email?: string | null;
 	phone_number: string;
 	screening_number: string | null;
-	app_identity: string | null;
+	sip_username: string | null;
 	status: string;
 	coverage_status?: string | null;
 }): UserRecord {
@@ -35,7 +35,7 @@ function mapUserRow(row: {
 		email: row.email ?? null,
 		phoneNumber: row.phone_number,
 		screeningNumber: row.screening_number,
-		appIdentity: row.app_identity,
+		sipUsername: row.sip_username,
 		status: row.status,
 		coverageStatus: row.coverage_status ?? row.status
 	};
@@ -55,7 +55,7 @@ export async function createUser(
 				email,
 				phone_number,
 				screening_number,
-				app_identity,
+				sip_username,
 				status,
 				coverage_status
 			)
@@ -64,7 +64,7 @@ export async function createUser(
 				full_name = excluded.full_name,
 				email = excluded.email,
 				screening_number = excluded.screening_number,
-				app_identity = excluded.app_identity,
+				sip_username = excluded.sip_username,
 				status = excluded.status,
 				coverage_status = excluded.coverage_status
 		`)
@@ -73,7 +73,7 @@ export async function createUser(
 			input.email ?? null,
 			input.phoneNumber,
 			input.screeningNumber ?? null,
-			input.appIdentity ?? null,
+			input.sipUsername ?? null,
 			status,
 			coverageStatus
 		)
@@ -103,7 +103,7 @@ export async function findUserById(
 				email,
 				phone_number,
 				screening_number,
-				app_identity,
+				sip_username,
 				status,
 				coverage_status
 			FROM users
@@ -117,7 +117,7 @@ export async function findUserById(
 			email: string | null;
 			phone_number: string;
 			screening_number: string | null;
-			app_identity: string | null;
+			sip_username: string | null;
 			status: string;
 			coverage_status: string | null;
 		}>();
@@ -137,7 +137,7 @@ export async function findUserByPhoneNumber(
 				email,
 				phone_number,
 				screening_number,
-				app_identity,
+				sip_username,
 				status,
 				coverage_status
 			FROM users
@@ -150,7 +150,7 @@ export async function findUserByPhoneNumber(
 			email: string | null;
 			phone_number: string;
 			screening_number: string | null;
-			app_identity: string | null;
+			sip_username: string | null;
 			status: string;
 			coverage_status: string | null;
 		}>();
@@ -170,7 +170,7 @@ export async function findUserByScreeningNumber(
 				email,
 				phone_number,
 				screening_number,
-				app_identity,
+				sip_username,
 				status,
 				coverage_status
 			FROM users
@@ -184,7 +184,7 @@ export async function findUserByScreeningNumber(
 			email: string | null;
 			phone_number: string;
 			screening_number: string | null;
-			app_identity: string | null;
+			sip_username: string | null;
 			status: string;
 			coverage_status: string | null;
 		}>();
@@ -204,7 +204,7 @@ export async function listUsers(
 				email,
 				phone_number,
 				screening_number,
-				app_identity,
+				sip_username,
 				status,
 				coverage_status
 			FROM users
@@ -218,7 +218,7 @@ export async function listUsers(
 			email: string | null;
 			phone_number: string;
 			screening_number: string | null;
-			app_identity: string | null;
+			sip_username: string | null;
 			status: string;
 			coverage_status: string | null;
 		}>();

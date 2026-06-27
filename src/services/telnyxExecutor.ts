@@ -66,7 +66,7 @@ export async function executeTelnyxRequest(
 	const {
 		liveApiReady,
 		destinationType,
-		appIdentity,
+		sipUsername,
 		routingReason,
 		...liveRequestBody
 	} = request.body;

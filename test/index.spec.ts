@@ -10,7 +10,7 @@ async function ensureTestSchema(): Promise<void> {
 				email TEXT UNIQUE,
 				phone_number TEXT NOT NULL UNIQUE,
 				screening_number TEXT UNIQUE,
-				app_identity TEXT UNIQUE,
+				sip_username TEXT UNIQUE,
 				status TEXT NOT NULL DEFAULT 'active',
 				coverage_status TEXT NOT NULL DEFAULT 'active',
 				created_at TEXT DEFAULT CURRENT_TIMESTAMP
@@ -125,7 +125,7 @@ async function ensureTestSchema(): Promise<void> {
 				to_number TEXT,
 				planned_action TEXT,
 				planned_command TEXT,
-				approved_app_identity TEXT,
+				approved_sip_username TEXT,
 				created_at TEXT DEFAULT CURRENT_TIMESTAMP
 			)
 		`)
@@ -519,7 +519,8 @@ describe("NoMoreScamCalls Worker", () => {
 			body: JSON.stringify({
 				fullName: "Mary Example",
 				email: "mary@example.com",
-				phoneNumber: "+18165550100"
+				phoneNumber: "+18165550100",
+				sipUsername: "usersupport15892"
 			})
 		});
 
@@ -534,7 +535,7 @@ describe("NoMoreScamCalls Worker", () => {
 					email: string;
 					phoneNumber: string;
 					screeningNumber: string;
-					appIdentity: string;
+					sipUsername: string;
 					status: string;
 					coverageStatus: string;
 				};
@@ -551,10 +552,11 @@ describe("NoMoreScamCalls Worker", () => {
 		expect(body.provisioning.user.email).toBe("mary@example.com");
 		expect(body.provisioning.user.phoneNumber).toBe("+18165550100");
 		expect(body.provisioning.user.screeningNumber).toBe("+19139562000");
-		expect(body.provisioning.user.appIdentity.startsWith("nmcs_app_")).toBe(true);
+		expect(body.provisioning.user.sipUsername).toBe("usersupport15892");
 		expect(body.provisioning.user.status).toBe("active");
 		expect(body.provisioning.user.coverageStatus).toBe("active");
 		expect(body.provisioning.steps.map((step) => step.name)).toContain("screening_number_reserved_from_inventory");
+		expect(body.provisioning.steps.map((step) => step.name)).toContain("sip_username_assigned");
 		expect(body.provisioning.steps.map((step) => step.name)).toContain("coverage_activated");
 	});
 
@@ -567,7 +569,7 @@ describe("NoMoreScamCalls Worker", () => {
 			body: JSON.stringify({
 				phoneNumber: "+18165550002",
 				screeningNumber: "+18165550003",
-				appIdentity: "user_18165550002",
+				sipUsername: "user_18165550002",
 				status: "active"
 			})
 		});
@@ -578,14 +580,14 @@ describe("NoMoreScamCalls Worker", () => {
 			user: {
 				phoneNumber: string;
 				screeningNumber: string;
-				appIdentity: string;
+				sipUsername: string;
 				status: string;
 			};
 		}>();
 
 		expect(createBody.user.phoneNumber).toBe("+18165550002");
 		expect(createBody.user.screeningNumber).toBe("+18165550003");
-		expect(createBody.user.appIdentity).toBe("user_18165550002");
+		expect(createBody.user.sipUsername).toBe("user_18165550002");
 		expect(createBody.user.status).toBe("active");
 
 		const listResponse = await SELF.fetch("http://example.com/users?limit=10");
@@ -596,7 +598,7 @@ describe("NoMoreScamCalls Worker", () => {
 			users: Array<{
 				phoneNumber: string;
 				screeningNumber: string | null;
-				appIdentity: string | null;
+				sipUsername: string | null;
 				status: string;
 			}>;
 		}>();
@@ -610,13 +612,13 @@ describe("NoMoreScamCalls Worker", () => {
 				INSERT INTO users (
 					phone_number,
 					screening_number,
-					app_identity,
+					sip_username,
 					status
 				)
 				VALUES (?, ?, ?, 'active')
 				ON CONFLICT(phone_number) DO UPDATE SET
 					screening_number = excluded.screening_number,
-					app_identity = excluded.app_identity,
+					sip_username = excluded.sip_username,
 					status = 'active'
 			`)
 			.bind(
@@ -651,7 +653,7 @@ describe("NoMoreScamCalls Worker", () => {
 				id: number;
 				phoneNumber: string;
 				screeningNumber: string;
-				appIdentity: string;
+				sipUsername: string;
 				status: string;
 			} | null;
 			approvedDestination: {
@@ -661,7 +663,7 @@ describe("NoMoreScamCalls Worker", () => {
 			simulatedTelnyxRequest: {
 				body: {
 					destinationType?: string;
-					appIdentity?: string | null;
+					sipUsername?: string | null;
 					simulatedDestination?: string | null;
 					liveApiReady?: boolean;
 				};
@@ -671,12 +673,12 @@ describe("NoMoreScamCalls Worker", () => {
 		expect(body.protectedUser).not.toBeNull();
 		expect(body.protectedUser?.phoneNumber).toBe("+18165550001");
 		expect(body.protectedUser?.screeningNumber).toBe("+18165550000");
-		expect(body.protectedUser?.appIdentity).toBe("user_18165550001");
+		expect(body.protectedUser?.sipUsername).toBe("user_18165550001");
 		expect(body.protectedUser?.status).toBe("active");
 		expect(body.approvedDestination.destinationType).toBe("app");
 		expect(body.approvedDestination.destination).toBe("user_18165550001");
 		expect(body.simulatedTelnyxRequest?.body.destinationType).toBe("app");
-		expect(body.simulatedTelnyxRequest?.body.appIdentity).toBe("user_18165550001");
+		expect(body.simulatedTelnyxRequest?.body.sipUsername).toBe("user_18165550001");
 		expect(body.simulatedTelnyxRequest?.body.to).toBe("sip:user_18165550001@sip.telnyx.com");
 		expect(body.simulatedTelnyxRequest?.body.liveApiReady).toBe(true);
 		expect(body.simulatedTelnyxRequest?.body.from).toBe("+18165550000");

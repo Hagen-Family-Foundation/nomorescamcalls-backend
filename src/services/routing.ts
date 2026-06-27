@@ -19,19 +19,19 @@ export function planApprovedCallDestination(
 		};
 	}
 
-	if (!user.appIdentity) {
+	if (!user.sipUsername) {
 		return {
 			destinationType: "unavailable",
 			destination: null,
 			screeningNumber: user.screeningNumber,
-			reason: "Protected user does not have an app identity yet."
+			reason: "Protected user does not have a SIP username yet."
 		};
 	}
 
 	return {
 		destinationType: "app",
-		destination: user.appIdentity,
+		destination: user.sipUsername,
 		screeningNumber: user.screeningNumber,
-		reason: "Approved caller should be routed to the protected user's app identity."
+		reason: "Approved caller should be routed to the protected user's SIP username."
 	};
 }

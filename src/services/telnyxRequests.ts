@@ -45,13 +45,13 @@ export function buildTelnyxRequest(
 			method: "POST",
 			endpoint: `/calls/${command.callControlId}/actions/transfer`,
 			body: {
-				to: `sip:${telnyxAppDestination.appIdentity}@sip.telnyx.com`,
+				to: `sip:${telnyxAppDestination.sipUsername}@sip.telnyx.com`,
 				from: approvedDestination?.screeningNumber ?? "",
 				from_display_name: "NoMoreScamCalls",
 				timeout_secs: 60,
 				media_encryption: "SRTP",
 				destinationType: telnyxAppDestination.destinationType,
-				appIdentity: telnyxAppDestination.appIdentity,
+				sipUsername: telnyxAppDestination.sipUsername,
 				liveApiReady: telnyxAppDestination.liveApiReady,
 				routingReason: telnyxAppDestination.reason
 			},

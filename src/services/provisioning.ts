@@ -1,4 +1,3 @@
-import { hashPhoneNumber } from "../utils/hash";
 import { createUser, findUserByPhoneNumber, type UserRecord } from "./users";
 import { reserveAvailableScreeningNumber } from "./screeningNumberInventory";
 
@@ -6,6 +5,7 @@ export interface ProvisionSubscriberInput {
 	fullName: string;
 	email: string;
 	phoneNumber: string;
+	sipUsername: string;
 }
 
 export interface ProvisionSubscriberResult {
@@ -16,13 +16,6 @@ export interface ProvisionSubscriberResult {
 		name: string;
 		status: "complete";
 	}>;
-}
-
-export async function createInternalAppIdentity(
-	phoneNumber: string
-): Promise<string> {
-	const hash = await hashPhoneNumber(phoneNumber);
-	return `nmcs_app_${hash.slice(0, 16)}`;
 }
 
 export async function provisionSubscriber(
@@ -49,15 +42,13 @@ export async function provisionSubscriber(
 		};
 	}
 
-	const appIdentity = await createInternalAppIdentity(input.phoneNumber);
-
 	const pendingUser = await createUser(
 		db,
 		{
 			fullName: input.fullName,
 			email: input.email,
 			phoneNumber: input.phoneNumber,
-			appIdentity,
+			sipUsername: input.sipUsername,
 			status: "provisioning",
 			coverageStatus: "pending"
 		}
@@ -75,7 +66,7 @@ export async function provisionSubscriber(
 			email: input.email,
 			phoneNumber: input.phoneNumber,
 			screeningNumber: reservedNumber.phoneNumber,
-			appIdentity,
+			sipUsername: input.sipUsername,
 			status: "active",
 			coverageStatus: "active"
 		}
@@ -95,7 +86,7 @@ export async function provisionSubscriber(
 				status: "complete"
 			},
 			{
-				name: "internal_app_identity_created",
+				name: "sip_username_assigned",
 				status: "complete"
 			},
 			{
