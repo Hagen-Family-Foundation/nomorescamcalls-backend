@@ -1,3 +1,5 @@
+import { getTelnyxJson } from "./telnyxHttpClient";
+
 export interface TelnyxPhoneNumberRecord {
 	phoneNumber: string;
 	providerNumberId: string | null;
@@ -11,9 +13,11 @@ export interface TelnyxPhoneNumbersClientConfig {
 }
 
 export interface FetchTelnyxPhoneNumbersResult {
-	mode: "simulated" | "live_config_missing";
+	mode: "simulated" | "live" | "live_failed";
 	numbers: TelnyxPhoneNumberRecord[];
 	reason: string;
+	status?: number;
+	responseBody?: unknown;
 }
 
 export async function fetchTelnyxPhoneNumbers(
@@ -27,10 +31,29 @@ export async function fetchTelnyxPhoneNumbers(
 		};
 	}
 
+	const response = await getTelnyxJson(
+		config,
+		"/phone_numbers"
+	);
+
+	const numbers = normalizeTelnyxPhoneNumberPayload(response.body);
+
+	if (!response.ok) {
+		return {
+			mode: "live_failed",
+			numbers,
+			reason: "Telnyx phone number API returned a non-success status.",
+			status: response.status,
+			responseBody: response.body
+		};
+	}
+
 	return {
-		mode: "live_config_missing",
-		numbers: [],
-		reason: "Live Telnyx phone number fetching has not been enabled yet."
+		mode: "live",
+		numbers,
+		reason: "Telnyx phone numbers were fetched successfully.",
+		status: response.status,
+		responseBody: response.body
 	};
 }
 
