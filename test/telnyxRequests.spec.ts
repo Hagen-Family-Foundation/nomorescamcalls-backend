@@ -14,6 +14,16 @@ function command(command: TelnyxPlannedCommand["command"]): TelnyxPlannedCommand
 }
 
 describe("Telnyx request builder", () => {
+
+	it("builds an answer request", () => {
+		const request = buildTelnyxRequest(command("answer"), null);
+
+		expect(request?.method).toBe("POST");
+		expect(request?.endpoint).toBe("/calls/test-call-control-id/actions/answer");
+		expect(request?.body.liveApiReady).toBe(true);
+	});
+
+
 	it("builds a transfer request for an approved app destination", () => {
 		const request = buildTelnyxRequest(
 			command("transfer"),

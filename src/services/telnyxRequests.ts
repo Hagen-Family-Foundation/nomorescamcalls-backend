@@ -22,6 +22,19 @@ export function buildTelnyxRequest(
 		return null;
 	}
 
+
+	if (command.command === "answer") {
+		return {
+			mode: "simulated",
+			method: "POST",
+			endpoint: `/calls/${command.callControlId}/actions/answer`,
+			body: {
+				liveApiReady: true
+			},
+			safetyNote: "Answer is guarded by TELNYX_LIVE_EXECUTION and remains disabled unless explicitly enabled."
+		};
+	}
+
 	if (command.command === "transfer") {
 		const telnyxAppDestination = planTelnyxAppDestination(
 			approvedDestination
