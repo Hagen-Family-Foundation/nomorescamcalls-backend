@@ -1,11 +1,11 @@
 import { createUser, findUserByPhoneNumber, type UserRecord } from "./users";
 import { reserveAvailableScreeningNumber } from "./screeningNumberInventory";
+import { reserveAvailableSipCredential } from "./sipCredentialInventory";
 
 export interface ProvisionSubscriberInput {
 	fullName: string;
 	email: string;
 	phoneNumber: string;
-	sipUsername: string;
 }
 
 export interface ProvisionSubscriberResult {
@@ -48,13 +48,17 @@ export async function provisionSubscriber(
 			fullName: input.fullName,
 			email: input.email,
 			phoneNumber: input.phoneNumber,
-			sipUsername: input.sipUsername,
 			status: "provisioning",
 			coverageStatus: "pending"
 		}
 	);
 
 	const reservedNumber = await reserveAvailableScreeningNumber(
+		db,
+		pendingUser.id
+	);
+
+	const reservedSipCredential = await reserveAvailableSipCredential(
 		db,
 		pendingUser.id
 	);
@@ -66,7 +70,7 @@ export async function provisionSubscriber(
 			email: input.email,
 			phoneNumber: input.phoneNumber,
 			screeningNumber: reservedNumber.phoneNumber,
-			sipUsername: input.sipUsername,
+			sipUsername: reservedSipCredential.sipUsername,
 			status: "active",
 			coverageStatus: "active"
 		}

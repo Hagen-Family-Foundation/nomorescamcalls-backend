@@ -190,17 +190,15 @@ export default {
 				fullName?: string;
 				email?: string;
 				phoneNumber?: string;
-				sipUsername?: string;
 			};
 
 			const fullName = body.fullName ?? "";
 			const email = body.email ?? "";
 			const phoneNumber = body.phoneNumber ?? "";
-			const sipUsername = body.sipUsername ?? "";
 
-			if (!fullName || !email || !phoneNumber || !sipUsername) {
+			if (!fullName || !email || !phoneNumber) {
 				return Response.json({
-					error: "fullName, email, phoneNumber, and sipUsername are required"
+					error: "fullName, email, and phoneNumber are required"
 				}, {
 					status: 400
 				});
@@ -211,8 +209,7 @@ export default {
 				{
 					fullName,
 					email,
-					phoneNumber,
-					sipUsername
+					phoneNumber
 				}
 			);
 

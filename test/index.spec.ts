@@ -152,6 +152,23 @@ async function ensureTestSchema(): Promise<void> {
 
 	await env.nomorescamcalls_db
 		.prepare(`
+			CREATE TABLE IF NOT EXISTS sip_credential_inventory (
+				id INTEGER PRIMARY KEY AUTOINCREMENT,
+				sip_username TEXT NOT NULL UNIQUE,
+				status TEXT NOT NULL DEFAULT 'available',
+				assigned_user_id INTEGER,
+				assigned_at TEXT,
+				provider TEXT NOT NULL DEFAULT 'telnyx',
+				provider_credential_id TEXT,
+				connection_id TEXT,
+				last_synced_at TEXT,
+				created_at TEXT DEFAULT CURRENT_TIMESTAMP
+			)
+		`)
+		.run();
+
+	await env.nomorescamcalls_db
+		.prepare(`
 			CREATE INDEX IF NOT EXISTS idx_screening_number_inventory_status
 			ON screening_number_inventory(status)
 		`)
@@ -511,6 +528,18 @@ describe("NoMoreScamCalls Worker", () => {
 			.bind("+19139562000")
 			.run();
 
+		await env.nomorescamcalls_db
+			.prepare(`
+				INSERT INTO sip_credential_inventory (sip_username, status)
+				VALUES (?, 'available')
+				ON CONFLICT(sip_username) DO UPDATE SET
+					status = 'available',
+					assigned_user_id = NULL,
+					assigned_at = NULL
+			`)
+			.bind("usersupport15892")
+			.run();
+
 		const response = await SELF.fetch("http://example.com/provisioning/subscribers", {
 			method: "POST",
 			headers: {
@@ -519,8 +548,7 @@ describe("NoMoreScamCalls Worker", () => {
 			body: JSON.stringify({
 				fullName: "Mary Example",
 				email: "mary@example.com",
-				phoneNumber: "+18165550100",
-				sipUsername: "usersupport15892"
+				phoneNumber: "+18165550100"
 			})
 		});
 
