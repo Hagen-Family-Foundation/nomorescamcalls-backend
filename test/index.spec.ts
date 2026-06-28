@@ -515,6 +515,55 @@ describe("NoMoreScamCalls Worker", () => {
 		expect(body.sync.reason).toContain("TELNYX_API_KEY");
 	});
 
+
+	it("returns SIP credential inventory health", async () => {
+		const response = await SELF.fetch("http://example.com/inventory/sip-credentials/health?threshold=5");
+
+		expect(response.status).toBe(200);
+
+		const body = await response.json<{
+			health: {
+				total: number;
+				available: number;
+				assigned: number;
+				lowInventoryThreshold: number;
+				status: string;
+			};
+		}>();
+
+		expect(body.health.total).toBeGreaterThanOrEqual(0);
+		expect(body.health.lowInventoryThreshold).toBe(5);
+		expect(["healthy", "low_inventory", "empty"]).toContain(body.health.status);
+	});
+
+	it("syncs Telnyx SIP credentials from the configured Telnyx account", async () => {
+		const response = await SELF.fetch("http://example.com/telnyx/sip-credentials/sync", {
+			method: "POST",
+			headers: {
+				"content-type": "application/json"
+			},
+			body: JSON.stringify({})
+		});
+
+		expect(response.status).toBe(200);
+
+		const body = await response.json<{
+			sync: {
+				mode: string;
+				source: string;
+				importedCount: number;
+				sipUsernames: string[];
+				reason: string;
+			};
+		}>();
+
+		expect(body.sync.mode).toBe("simulated");
+		expect(body.sync.source).toBe("telnyx_credential_connections");
+		expect(body.sync.importedCount).toBe(0);
+		expect(body.sync.sipUsernames).toEqual([]);
+		expect(body.sync.reason).toContain("TELNYX_API_KEY");
+	});
+
 	it("provisions a subscriber with active coverage", async () => {
 		await env.nomorescamcalls_db
 			.prepare(`

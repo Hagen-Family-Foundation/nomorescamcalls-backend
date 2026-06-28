@@ -10,9 +10,11 @@ import { getCallerIntelligence } from "./services/callerLookup";
 import { addCallerListEntry, listCallerListEntries, removeCallerListEntry } from "./services/callerLists";
 import { createUser, listUsers } from "./services/users";
 import { getScreeningNumberInventoryHealth } from "./services/screeningNumberInventory";
+import { getSipCredentialInventoryHealth } from "./services/sipCredentialInventory";
 import { getTelnyxExecutionPolicy } from "./services/telnyxExecutionPolicy";
 import { provisionSubscriber } from "./services/provisioning";
 import { syncTelnyxInventory } from "./services/telnyxInventorySync";
+import { syncTelnyxSipCredentials } from "./services/telnyxSipCredentialSync";
 
 export default {
 	async fetch(request: Request, env: Env): Promise<Response> {
@@ -175,6 +177,37 @@ export default {
 						baseUrl: env.TELNYX_API_BASE_URL
 					},
 					voiceApplicationId: env.TELNYX_VOICE_APPLICATION_ID,
+					connectionId: env.TELNYX_CONNECTION_ID
+				}
+			);
+
+			return Response.json({
+				sync
+			});
+		}
+
+		// SIP Credential Inventory Health Endpoint
+		if (request.method === "GET" && url.pathname === "/inventory/sip-credentials/health") {
+			const threshold = Number(url.searchParams.get("threshold") ?? "5");
+			const health = await getSipCredentialInventoryHealth(
+				env.nomorescamcalls_db,
+				threshold
+			);
+
+			return Response.json({
+				health
+			});
+		}
+
+		// Telnyx SIP Credential Sync Endpoint
+		if (request.method === "POST" && url.pathname === "/telnyx/sip-credentials/sync") {
+			const sync = await syncTelnyxSipCredentials(
+				env.nomorescamcalls_db,
+				{
+					telnyxConfig: {
+						apiKey: env.TELNYX_API_KEY,
+						baseUrl: env.TELNYX_API_BASE_URL
+					},
 					connectionId: env.TELNYX_CONNECTION_ID
 				}
 			);
