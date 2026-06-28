@@ -190,6 +190,22 @@ export async function reserveAvailableScreeningNumber(
 	return reserved;
 }
 
+export async function releaseScreeningNumberForUser(
+	db: D1Database,
+	userId: number
+): Promise<void> {
+	await db
+		.prepare(`
+			UPDATE screening_number_inventory
+			SET status = 'available',
+				assigned_user_id = NULL,
+				assigned_at = NULL
+			WHERE assigned_user_id = ?
+		`)
+		.bind(userId)
+		.run();
+}
+
 export interface ScreeningNumberInventoryHealth {
 	total: number;
 	available: number;

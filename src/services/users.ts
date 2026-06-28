@@ -158,6 +158,83 @@ export async function findUserByPhoneNumber(
 	return row ? mapUserRow(row) : null;
 }
 
+export async function updateUserProvisioningAssignment(
+	db: D1Database,
+	userId: number,
+	screeningNumber: string,
+	sipUsername: string
+): Promise<UserRecord> {
+	await db
+		.prepare(`
+			UPDATE users
+			SET screening_number = ?,
+				sip_username = ?,
+				status = 'active',
+				coverage_status = 'active'
+			WHERE id = ?
+				AND status = 'provisioning'
+		`)
+		.bind(screeningNumber, sipUsername, userId)
+		.run();
+
+	const user = await findUserByIdIncludingInactive(db, userId);
+
+	if (
+		!user
+		|| user.screeningNumber !== screeningNumber
+		|| user.sipUsername !== sipUsername
+		|| user.status !== "active"
+		|| user.coverageStatus !== "active"
+	) {
+		throw new Error("Failed to finalize provisioned user");
+	}
+
+	return user;
+}
+
+export async function deleteUserById(
+	db: D1Database,
+	userId: number
+): Promise<void> {
+	await db
+		.prepare("DELETE FROM users WHERE id = ?")
+		.bind(userId)
+		.run();
+}
+
+async function findUserByIdIncludingInactive(
+	db: D1Database,
+	id: number
+): Promise<UserRecord | null> {
+	const row = await db
+		.prepare(`
+			SELECT
+				id,
+				full_name,
+				email,
+				phone_number,
+				screening_number,
+				sip_username,
+				status,
+				coverage_status
+			FROM users
+			WHERE id = ?
+		`)
+		.bind(id)
+		.first<{
+			id: number;
+			full_name: string | null;
+			email: string | null;
+			phone_number: string;
+			screening_number: string | null;
+			sip_username: string | null;
+			status: string;
+			coverage_status: string | null;
+		}>();
+
+	return row ? mapUserRow(row) : null;
+}
+
 export async function findUserByScreeningNumber(
 	db: D1Database,
 	screeningNumber: string

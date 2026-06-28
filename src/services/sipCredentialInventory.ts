@@ -182,6 +182,22 @@ export async function reserveAvailableSipCredential(
 	return reserved;
 }
 
+export async function releaseSipCredentialForUser(
+	db: D1Database,
+	userId: number
+): Promise<void> {
+	await db
+		.prepare(`
+			UPDATE sip_credential_inventory
+			SET status = 'available',
+				assigned_user_id = NULL,
+				assigned_at = NULL
+			WHERE assigned_user_id = ?
+		`)
+		.bind(userId)
+		.run();
+}
+
 export interface SipCredentialInventoryHealth {
 	total: number;
 	available: number;

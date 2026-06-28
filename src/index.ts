@@ -237,18 +237,31 @@ export default {
 				});
 			}
 
-			const provisioning = await provisionSubscriber(
-				env.nomorescamcalls_db,
-				{
-					fullName,
-					email,
-					phoneNumber
-				}
-			);
+			try {
+				const provisioning = await provisionSubscriber(
+					env.nomorescamcalls_db,
+					{
+						fullName,
+						email,
+						phoneNumber
+					}
+				);
 
-			return Response.json({
-				provisioning
-			});
+				return Response.json({
+					provisioning
+				});
+			} catch (error) {
+				const message = error instanceof Error
+					? error.message
+					: "Provisioning failed";
+
+				return Response.json({
+					error: "Provisioning failed",
+					reason: message
+				}, {
+					status: 409
+				});
+			}
 		}
 
 		// Create or Update User Endpoint

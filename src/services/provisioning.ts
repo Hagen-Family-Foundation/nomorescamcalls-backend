@@ -1,6 +1,18 @@
-import { createUser, findUserByPhoneNumber, type UserRecord } from "./users";
-import { reserveAvailableScreeningNumber } from "./screeningNumberInventory";
-import { reserveAvailableSipCredential } from "./sipCredentialInventory";
+import {
+	createUser,
+	deleteUserById,
+	findUserByPhoneNumber,
+	updateUserProvisioningAssignment,
+	type UserRecord
+} from "./users";
+import {
+	releaseScreeningNumberForUser,
+	reserveAvailableScreeningNumber
+} from "./screeningNumberInventory";
+import {
+	releaseSipCredentialForUser,
+	reserveAvailableSipCredential
+} from "./sipCredentialInventory";
 
 export interface ProvisionSubscriberInput {
 	fullName: string;
@@ -24,7 +36,7 @@ export async function provisionSubscriber(
 ): Promise<ProvisionSubscriberResult> {
 	const existingUser = await findUserByPhoneNumber(db, input.phoneNumber);
 
-	if (existingUser?.screeningNumber) {
+	if (existingUser?.screeningNumber && existingUser.sipUsername) {
 		return {
 			user: existingUser,
 			coverageStatus: existingUser.coverageStatus,
@@ -53,50 +65,52 @@ export async function provisionSubscriber(
 		}
 	);
 
-	const reservedNumber = await reserveAvailableScreeningNumber(
-		db,
-		pendingUser.id
-	);
+	try {
+		const reservedNumber = await reserveAvailableScreeningNumber(
+			db,
+			pendingUser.id
+		);
 
-	const reservedSipCredential = await reserveAvailableSipCredential(
-		db,
-		pendingUser.id
-	);
+		const reservedSipCredential = await reserveAvailableSipCredential(
+			db,
+			pendingUser.id
+		);
 
-	const user = await createUser(
-		db,
-		{
-			fullName: input.fullName,
-			email: input.email,
-			phoneNumber: input.phoneNumber,
-			screeningNumber: reservedNumber.phoneNumber,
-			sipUsername: reservedSipCredential.sipUsername,
-			status: "active",
-			coverageStatus: "active"
-		}
-	);
+		const user = await updateUserProvisioningAssignment(
+			db,
+			pendingUser.id,
+			reservedNumber.phoneNumber,
+			reservedSipCredential.sipUsername
+		);
 
-	return {
-		user,
-		coverageStatus: user.coverageStatus,
-		provisioningStatus: "active",
-		steps: [
-			{
-				name: "subscriber_record_created",
-				status: "complete"
-			},
-			{
-				name: "screening_number_reserved_from_inventory",
-				status: "complete"
-			},
-			{
-				name: "sip_username_assigned",
-				status: "complete"
-			},
-			{
-				name: "coverage_activated",
-				status: "complete"
-			}
-		]
-	};
+		return {
+			user,
+			coverageStatus: user.coverageStatus,
+			provisioningStatus: "active",
+			steps: [
+				{
+					name: "subscriber_record_created",
+					status: "complete"
+				},
+				{
+					name: "screening_number_reserved_from_inventory",
+					status: "complete"
+				},
+				{
+					name: "sip_username_assigned",
+					status: "complete"
+				},
+				{
+					name: "coverage_activated",
+					status: "complete"
+				}
+			]
+		};
+	} catch (error) {
+		await releaseScreeningNumberForUser(db, pendingUser.id);
+		await releaseSipCredentialForUser(db, pendingUser.id);
+		await deleteUserById(db, pendingUser.id);
+
+		throw error;
+	}
 }
