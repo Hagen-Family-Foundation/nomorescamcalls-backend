@@ -206,6 +206,29 @@ export async function releaseScreeningNumberForUser(
 		.run();
 }
 
+export async function removeAvailableScreeningNumbersMissingFromTelnyx(
+	db: D1Database,
+	activePhoneNumbers: string[]
+): Promise<number> {
+	if (activePhoneNumbers.length === 0) {
+		return 0;
+	}
+
+	const placeholders = activePhoneNumbers.map(() => "?").join(", ");
+
+	const result = await db
+		.prepare(`
+			DELETE FROM screening_number_inventory
+			WHERE provider = 'telnyx'
+				AND status = 'available'
+				AND phone_number NOT IN (${placeholders})
+		`)
+		.bind(...activePhoneNumbers)
+		.run();
+
+	return result.meta.changes ?? 0;
+}
+
 export interface ScreeningNumberInventoryHealth {
 	total: number;
 	available: number;

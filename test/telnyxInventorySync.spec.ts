@@ -123,4 +123,58 @@ describe("telnyxInventorySync", () => {
 		expect(stored?.connectionId).toBe("connection-default");
 	});
 
+
+	it("removes available Telnyx inventory numbers missing from the latest sync", async () => {
+		await env.nomorescamcalls_db
+			.prepare(`
+				INSERT INTO screening_number_inventory (
+					phone_number,
+					status,
+					provider
+				)
+				VALUES (?, 'available', 'telnyx')
+				ON CONFLICT(phone_number) DO UPDATE SET
+					status = 'available',
+					assigned_user_id = NULL,
+					assigned_at = NULL,
+					provider = 'telnyx'
+			`)
+			.bind("+19139562496")
+			.run();
+
+		vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({
+			data: [
+				{
+					id: "telnyx-number-still-active",
+					phone_number: "+19139562495"
+				}
+			]
+		}), {
+			status: 200
+		})));
+
+		await syncTelnyxInventory(
+			env.nomorescamcalls_db,
+			{
+				telnyxConfig: {
+					apiKey: "test-api-key",
+					baseUrl: "https://api.telnyx.test/v2"
+				}
+			}
+		);
+
+		const stale = await findScreeningNumberInInventory(
+			env.nomorescamcalls_db,
+			"+19139562496"
+		);
+
+		const active = await findScreeningNumberInInventory(
+			env.nomorescamcalls_db,
+			"+19139562495"
+		);
+
+		expect(stale).toBeNull();
+		expect(active?.status).toBe("available");
+	});
+
 });

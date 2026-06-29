@@ -1,4 +1,7 @@
-import { addScreeningNumberToInventory } from "./screeningNumberInventory";
+import {
+	addScreeningNumberToInventory,
+	removeAvailableScreeningNumbersMissingFromTelnyx
+} from "./screeningNumberInventory";
 import {
 	fetchTelnyxPhoneNumbers,
 	type TelnyxPhoneNumbersClientConfig
@@ -45,6 +48,11 @@ export async function syncTelnyxInventory(
 			}
 		);
 	}
+
+	await removeAvailableScreeningNumbersMissingFromTelnyx(
+		db,
+		uniqueRecords.map((record) => record.phoneNumber)
+	);
 
 	return {
 		mode: fetched.mode,
