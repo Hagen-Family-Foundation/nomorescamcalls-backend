@@ -549,7 +549,7 @@ export default {
 			const recordings = await fetchTelnyxRecordings({
 				apiKey: env.TELNYX_API_KEY,
 				baseUrl: env.TELNYX_API_BASE_URL
-			});
+			}, url.searchParams.get("call_session_id"));
 
 			return Response.json({
 				recordings
