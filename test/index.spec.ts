@@ -225,7 +225,7 @@ describe("NoMoreScamCalls Worker", () => {
 						call_control_id: "test-call-control-id",
 						call_session_id: "test-call-session-id",
 						from: "+18165551234",
-						to: "+18165550000"
+						to: "+18005550000"
 					}
 				}
 			})
@@ -767,7 +767,7 @@ describe("NoMoreScamCalls Worker", () => {
 			`)
 			.bind(
 				"+18005550101",
-				"+18165550000",
+				"+18005550000",
 				"test_user_18005550101"
 			)
 			.run();
@@ -784,7 +784,7 @@ describe("NoMoreScamCalls Worker", () => {
 						call_control_id: "test-user-call-control-id",
 						call_session_id: "test-user-call-session-id",
 						from: "+18165551235",
-						to: "+18165550000"
+						to: "+18005550000"
 					}
 				}
 			})
@@ -816,7 +816,7 @@ describe("NoMoreScamCalls Worker", () => {
 
 		expect(body.protectedUser).not.toBeNull();
 		expect(body.protectedUser?.phoneNumber).toBe("+18005550101");
-		expect(body.protectedUser?.screeningNumber).toBe("+18165550000");
+		expect(body.protectedUser?.screeningNumber).toBe("+18005550000");
 		expect(body.protectedUser?.sipUsername).toBe("test_user_18005550101");
 		expect(body.protectedUser?.status).toBe("active");
 		expect(body.approvedDestination.destinationType).toBe("app");
@@ -825,7 +825,7 @@ describe("NoMoreScamCalls Worker", () => {
 		expect(body.simulatedTelnyxRequest?.body.sipUsername).toBe("test_user_18005550101");
 		expect(body.simulatedTelnyxRequest?.body.to).toBe("sip:test_user_18005550101@sip.telnyx.com");
 		expect(body.simulatedTelnyxRequest?.body.liveApiReady).toBe(true);
-		expect(body.simulatedTelnyxRequest?.body.from).toBe("+18165550000");
+		expect(body.simulatedTelnyxRequest?.body.from).toBe("+18005550000");
 	});
 
 	it("handles a Telnyx challenge response webhook", async () => {
@@ -841,7 +841,7 @@ describe("NoMoreScamCalls Worker", () => {
 						call_control_id: "test-call-control-id",
 						call_session_id: "test-call-session-id",
 						from: "+18165551234",
-						to: "+18165550000",
+						to: "+18005550000",
 						digits: "5"
 					}
 				}

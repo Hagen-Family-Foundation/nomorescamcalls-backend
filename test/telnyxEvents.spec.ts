@@ -13,7 +13,7 @@ describe("Telnyx event normalization", () => {
 					call_control_id: "test-call-control-id",
 					call_session_id: "test-call-session-id",
 					from: "+18165551234",
-					to: "+18165550000",
+					to: "+18005550000",
 					digits: "5"
 				}
 			}
