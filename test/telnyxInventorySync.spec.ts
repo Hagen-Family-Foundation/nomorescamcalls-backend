@@ -139,14 +139,14 @@ describe("telnyxInventorySync", () => {
 					assigned_at = NULL,
 					provider = 'telnyx'
 			`)
-			.bind("+19139562496")
+			.bind("+18005550196")
 			.run();
 
 		vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({
 			data: [
 				{
 					id: "telnyx-number-still-active",
-					phone_number: "+19139562495"
+					phone_number: "+18005550195"
 				}
 			]
 		}), {
@@ -165,12 +165,12 @@ describe("telnyxInventorySync", () => {
 
 		const stale = await findScreeningNumberInInventory(
 			env.nomorescamcalls_db,
-			"+19139562496"
+			"+18005550196"
 		);
 
 		const active = await findScreeningNumberInInventory(
 			env.nomorescamcalls_db,
-			"+19139562495"
+			"+18005550195"
 		);
 
 		expect(stale).toBeNull();
