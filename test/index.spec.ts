@@ -23,9 +23,10 @@ async function ensureTestSchema(): Promise<void> {
 			CREATE TABLE IF NOT EXISTS block_list (
 				id INTEGER PRIMARY KEY AUTOINCREMENT,
 				user_id INTEGER,
-				phone_number TEXT NOT NULL UNIQUE,
+				phone_number TEXT NOT NULL,
 				reason TEXT NOT NULL,
-				created_at TEXT DEFAULT CURRENT_TIMESTAMP
+				created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+				UNIQUE(user_id, phone_number)
 			)
 		`)
 		.run();
@@ -35,9 +36,10 @@ async function ensureTestSchema(): Promise<void> {
 			CREATE TABLE IF NOT EXISTS allow_list (
 				id INTEGER PRIMARY KEY AUTOINCREMENT,
 				user_id INTEGER,
-				phone_number TEXT NOT NULL UNIQUE,
+				phone_number TEXT NOT NULL,
 				reason TEXT NOT NULL,
-				created_at TEXT DEFAULT CURRENT_TIMESTAMP
+				created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+				UNIQUE(user_id, phone_number)
 			)
 		`)
 		.run();

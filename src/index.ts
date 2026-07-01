@@ -317,10 +317,12 @@ export default {
 			const body = await request.json() as {
 				phoneNumber?: string;
 				reason?: string;
+				userId?: number;
 			};
 
 			const phoneNumber = body.phoneNumber ?? "";
 			const reason = body.reason ?? "manual_allow";
+			const userId = body.userId ?? null;
 
 			if (!phoneNumber) {
 				return Response.json({
@@ -334,7 +336,8 @@ export default {
 				env.nomorescamcalls_db,
 				"allow",
 				phoneNumber,
-				reason
+				reason,
+				userId
 			);
 
 			return Response.json({

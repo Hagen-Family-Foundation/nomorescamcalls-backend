@@ -57,7 +57,7 @@ export async function addCallerListEntry(
 				reason
 			)
 			VALUES (?, ?, ?)
-			ON CONFLICT(phone_number) DO UPDATE SET
+			ON CONFLICT(user_id, phone_number) DO UPDATE SET
 				user_id = excluded.user_id,
 				reason = excluded.reason
 		`)
