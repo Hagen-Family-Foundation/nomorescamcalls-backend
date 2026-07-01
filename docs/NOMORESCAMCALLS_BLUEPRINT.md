@@ -1,4 +1,4 @@
-# NoMoreScamCalls Product Architecture
+# NoMoreScamCalls Blueprint — How It's Built
 
 _Last updated: 2026-07-01_
 
@@ -283,3 +283,71 @@ The public experience should be:
 - not cluttered with technical detail.
 
 The market-facing app/site should communicate protection, trust, simplicity, and guided assistance.
+
+## 2026-07-01 Voice Application and Recording Evidence
+
+Production evidence proved that the Worker must point to the active Telnyx Voice Application:
+
+- active Voice Application: NoMoreScamCalls WebRTC POC 2
+- active Voice Application ID: 2974360803492235067
+- webhook: https://nomorescamcalls-backend.smokey831831.workers.dev/webhooks/telnyx
+
+The stale beta Voice Application was removed from Telnyx, and the Worker configuration was updated to the active Voice Application ID.
+
+Production evidence also proved that caller audio recordings already exist.
+
+The Telnyx Recordings API returned completed recordings for live calls, including:
+
+- recording id,
+- call session id,
+- call leg id,
+- caller number,
+- screening number,
+- recording start time,
+- recording end time,
+- duration,
+- MP3 download URL.
+
+This changes the voice-analysis problem.
+
+The primary problem is no longer how to capture the caller's voice.
+
+The primary problem is how to reliably retrieve the correct recording by call_session_id and use it for transcription and analysis.
+
+## Voice Evidence Architecture Direction
+
+The long-term challenge flow should move away from keypad input.
+
+The caller should hear only:
+
+"Please state your name and reason for calling."
+
+The system should then use the resulting voice evidence for future analysis.
+
+The preferred correlation key is Telnyx call_session_id because it appears in:
+
+- live Call Control webhook events,
+- challenge events,
+- bridge/transfer events,
+- hangup events,
+- Telnyx recording records.
+
+The next architecture brick is to determine whether recordings can be fetched directly or deterministically by call_session_id.
+
+If proven, the future flow becomes:
+
+Incoming call
+→ screen
+→ challenge if needed
+→ caller states name and reason
+→ recording is retrieved by call_session_id
+→ recording is transcribed
+→ transcript and voice evidence are analyzed
+→ final risk decision
+→ transfer or terminate
+
+This follows the permanent project rule:
+
+The evidence will tell us what to do next.
+We only use evidence as our guide.
+We do not use anything else.
