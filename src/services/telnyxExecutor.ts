@@ -41,11 +41,11 @@ export async function executeTelnyxRequest(
 		};
 	}
 
-	if (request.body.liveApiReady !== true) {
+	if (request.metadata.liveApiReady !== true) {
 		return {
 			mode: "disabled",
 			executed: false,
-			reason: "Telnyx live execution was requested, but this request body is not explicitly marked liveApiReady.",
+			reason: "Telnyx live execution was requested, but this request is not explicitly marked liveApiReady.",
 			request,
 			policy
 		};
@@ -63,13 +63,6 @@ export async function executeTelnyxRequest(
 
 	const baseUrl = apiConfig.baseUrl ?? "https://api.telnyx.com/v2";
 	const url = `${baseUrl}${request.endpoint}`;
-	const {
-		liveApiReady,
-		destinationType,
-		sipUsername,
-		routingReason,
-		...liveRequestBody
-	} = request.body;
 
 	try {
 		const response = await fetch(url, {
@@ -78,7 +71,7 @@ export async function executeTelnyxRequest(
 				"authorization": `Bearer ${apiConfig.apiKey}`,
 				"content-type": "application/json"
 			},
-			body: JSON.stringify(liveRequestBody)
+			body: JSON.stringify(request.body)
 		});
 
 		const responseText = await response.text();

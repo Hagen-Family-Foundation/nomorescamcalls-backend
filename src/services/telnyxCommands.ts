@@ -45,7 +45,7 @@ export function planTelnyxCommand(
 			callControlId: event.callControlId,
 			callSessionId: event.callSessionId,
 			reason: "Blocked caller would be rejected or hung up before ringing the user.",
-			safetyNote: "Hangup is simulation-only and disabled."
+			safetyNote: "Hangup is guarded by TELNYX_LIVE_EXECUTION and remains disabled unless explicitly enabled."
 		};
 	}
 
@@ -55,6 +55,6 @@ export function planTelnyxCommand(
 		callControlId: event.callControlId,
 		callSessionId: event.callSessionId,
 		reason: "Caller would receive a short verification challenge before being allowed through.",
-		safetyNote: "Gather/speak challenge is simulation-only and disabled."
+		safetyNote: "Gather/speak challenge is guarded by TELNYX_LIVE_EXECUTION and remains disabled unless explicitly enabled."
 	};
 }

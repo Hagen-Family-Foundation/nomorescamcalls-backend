@@ -821,10 +821,10 @@ describe("NoMoreScamCalls Worker", () => {
 		expect(body.protectedUser?.status).toBe("active");
 		expect(body.approvedDestination.destinationType).toBe("app");
 		expect(body.approvedDestination.destination).toBe("test_user_18005550101");
-		expect(body.simulatedTelnyxRequest?.body.destinationType).toBe("app");
-		expect(body.simulatedTelnyxRequest?.body.sipUsername).toBe("test_user_18005550101");
+		expect(body.simulatedTelnyxRequest?.metadata.destinationType).toBe("app");
+		expect(body.simulatedTelnyxRequest?.metadata.sipUsername).toBe("test_user_18005550101");
 		expect(body.simulatedTelnyxRequest?.body.to).toBe("sip:test_user_18005550101@sip.telnyx.com");
-		expect(body.simulatedTelnyxRequest?.body.liveApiReady).toBe(true);
+		expect(body.simulatedTelnyxRequest?.metadata.liveApiReady).toBe(true);
 		expect(body.simulatedTelnyxRequest?.body.from).toBe("+18005550000");
 	});
 

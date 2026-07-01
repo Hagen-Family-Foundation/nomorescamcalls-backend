@@ -20,7 +20,7 @@ describe("Telnyx request builder", () => {
 
 		expect(request?.method).toBe("POST");
 		expect(request?.endpoint).toBe("/calls/test-call-control-id/actions/answer");
-		expect(request?.body.liveApiReady).toBe(true);
+		expect(request?.metadata.liveApiReady).toBe(true);
 	});
 
 
@@ -40,7 +40,7 @@ describe("Telnyx request builder", () => {
 		expect(request?.endpoint).toBe("/calls/test-call-control-id/actions/transfer");
 		expect(request?.body.to).toBe("sip:test_user_18005550101@sip.telnyx.com");
 		expect(request?.body.from).toBe("+18005550000");
-		expect(request?.body.liveApiReady).toBe(true);
+		expect(request?.metadata.liveApiReady).toBe(true);
 	});
 
 	it("builds a hangup request", () => {
@@ -64,8 +64,8 @@ describe("Telnyx request builder", () => {
 
 		expect(request?.method).toBe("POST");
 		expect(request?.endpoint).toBe("/calls/test-call-control-id/actions/gather_using_speak");
-		expect(request?.body.prompt).toBe("Please press 5 to continue.");
-		expect(request?.body.expectedInput).toBe("5");
+		expect(request?.body.payload).toBe("Please press 5 to continue.");
+		expect(request?.metadata.challengeExpectedInput).toBe("5");
 	});
 
 	it("returns null for noop", () => {
