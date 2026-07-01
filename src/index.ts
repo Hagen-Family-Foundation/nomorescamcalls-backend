@@ -16,6 +16,7 @@ import { provisionSubscriber } from "./services/provisioning";
 import { syncTelnyxInventory } from "./services/telnyxInventorySync";
 import { syncTelnyxSipCredentials } from "./services/telnyxSipCredentialSync";
 import { fetchTelnyxVoiceApplication } from "./services/telnyxVoiceApplicationsClient";
+import { fetchTelnyxRecordings } from "./services/telnyxRecordingsClient";
 
 export default {
 	async fetch(request: Request, env: Env): Promise<Response> {
@@ -540,6 +541,18 @@ export default {
 
 			return Response.json({
 				voiceApplication
+			});
+		}
+
+		// Telnyx Recordings Diagnostic Endpoint
+		if (request.method === "GET" && url.pathname === "/telnyx/recordings") {
+			const recordings = await fetchTelnyxRecordings({
+				apiKey: env.TELNYX_API_KEY,
+				baseUrl: env.TELNYX_API_BASE_URL
+			});
+
+			return Response.json({
+				recordings
 			});
 		}
 
