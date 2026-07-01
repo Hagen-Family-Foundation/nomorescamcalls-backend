@@ -351,3 +351,83 @@ This follows the permanent project rule:
 The evidence will tell us what to do next.
 We only use evidence as our guide.
 We do not use anything else.
+
+## 2026-07-01 Recording Correlation Proof
+
+Production evidence proved that Telnyx recordings can be matched back to live call events by call_session_id.
+
+The Worker now supports a recordings diagnostic query:
+
+/telnyx/recordings?call_session_id=<call_session_id>
+
+This returned the correct completed recording for the live test call, including:
+
+- recording id,
+- call_session_id,
+- call_leg_id,
+- caller number,
+- screening number,
+- duration,
+- recording start and end timestamps,
+- MP3 download URL.
+
+This proves the core correlation path:
+
+live call event
+→ call_session_id
+→ Telnyx recording
+→ MP3 download URL
+
+This is the backbone for the future spoken-caller analysis flow.
+
+The immediate beta-focused meaning is:
+
+NoMoreScamCalls does not need to prove basic call control or audio capture anymore before beta planning can continue.
+
+Those bricks are proven.
+
+The remaining work should now focus on getting the service safe, understandable, supportable, and testable for real beta users.
+
+From this point forward, next-step decisions should be evaluated by one question:
+
+Does this help get NoMoreScamCalls into the hands of beta testers safely and with evidence?
+
+## 2026-07-01 Recording Correlation Proof
+
+Production evidence proved that Telnyx recordings can be matched back to live call events by call_session_id.
+
+The Worker now supports a recordings diagnostic query:
+
+/telnyx/recordings?call_session_id=<call_session_id>
+
+This returned the correct completed recording for the live test call, including:
+
+- recording id,
+- call_session_id,
+- call_leg_id,
+- caller number,
+- screening number,
+- duration,
+- recording start and end timestamps,
+- MP3 download URL.
+
+This proves the core correlation path:
+
+live call event
+→ call_session_id
+→ Telnyx recording
+→ MP3 download URL
+
+This is the backbone for the future spoken-caller analysis flow.
+
+The immediate beta-focused meaning is:
+
+NoMoreScamCalls does not need to prove basic call control or audio capture anymore before beta planning can continue.
+
+Those bricks are proven.
+
+The remaining work should now focus on getting the service safe, understandable, supportable, and testable for real beta users.
+
+From this point forward, next-step decisions should be evaluated by one question:
+
+Does this help get NoMoreScamCalls into the hands of beta testers safely and with evidence?
