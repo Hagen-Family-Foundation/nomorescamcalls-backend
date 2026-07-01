@@ -766,9 +766,9 @@ describe("NoMoreScamCalls Worker", () => {
 					status = 'active'
 			`)
 			.bind(
-				"+18165550001",
+				"+18005550101",
 				"+18165550000",
-				"user_18165550001"
+				"test_user_18005550101"
 			)
 			.run();
 
@@ -815,15 +815,15 @@ describe("NoMoreScamCalls Worker", () => {
 		}>();
 
 		expect(body.protectedUser).not.toBeNull();
-		expect(body.protectedUser?.phoneNumber).toBe("+18165550001");
+		expect(body.protectedUser?.phoneNumber).toBe("+18005550101");
 		expect(body.protectedUser?.screeningNumber).toBe("+18165550000");
-		expect(body.protectedUser?.sipUsername).toBe("user_18165550001");
+		expect(body.protectedUser?.sipUsername).toBe("test_user_18005550101");
 		expect(body.protectedUser?.status).toBe("active");
 		expect(body.approvedDestination.destinationType).toBe("app");
-		expect(body.approvedDestination.destination).toBe("user_18165550001");
+		expect(body.approvedDestination.destination).toBe("test_user_18005550101");
 		expect(body.simulatedTelnyxRequest?.body.destinationType).toBe("app");
-		expect(body.simulatedTelnyxRequest?.body.sipUsername).toBe("user_18165550001");
-		expect(body.simulatedTelnyxRequest?.body.to).toBe("sip:user_18165550001@sip.telnyx.com");
+		expect(body.simulatedTelnyxRequest?.body.sipUsername).toBe("test_user_18005550101");
+		expect(body.simulatedTelnyxRequest?.body.to).toBe("sip:test_user_18005550101@sip.telnyx.com");
 		expect(body.simulatedTelnyxRequest?.body.liveApiReady).toBe(true);
 		expect(body.simulatedTelnyxRequest?.body.from).toBe("+18165550000");
 	});

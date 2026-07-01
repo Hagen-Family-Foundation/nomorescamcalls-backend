@@ -30,7 +30,7 @@ describe("Telnyx request builder", () => {
 			null,
 			{
 				destinationType: "app",
-				destination: "user_18165550001",
+				destination: "test_user_18005550101",
 				screeningNumber: "+18165550000",
 				reason: "test approved destination"
 			}
@@ -38,7 +38,7 @@ describe("Telnyx request builder", () => {
 
 		expect(request?.method).toBe("POST");
 		expect(request?.endpoint).toBe("/calls/test-call-control-id/actions/transfer");
-		expect(request?.body.to).toBe("sip:user_18165550001@sip.telnyx.com");
+		expect(request?.body.to).toBe("sip:test_user_18005550101@sip.telnyx.com");
 		expect(request?.body.from).toBe("+18165550000");
 		expect(request?.body.liveApiReady).toBe(true);
 	});
