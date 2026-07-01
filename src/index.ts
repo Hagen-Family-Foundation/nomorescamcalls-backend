@@ -15,6 +15,7 @@ import { getTelnyxExecutionPolicy } from "./services/telnyxExecutionPolicy";
 import { provisionSubscriber } from "./services/provisioning";
 import { syncTelnyxInventory } from "./services/telnyxInventorySync";
 import { syncTelnyxSipCredentials } from "./services/telnyxSipCredentialSync";
+import { fetchTelnyxVoiceApplication } from "./services/telnyxVoiceApplicationsClient";
 
 export default {
 	async fetch(request: Request, env: Env): Promise<Response> {
@@ -524,6 +525,21 @@ export default {
 			return Response.json({
 				removed,
 				phoneNumber
+			});
+		}
+
+		// Telnyx Voice Application Diagnostic Endpoint
+		if (request.method === "GET" && url.pathname === "/telnyx/voice-application") {
+			const voiceApplication = await fetchTelnyxVoiceApplication(
+				env.TELNYX_VOICE_APPLICATION_ID,
+				{
+					apiKey: env.TELNYX_API_KEY,
+					baseUrl: env.TELNYX_API_BASE_URL
+				}
+			);
+
+			return Response.json({
+				voiceApplication
 			});
 		}
 
