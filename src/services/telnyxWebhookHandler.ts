@@ -1,7 +1,7 @@
 import { screenPhoneNumber } from "./screening";
 import { planTelnyxAction } from "./telnyxActions";
 import { normalizeTelnyxEvent, shouldHandleTelnyxChallengeResponse, shouldScreenTelnyxEvent } from "./telnyxEvents";
-import { planTelnyxCommand } from "./telnyxCommands";
+import { planTelnyxExecution } from "./telnyxCommands";
 import { recordTelnyxWebhookEvent } from "./telnyxAudit";
 import { planChallengePrompt } from "./challengePrompts";
 import { buildTelnyxRequest } from "./telnyxRequests";
@@ -72,10 +72,11 @@ export async function handleTelnyxWebhook(
 	);
 
 	const plannedTelnyxAction = planTelnyxAction(screening.action);
-	const plannedTelnyxCommand = planTelnyxCommand(
+	const plannedTelnyxExecution = planTelnyxExecution(
 		telnyxEvent,
 		plannedTelnyxAction
 	);
+	const plannedTelnyxCommand = plannedTelnyxExecution.commands[0];
 	const plannedChallengePrompt = planChallengePrompt(
 		screening.challengeProfile
 	);
@@ -83,7 +84,7 @@ export async function handleTelnyxWebhook(
 		plannedChallengePrompt
 	);
 	if (
-		plannedTelnyxCommand.command === "gather" &&
+		plannedTelnyxExecution.commands.some((command) => command.command === "gather") &&
 		plannedChallengePrompt
 	) {
 		await saveTelnyxChallenge(
@@ -99,16 +100,31 @@ export async function handleTelnyxWebhook(
 		protectedUser
 	);
 
-	const simulatedTelnyxRequest = buildTelnyxRequest(
-		plannedTelnyxCommand,
-		plannedChallengePrompt,
-		approvedDestination
+	const telnyxRequests = plannedTelnyxExecution.commands.map((command) =>
+		buildTelnyxRequest(
+			command,
+			plannedChallengePrompt,
+			approvedDestination
+		)
 	);
-	const telnyxExecution = await executeTelnyxRequest(
-		simulatedTelnyxRequest,
-		executionPolicy,
-		telnyxApiConfig
-	);
+	const telnyxExecutions = [];
+	for (const request of telnyxRequests) {
+		telnyxExecutions.push(await executeTelnyxRequest(
+			request,
+			executionPolicy,
+			telnyxApiConfig
+		));
+	}
+	const simulatedTelnyxRequest = telnyxRequests[0] ?? null;
+	const telnyxExecution = telnyxExecutions[0] ?? null;
+
+
+	console.log("SCREENING:", JSON.stringify(screening));
+	console.log("PLANNED ACTION:", JSON.stringify(plannedTelnyxAction));
+	console.log("PLANNED EXECUTION:", JSON.stringify(plannedTelnyxExecution));
+	console.log("PLANNED COMMAND:", JSON.stringify(plannedTelnyxCommand));
+	console.log("TELNYX REQUESTS:", JSON.stringify(telnyxRequests));
+	console.log("TELNYX EXECUTIONS:", JSON.stringify(telnyxExecutions));
 
 	await recordTelnyxWebhookEvent(
 		db,
@@ -126,11 +142,14 @@ export async function handleTelnyxWebhook(
 		telnyxEvent,
 		screening,
 		plannedTelnyxAction,
+		plannedTelnyxExecution,
 		plannedTelnyxCommand,
 		plannedChallengePrompt,
 		plannedChallengeOutcome,
 		approvedDestination,
 		simulatedTelnyxRequest,
-		telnyxExecution
+		telnyxExecution,
+		telnyxRequests,
+		telnyxExecutions
 	});
 }

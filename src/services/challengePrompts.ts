@@ -24,7 +24,7 @@ export function planChallengePrompt(
 		return {
 			mode: "simulated",
 			type: "strict_verification",
-			prompt: "Please press 5 to complete your call.",
+			prompt: "Please state your name and reason for calling.",
 			profilePrompts: challengeProfile.prompts,
 			expectedInput: "5",
 			maxAttempts: 1,
@@ -37,7 +37,7 @@ export function planChallengePrompt(
 		return {
 			mode: "simulated",
 			type: "dtmf_press_with_retry",
-			prompt: "Please press 5 to continue.",
+			prompt: "Please state your name and reason for calling.",
 			profilePrompts: challengeProfile.prompts,
 			expectedInput: "5",
 			maxAttempts: 2,
@@ -49,7 +49,7 @@ export function planChallengePrompt(
 	return {
 		mode: "simulated",
 		type: "dtmf_press",
-		prompt: "Please press 5 to continue.",
+		prompt: "Please state your name and reason for calling.",
 		profilePrompts: challengeProfile.prompts,
 		expectedInput: "5",
 		maxAttempts: 1,

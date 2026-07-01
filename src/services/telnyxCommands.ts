@@ -12,49 +12,105 @@ export interface TelnyxPlannedCommand {
 	safetyNote: string;
 }
 
-export function planTelnyxCommand(
+export interface TelnyxExecutionPlan {
+	mode: "simulated";
+	action: TelnyxPlannedAction["action"];
+	commands: TelnyxPlannedCommand[];
+	reason: string;
+}
+
+function command(
+	event: TelnyxCallEvent,
+	command: TelnyxCommandType,
+	reason: string,
+	safetyNote: string
+): TelnyxPlannedCommand {
+	return {
+		mode: "simulated",
+		command,
+		callControlId: event.callControlId,
+		callSessionId: event.callSessionId,
+		reason,
+		safetyNote
+	};
+}
+
+export function planTelnyxExecution(
 	event: TelnyxCallEvent,
 	plannedAction: TelnyxPlannedAction
-): TelnyxPlannedCommand {
+): TelnyxExecutionPlan {
 	if (!event.callControlId) {
 		return {
 			mode: "simulated",
-			command: "noop",
-			callControlId: event.callControlId,
-			callSessionId: event.callSessionId,
-			reason: "Missing call_control_id; cannot safely plan Telnyx Call Control command.",
-			safetyNote: "No live Telnyx command will be attempted."
+			action: plannedAction.action,
+			commands: [
+				command(
+					event,
+					"noop",
+					"Missing call_control_id; cannot safely plan Telnyx Call Control command.",
+					"No live Telnyx command will be attempted."
+				)
+			],
+			reason: "Missing call_control_id."
 		};
 	}
 
 	if (plannedAction.action === "allow") {
 		return {
 			mode: "simulated",
-			command: "transfer",
-			callControlId: event.callControlId,
-			callSessionId: event.callSessionId,
-			reason: "Approved caller would be transferred to the protected user's Telnyx WebRTC app identity.",
-			safetyNote: "Transfer is guarded by TELNYX_LIVE_EXECUTION and remains disabled unless explicitly enabled."
+			action: "allow",
+			commands: [
+				command(
+					event,
+					"transfer",
+					"Approved caller should be transferred to the protected user's Telnyx WebRTC app identity.",
+					"Transfer is guarded by TELNYX_LIVE_EXECUTION and remains disabled unless explicitly enabled."
+				)
+			],
+			reason: "Allow path uses direct transfer."
 		};
 	}
 
 	if (plannedAction.action === "block") {
 		return {
 			mode: "simulated",
-			command: "hangup",
-			callControlId: event.callControlId,
-			callSessionId: event.callSessionId,
-			reason: "Blocked caller would be rejected or hung up before ringing the user.",
-			safetyNote: "Hangup is guarded by TELNYX_LIVE_EXECUTION and remains disabled unless explicitly enabled."
+			action: "block",
+			commands: [
+				command(
+					event,
+					"hangup",
+					"Blocked caller should be hung up before ringing the user.",
+					"Hangup is guarded by TELNYX_LIVE_EXECUTION and remains disabled unless explicitly enabled."
+				)
+			],
+			reason: "Block path uses hangup."
 		};
 	}
 
 	return {
 		mode: "simulated",
-		command: "gather",
-		callControlId: event.callControlId,
-		callSessionId: event.callSessionId,
-		reason: "Caller would receive a short verification challenge before being allowed through.",
-		safetyNote: "Gather/speak challenge is guarded by TELNYX_LIVE_EXECUTION and remains disabled unless explicitly enabled."
+		action: "challenge",
+		commands: [
+			command(
+				event,
+				"answer",
+				"Challenge path must answer the call before gather_using_speak.",
+				"Answer is guarded by TELNYX_LIVE_EXECUTION and remains disabled unless explicitly enabled."
+			),
+			command(
+				event,
+				"gather",
+				"Caller should receive a short verification challenge before being allowed through.",
+				"Gather/speak challenge is guarded by TELNYX_LIVE_EXECUTION and remains disabled unless explicitly enabled."
+			)
+		],
+		reason: "Challenge path requires answer before gather."
 	};
+}
+
+export function planTelnyxCommand(
+	event: TelnyxCallEvent,
+	plannedAction: TelnyxPlannedAction
+): TelnyxPlannedCommand {
+	return planTelnyxExecution(event, plannedAction).commands[0];
 }

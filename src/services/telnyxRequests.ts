@@ -99,14 +99,13 @@ export function buildTelnyxRequest(
 			method: "POST",
 			endpoint: `/calls/${command.callControlId}/actions/gather_using_speak`,
 			body: {
-				payload: challengePrompt?.prompt ?? "Please press 5 to continue.",
+				payload: challengePrompt?.prompt ?? "Please state your name and reason for calling.",
 				language: "en-US",
 				voice: "female",
 				valid_digits: expectedInput,
 				max: 1,
 				timeout_millis: timeoutSeconds * 1000,
-				inter_digit_timeout_millis: 3000,
-				client_state: command.callSessionId
+				inter_digit_timeout_millis: 3000
 			},
 			metadata: {
 				liveApiReady: true,

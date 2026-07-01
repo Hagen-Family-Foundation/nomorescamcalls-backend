@@ -14,7 +14,7 @@ import type { TelnyxExecutionPolicy } from "./telnyxExecutionPolicy";
 const defaultChallengePrompt: ChallengePromptPlan = {
 	mode: "simulated",
 	type: "dtmf_press",
-	prompt: "Please press 5 to continue.",
+	prompt: "Please state your name and reason for calling.",
 	profilePrompts: [],
 	expectedInput: "5",
 	maxAttempts: 1,
@@ -82,6 +82,13 @@ export async function handleTelnyxChallengeResponse(
 		executionPolicy,
 		telnyxApiConfig
 	);
+
+
+	console.log("CHALLENGE STORED:", JSON.stringify(storedChallenge));
+	console.log("CHALLENGE OUTCOME:", JSON.stringify(plannedChallengeOutcome));
+	console.log("CHALLENGE COMMAND:", JSON.stringify(plannedTelnyxCommand));
+	console.log("CHALLENGE REQUEST:", JSON.stringify(simulatedTelnyxRequest));
+	console.log("CHALLENGE EXECUTION:", JSON.stringify(telnyxExecution));
 
 	await recordTelnyxWebhookEvent(
 		db,
