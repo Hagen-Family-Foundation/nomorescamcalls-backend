@@ -5,7 +5,14 @@ export interface DecisionResult {
 	reason: string;
 }
 
-export function decideAction(score: number): DecisionResult {
+export interface DecisionContext {
+	signalScore?: number;
+}
+
+export function decideAction(
+	score: number,
+	context: DecisionContext = {}
+): DecisionResult {
 	if (score >= 95) {
 		return {
 			action: "block",
@@ -13,10 +20,17 @@ export function decideAction(score: number): DecisionResult {
 		};
 	}
 
-	if (score >= 35) {
+	if (score >= 35 && (context.signalScore ?? 0) > 0) {
 		return {
 			action: "challenge",
 			reason: "risk_challenge"
+		};
+	}
+
+	if (score >= 35) {
+		return {
+			action: "allow",
+			reason: "frequency_without_suspicious_signal_allow"
 		};
 	}
 

@@ -144,7 +144,7 @@ export async function screenPhoneNumber(
 		);
 	}
 
-	const action = decideAction(reputation.riskScore);
+	const action = decideAction(reputation.riskScore, { signalScore: reputation.signalScore });
 
 	const result: ScreeningResult = {
 		phoneNumber,
