@@ -224,7 +224,7 @@ describe("NoMoreScamCalls Worker", () => {
 					payload: {
 						call_control_id: "test-call-control-id",
 						call_session_id: "test-call-session-id",
-						from: "+18165551234",
+						from: "+18005551234",
 						to: "+18005550000"
 					}
 				}
@@ -368,7 +368,7 @@ describe("NoMoreScamCalls Worker", () => {
 	});
 
 	it("returns caller intelligence", async () => {
-		const response = await SELF.fetch("http://example.com/caller?phone=%2B18165551234");
+		const response = await SELF.fetch("http://example.com/caller?phone=%2B18005551234");
 
 		expect(response.status).toBe(200);
 
@@ -383,7 +383,7 @@ describe("NoMoreScamCalls Worker", () => {
 			};
 		}>();
 
-		expect(body.caller.phoneNumber).toBe("+18165551234");
+		expect(body.caller.phoneNumber).toBe("+18005551234");
 		expect(typeof body.caller.callerHash).toBe("string");
 		expect(Array.isArray(body.caller.signals)).toBe(true);
 		expect(Array.isArray(body.caller.recentCalls)).toBe(true);
@@ -783,7 +783,7 @@ describe("NoMoreScamCalls Worker", () => {
 					payload: {
 						call_control_id: "test-user-call-control-id",
 						call_session_id: "test-user-call-session-id",
-						from: "+18165551235",
+						from: "+18005551235",
 						to: "+18005550000"
 					}
 				}
@@ -840,7 +840,7 @@ describe("NoMoreScamCalls Worker", () => {
 					payload: {
 						call_control_id: "test-call-control-id",
 						call_session_id: "test-call-session-id",
-						from: "+18165551234",
+						from: "+18005551234",
 						to: "+18005550000",
 						digits: "5"
 					}
