@@ -44,7 +44,9 @@ describe("AI Investigator", () => {
 
 		expect(report.status).toBe("not_requested");
 		expect(report.spokenCallerAnalysis.status).toBe("not_requested");
+		expect(report.evidenceFindings).toEqual([]);
 		expect(report.questionsAsked).toEqual([]);
+		expect(report.unansweredQuestions).toEqual([]);
 		expect(report.remainingUncertainty).toBe(0);
 		expect(report.reason).toBe("allow_list_caller_baseline_observation_only");
 	});
@@ -59,6 +61,11 @@ describe("AI Investigator", () => {
 
 		expect(report.status).toBe("completed");
 		expect(report.spokenCallerAnalysis.status).toBe("not_requested");
+		expect(report.evidenceFindings).toEqual([]);
+		expect(report.questionsAsked).toEqual([]);
+		expect(report.unansweredQuestions).toEqual([
+			"AI investigation provider has not been connected."
+		]);
 		expect(report.remainingUncertainty).toBe(1);
 		expect(report.reason).toBe("ai_investigator_provider_not_connected");
 	});
