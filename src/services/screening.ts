@@ -1,9 +1,7 @@
 import { getChallengeProfile, type ChallengeProfile } from "./challenges";
 import { decideAction, type ScreeningAction } from "./decision";
+import { collectBaselineCallEvidence } from "./evidence";
 import { recordCallEvent } from "./events";
-import { updateCallerReputation } from "./reputation";
-import { hashPhoneNumber } from "../utils/hash";
-import { findConfirmedScamNumber } from "./confirmedScams";
 import { decideScamPromotion } from "./scamPromotionRules";
 import { promoteConfirmedScamNumber } from "./scamPromotion";
 
@@ -31,16 +29,13 @@ export async function screenPhoneNumber(
 	db: D1Database,
 	userId: number | null = null
 ): Promise<ScreeningResult> {
-	const callerHash = await hashPhoneNumber(phoneNumber);
+	const evidence = await collectBaselineCallEvidence(
+		phoneNumber,
+		db,
+		userId
+	);
 
-	const allowed = await db
-		.prepare(
-			"SELECT reason FROM allow_list WHERE phone_number = ? AND user_id IS ?"
-		)
-		.bind(phoneNumber, userId)
-		.first<{ reason: string }>();
-
-	if (allowed) {
+	if (evidence.evidenceClass === "allow_list" && evidence.allowList) {
 		const action = decideAction(0);
 
 		const result: ScreeningResult = {
@@ -48,13 +43,13 @@ export async function screenPhoneNumber(
 			decision: "allow",
 			action: action.action,
 			score: 0,
-			reason: allowed.reason,
+			reason: evidence.allowList.reason,
 			actionReason: action.reason
 		};
 
 		await recordCallEvent(
 			db,
-			callerHash,
+			evidence.callerHash,
 			result.decision,
 			result.score,
 			result.reason,
@@ -64,26 +59,21 @@ export async function screenPhoneNumber(
 		return result;
 	}
 
-	const confirmedScam = await findConfirmedScamNumber(
-		db,
-		phoneNumber
-	);
-
-	if (confirmedScam) {
-		const action = decideAction(confirmedScam.riskScore);
+	if (evidence.evidenceClass === "confirmed_scam" && evidence.confirmedScam) {
+		const action = decideAction(evidence.confirmedScam.riskScore);
 
 		const result: ScreeningResult = {
 			phoneNumber,
 			decision: "block",
 			action: action.action,
-			score: confirmedScam.riskScore,
-			reason: confirmedScam.reason,
+			score: evidence.confirmedScam.riskScore,
+			reason: evidence.confirmedScam.reason,
 			actionReason: action.reason
 		};
 
 		await recordCallEvent(
 			db,
-			callerHash,
+			evidence.callerHash,
 			result.decision,
 			result.score,
 			result.reason,
@@ -93,14 +83,7 @@ export async function screenPhoneNumber(
 		return result;
 	}
 
-	const blocked = await db
-		.prepare(
-			"SELECT reason FROM block_list WHERE phone_number = ? AND user_id IS ?"
-		)
-		.bind(phoneNumber, userId)
-		.first<{ reason: string }>();
-
-	if (blocked) {
+	if (evidence.evidenceClass === "user_block_list" && evidence.userBlockList) {
 		const action = decideAction(95);
 
 		const result: ScreeningResult = {
@@ -108,13 +91,13 @@ export async function screenPhoneNumber(
 			decision: "block",
 			action: action.action,
 			score: 95,
-			reason: blocked.reason,
+			reason: evidence.userBlockList.reason,
 			actionReason: action.reason
 		};
 
 		await recordCallEvent(
 			db,
-			callerHash,
+			evidence.callerHash,
 			result.decision,
 			result.score,
 			result.reason,
@@ -124,7 +107,11 @@ export async function screenPhoneNumber(
 		return result;
 	}
 
-	const reputation = await updateCallerReputation(phoneNumber, db);
+	if (!evidence.reputation) {
+		throw new Error("Baseline evidence did not include reputation for unknown caller.");
+	}
+
+	const reputation = evidence.reputation;
 
 	const reason = reputation.status === "watchlist"
 		? "reputation_watchlist"
@@ -168,7 +155,7 @@ export async function screenPhoneNumber(
 
 	await recordCallEvent(
 		db,
-		callerHash,
+		evidence.callerHash,
 		result.decision,
 		result.score,
 		result.reason,
