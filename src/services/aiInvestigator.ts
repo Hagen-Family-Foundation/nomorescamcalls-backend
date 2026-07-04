@@ -3,6 +3,8 @@ import type { InvestigationPlan } from "./investigationPlanner";
 import type { EvidenceFinding } from "./evidenceFinding";
 import { aggregateEvidenceFindings, type EvidenceSummary } from "./evidenceAggregator";
 import { investigateIdentity, type IdentityInvestigationResult } from "./identityInvestigation";
+import { investigateOrganization, type OrganizationInvestigationResult } from "./organizationInvestigation";
+import { investigatePurpose, type PurposeInvestigationResult } from "./purposeInvestigation";
 import {
 	noSpokenCallerAnalysis,
 	type SpokenCallerAnalysisResult
@@ -23,6 +25,8 @@ export interface AiInvestigationReport {
 	status: AiInvestigationStatus;
 	spokenCallerAnalysis: SpokenCallerAnalysisResult;
 	identityInvestigation: IdentityInvestigationResult | null;
+	organizationInvestigation: OrganizationInvestigationResult | null;
+	purposeInvestigation: PurposeInvestigationResult | null;
 	evidenceFindings: EvidenceFinding[];
 	evidenceSummary: EvidenceSummary;
 	questionsAsked: string[];
@@ -41,6 +45,8 @@ export async function investigateCaller(
 				"ai_investigation_not_requested_by_plan"
 			),
 			identityInvestigation: null,
+			organizationInvestigation: null,
+			purposeInvestigation: null,
 			evidenceFindings: [],
 			evidenceSummary: aggregateEvidenceFindings([]),
 			questionsAsked: [],
@@ -54,8 +60,18 @@ export async function investigateCaller(
 		transcript: request.transcript
 	});
 
+	const organizationInvestigation = investigateOrganization({
+		transcript: request.transcript
+	});
+
+	const purposeInvestigation = investigatePurpose({
+		transcript: request.transcript
+	});
+
 	const evidenceFindings = [
-		...identityInvestigation.evidenceFindings
+		...identityInvestigation.evidenceFindings,
+		...organizationInvestigation.evidenceFindings,
+		...purposeInvestigation.evidenceFindings
 	];
 
 	const evidenceSummary = aggregateEvidenceFindings(evidenceFindings);
@@ -66,6 +82,8 @@ export async function investigateCaller(
 			"ai_investigation_enabled_but_no_provider_connected"
 		),
 		identityInvestigation,
+		organizationInvestigation,
+		purposeInvestigation,
 		evidenceFindings,
 		evidenceSummary,
 		questionsAsked: [],
