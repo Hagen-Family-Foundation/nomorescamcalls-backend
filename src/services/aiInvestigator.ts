@@ -6,7 +6,6 @@ import { investigateIdentity, type IdentityInvestigationResult } from "./identit
 import { investigateOrganization, type OrganizationInvestigationResult } from "./organizationInvestigation";
 import { investigatePurpose, type PurposeInvestigationResult } from "./purposeInvestigation";
 import { investigateUrgency, type UrgencyInvestigationResult } from "./urgencyInvestigation";
-import { investigateThreats, type ThreatInvestigationResult } from "./threatInvestigation";
 import {
 	noSpokenCallerAnalysis,
 	type SpokenCallerAnalysisResult
@@ -30,7 +29,6 @@ export interface AiInvestigationReport {
 	organizationInvestigation: OrganizationInvestigationResult | null;
 	purposeInvestigation: PurposeInvestigationResult | null;
 	urgencyInvestigation: UrgencyInvestigationResult | null;
-	threatInvestigation: ThreatInvestigationResult | null;
 	evidenceFindings: EvidenceFinding[];
 	evidenceSummary: EvidenceSummary;
 	questionsAsked: string[];
@@ -76,16 +74,11 @@ export async function investigateCaller(
 		transcript: request.transcript
 	});
 
-	const threatInvestigation = investigateThreats({
-		transcript: request.transcript
-	});
-
 	const evidenceFindings = [
 		...identityInvestigation.evidenceFindings,
 		...organizationInvestigation.evidenceFindings,
 		...purposeInvestigation.evidenceFindings,
-		...urgencyInvestigation.evidenceFindings,
-		...threatInvestigation.evidenceFindings
+		...urgencyInvestigation.evidenceFindings
 	];
 
 	const evidenceSummary = aggregateEvidenceFindings(evidenceFindings);
@@ -99,7 +92,6 @@ export async function investigateCaller(
 		organizationInvestigation,
 		purposeInvestigation,
 		urgencyInvestigation,
-		threatInvestigation,
 		evidenceFindings,
 		evidenceSummary,
 		questionsAsked: [],
