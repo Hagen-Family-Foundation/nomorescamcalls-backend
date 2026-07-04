@@ -63,10 +63,11 @@ describe("AI Investigator", () => {
 		expect(report.spokenCallerAnalysis.status).toBe("not_requested");
 		expect(report.evidenceFindings).toEqual([]);
 		expect(report.questionsAsked).toEqual([]);
+		expect(report.identityInvestigation?.status).toBe("not_available");
 		expect(report.unansweredQuestions).toEqual([
-			"AI investigation provider has not been connected."
+			"Identity investigation requires a transcript."
 		]);
 		expect(report.remainingUncertainty).toBe(1);
-		expect(report.reason).toBe("ai_investigator_provider_not_connected");
+		expect(report.reason).toBe("ai_investigator_completed_available_internal_investigations");
 	});
 });

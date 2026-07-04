@@ -1,6 +1,8 @@
 import type { BaselineCallEvidence } from "./evidence";
 import type { InvestigationPlan } from "./investigationPlanner";
 import type { EvidenceFinding } from "./evidenceFinding";
+import { aggregateEvidenceFindings, type EvidenceSummary } from "./evidenceAggregator";
+import { investigateIdentity, type IdentityInvestigationResult } from "./identityInvestigation";
 import {
 	noSpokenCallerAnalysis,
 	type SpokenCallerAnalysisResult
@@ -20,10 +22,11 @@ export interface AiInvestigationRequest {
 export interface AiInvestigationReport {
 	status: AiInvestigationStatus;
 	spokenCallerAnalysis: SpokenCallerAnalysisResult;
+	identityInvestigation: IdentityInvestigationResult | null;
 	evidenceFindings: EvidenceFinding[];
+	evidenceSummary: EvidenceSummary;
 	questionsAsked: string[];
 	unansweredQuestions: string[];
-	evidenceSummary: string;
 	remainingUncertainty: number;
 	reason: string;
 }
@@ -37,28 +40,39 @@ export async function investigateCaller(
 			spokenCallerAnalysis: noSpokenCallerAnalysis(
 				"ai_investigation_not_requested_by_plan"
 			),
+			identityInvestigation: null,
 			evidenceFindings: [],
+			evidenceSummary: aggregateEvidenceFindings([]),
 			questionsAsked: [],
 			unansweredQuestions: [],
-			evidenceSummary: "No additional AI investigation was requested.",
 			remainingUncertainty: 0,
 			reason: request.investigationPlan.reason
 		};
 	}
+
+	const identityInvestigation = investigateIdentity({
+		transcript: request.transcript
+	});
+
+	const evidenceFindings = [
+		...identityInvestigation.evidenceFindings
+	];
+
+	const evidenceSummary = aggregateEvidenceFindings(evidenceFindings);
 
 	return {
 		status: "completed",
 		spokenCallerAnalysis: noSpokenCallerAnalysis(
 			"ai_investigation_enabled_but_no_provider_connected"
 		),
-		evidenceFindings: [],
+		identityInvestigation,
+		evidenceFindings,
+		evidenceSummary,
 		questionsAsked: [],
-		unansweredQuestions: [
-			"AI investigation provider has not been connected."
-		],
-		evidenceSummary:
-			"AI investigation was requested, but no external model provider is connected yet.",
-		remainingUncertainty: 1,
-		reason: "ai_investigator_provider_not_connected"
+		unansweredQuestions: identityInvestigation.status === "not_available"
+			? ["Identity investigation requires a transcript."]
+			: [],
+		remainingUncertainty: evidenceSummary.remainingUncertainty,
+		reason: "ai_investigator_completed_available_internal_investigations"
 	};
 }
