@@ -172,3 +172,79 @@ Every future capability section should contain:
 * Future Improvements
 * Current Status
 * Supporting Evidence (Commits, Blueprint references, Live Proofs)
+
+# Capability: Incoming Screening
+
+## Why it Exists
+
+Incoming Screening is the entry point for every inbound call.
+
+Its responsibility is to gather baseline evidence about the caller, determine whether additional investigation is warranted, and provide the evidence required for the decision engine to produce one of the three canonical outcomes.
+
+Every call is observed.
+
+Not every call is investigated equally.
+
+## Beta Requirement
+
+* Every inbound call enters the evidence pipeline.
+* Baseline evidence collection is consistent.
+* Screening behavior is deterministic and testable.
+* Additional investigation can be introduced without redesigning the screening pipeline.
+
+## Evidence of Completion
+
+Current evidence demonstrates:
+
+* A dedicated baseline evidence collection service has been implemented.
+* Screening now consumes a unified evidence object rather than performing evidence collection directly.
+* Existing screening behavior remains unchanged after the architectural refactor.
+* Automated tests continued to pass after the refactor.
+
+## Operational Considerations
+
+* Baseline evidence collection should remain lightweight.
+* Expensive investigation should occur only when supported by evidence.
+* New evidence providers should integrate into the evidence service without requiring changes to the decision engine.
+
+## Customer Experience
+
+Protection remains invisible.
+
+Legitimate callers experience minimal delay.
+
+Subscribers experience calm rather than technical complexity.
+
+## Administrator Experience
+
+Evidence collection follows a consistent structure.
+
+Future evidence sources can be reviewed from a common pipeline.
+
+## Side Notes / Future Evidence Questions
+
+Future baseline evidence may include:
+
+* STIR/SHAKEN validation
+* Carrier and network signals
+* IPQS reputation
+* Historical calling behavior
+* Velocity analysis
+* AI transcript analysis (when warranted)
+* Voice behavior analysis (when warranted)
+
+## Future Improvements
+
+* Integrate additional evidence providers.
+* Define investigation thresholds based on accumulated evidence.
+* Measure baseline evidence latency during beta.
+* Continue refining evidence weighting using production observations.
+
+## Current Status
+
+**Status:** In Progress
+
+### Supporting Evidence
+
+* Commit `ec3776a` — Extract baseline call evidence service.
+* Verification: 48 automated tests passing after the refactor.
