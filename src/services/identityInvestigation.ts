@@ -1,4 +1,4 @@
-import type { AiEvidenceFinding } from "./aiInvestigator";
+import type { EvidenceFinding } from "./evidenceFinding";
 
 export interface IdentityInvestigationInput {
 	transcript: string | null;
@@ -9,7 +9,7 @@ export interface IdentityInvestigationResult {
 	claimedName: string | null;
 	claimedOrganization: string | null;
 	callPurpose: string | null;
-	evidenceFindings: AiEvidenceFinding[];
+	evidenceFindings: EvidenceFinding[];
 	remainingUncertainty: number;
 	reason: string;
 }

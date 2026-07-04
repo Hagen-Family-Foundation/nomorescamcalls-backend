@@ -1,5 +1,6 @@
 import type { BaselineCallEvidence } from "./evidence";
 import type { InvestigationPlan } from "./investigationPlanner";
+import type { EvidenceFinding } from "./evidenceFinding";
 import {
 	noSpokenCallerAnalysis,
 	type SpokenCallerAnalysisResult
@@ -16,22 +17,10 @@ export interface AiInvestigationRequest {
 	transcript: string | null;
 }
 
-export type AiEvidenceDirection =
-	| "supports_legitimacy"
-	| "supports_suspicion"
-	| "neutral";
-
-export interface AiEvidenceFinding {
-	type: string;
-	description: string;
-	direction: AiEvidenceDirection;
-	confidence: number;
-}
-
 export interface AiInvestigationReport {
 	status: AiInvestigationStatus;
 	spokenCallerAnalysis: SpokenCallerAnalysisResult;
-	evidenceFindings: AiEvidenceFinding[];
+	evidenceFindings: EvidenceFinding[];
 	questionsAsked: string[];
 	unansweredQuestions: string[];
 	evidenceSummary: string;
