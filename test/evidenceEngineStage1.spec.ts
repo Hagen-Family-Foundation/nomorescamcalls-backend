@@ -4,7 +4,7 @@ import {
 } from "../src/services/evidenceEngine";
 
 describe("Evidence Engine Stage 1", () => {
-	it("collects factual Telnyx call information", () => {
+	it("separates operational data from evidence", () => {
 		const result = collectStage1Evidence({
 			data: {
 				payload: {
@@ -18,10 +18,6 @@ describe("Evidence Engine Stage 1", () => {
 					start_time: "2026-07-13T16:53:10.821478Z",
 					custom_headers: [
 						{
-							name: "P-Early-Media",
-							value: "supported"
-						},
-						{
 							name: "P-Visited-Network-ID",
 							value: "dnatf402.sip.t-mobile.com"
 						}
@@ -30,20 +26,19 @@ describe("Evidence Engine Stage 1", () => {
 			}
 		});
 
-		expect(result).toEqual({
-			from: "+18167186960",
+		expect(result.operational).toEqual({
 			to: "+19139562493",
+			connectionId: "2974360803492235067",
+			startTime: "2026-07-13T16:53:10.821478Z"
+		});
+
+		expect(result.evidence).toEqual({
+			from: "+18167186960",
 			callerIdName: "+18167186960",
 			direction: "incoming",
 			callingPartyType: "pstn",
 			fromSipUri: "+18167186960@208.54.157.146",
-			connectionId: "2974360803492235067",
-			startTime: "2026-07-13T16:53:10.821478Z",
 			customHeaders: [
-				{
-					name: "P-Early-Media",
-					value: "supported"
-				},
 				{
 					name: "P-Visited-Network-ID",
 					value: "dnatf402.sip.t-mobile.com"
@@ -55,9 +50,10 @@ describe("Evidence Engine Stage 1", () => {
 	it("uses empty values when Telnyx fields are absent", () => {
 		const result = collectStage1Evidence({});
 
-		expect(result.from).toBe("");
-		expect(result.to).toBe("");
-		expect(result.callerIdName).toBeNull();
-		expect(result.customHeaders).toEqual([]);
+		expect(result.operational.to).toBe("");
+		expect(result.operational.connectionId).toBeNull();
+		expect(result.evidence.from).toBe("");
+		expect(result.evidence.callerIdName).toBeNull();
+		expect(result.evidence.customHeaders).toEqual([]);
 	});
 });

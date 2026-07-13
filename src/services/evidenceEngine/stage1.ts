@@ -1,21 +1,29 @@
+export interface Stage1OperationalData {
+	to: string;
+	connectionId: string | null;
+	startTime: string | null;
+}
+
 export interface Stage1Evidence {
 	from: string;
-	to: string;
 	callerIdName: string | null;
 	direction: string | null;
 	callingPartyType: string | null;
 	fromSipUri: string | null;
-	connectionId: string | null;
-	startTime: string | null;
 	customHeaders: {
 		name: string;
 		value: string;
 	}[];
 }
 
+export interface Stage1Result {
+	operational: Stage1OperationalData;
+	evidence: Stage1Evidence;
+}
+
 export function collectStage1Evidence(
 	payload: unknown
-): Stage1Evidence {
+): Stage1Result {
 	const event = payload as {
 		data?: {
 			payload?: {
@@ -38,17 +46,21 @@ export function collectStage1Evidence(
 	const source = event.data?.payload;
 
 	return {
-		from: source?.from ?? "",
-		to: source?.to ?? "",
-		callerIdName: source?.caller_id_name ?? null,
-		direction: source?.direction ?? null,
-		callingPartyType: source?.calling_party_type ?? null,
-		fromSipUri: source?.from_sip_uri ?? null,
-		connectionId: source?.connection_id ?? null,
-		startTime: source?.start_time ?? null,
-		customHeaders: (source?.custom_headers ?? []).map((header) => ({
-			name: header.name ?? "",
-			value: header.value ?? ""
-		}))
+		operational: {
+			to: source?.to ?? "",
+			connectionId: source?.connection_id ?? null,
+			startTime: source?.start_time ?? null
+		},
+		evidence: {
+			from: source?.from ?? "",
+			callerIdName: source?.caller_id_name ?? null,
+			direction: source?.direction ?? null,
+			callingPartyType: source?.calling_party_type ?? null,
+			fromSipUri: source?.from_sip_uri ?? null,
+			customHeaders: (source?.custom_headers ?? []).map((header) => ({
+				name: header.name ?? "",
+				value: header.value ?? ""
+			}))
+		}
 	};
 }
