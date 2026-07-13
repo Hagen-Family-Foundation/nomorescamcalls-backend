@@ -1,33 +1,75 @@
-export interface CallerResponseExtractionInput {
+const MISSING_NAME_DEDUCTION = 15;
+const MISSING_REASON_DEDUCTION = 15;
+const RESPONSE_STARTING_VALUE = 100;
+
+export interface CallerResponseInput {
 	transcript: string;
 	language: string | null;
 }
 
-export interface ExtractedCallerResponse {
+export interface CallerResponseEvaluation {
 	name: string | null;
 	reason: string | null;
+	nameAccepted: boolean;
+	reasonAccepted: boolean;
 }
 
-export interface CallerResponseExtractor {
-	extract(
-		input: CallerResponseExtractionInput
-	): Promise<ExtractedCallerResponse>;
+export interface CallerResponseEvaluator {
+	evaluate(
+		input: CallerResponseInput
+	): Promise<CallerResponseEvaluation>;
 }
 
-export async function extractCallerResponse(
+export interface CallerResponseResult extends CallerResponseEvaluation {
+	transcript: string;
+	language: string | null;
+	deduction: number;
+	value: number;
+}
+
+export async function evaluateCallerResponse(
 	transcript: string,
 	language: string | null,
-	extractor: CallerResponseExtractor
-): Promise<ExtractedCallerResponse> {
+	evaluator: CallerResponseEvaluator
+): Promise<CallerResponseResult> {
 	if (transcript.trim() === "") {
 		return {
+			transcript,
+			language,
 			name: null,
-			reason: null
+			reason: null,
+			nameAccepted: false,
+			reasonAccepted: false,
+			deduction:
+				MISSING_NAME_DEDUCTION +
+				MISSING_REASON_DEDUCTION,
+			value:
+				RESPONSE_STARTING_VALUE -
+				MISSING_NAME_DEDUCTION -
+				MISSING_REASON_DEDUCTION
 		};
 	}
 
-	return extractor.extract({
+	const evaluation = await evaluator.evaluate({
 		transcript,
 		language
 	});
+
+	let deduction = 0;
+
+	if (!evaluation.nameAccepted) {
+		deduction += MISSING_NAME_DEDUCTION;
+	}
+
+	if (!evaluation.reasonAccepted) {
+		deduction += MISSING_REASON_DEDUCTION;
+	}
+
+	return {
+		transcript,
+		language,
+		...evaluation,
+		deduction,
+		value: Math.max(0, RESPONSE_STARTING_VALUE - deduction)
+	};
 }

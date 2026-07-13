@@ -1,71 +1,80 @@
 import { describe, expect, it, vi } from "vitest";
 import {
-	extractCallerResponse,
-	type CallerResponseExtractor
+	evaluateCallerResponse,
+	type CallerResponseEvaluator
 } from "../src/services/evidenceEngine";
 
-describe("Evidence Engine response extraction", () => {
-	it("returns the name and reason supplied by the extractor", async () => {
-		const extractor: CallerResponseExtractor = {
-			extract: vi.fn().mockResolvedValue({
+describe("Evidence Engine caller response evaluation", () => {
+	it("returns full value when both answers satisfy the request", async () => {
+		const evaluator: CallerResponseEvaluator = {
+			evaluate: vi.fn().mockResolvedValue({
 				name: "Maria",
-				reason: "Calling about the appointment"
+				reason: "Calling about the appointment",
+				nameAccepted: true,
+				reasonAccepted: true
 			})
 		};
 
-		const result = await extractCallerResponse(
+		const result = await evaluateCallerResponse(
 			"This is Maria calling about the appointment.",
 			"en",
-			extractor
+			evaluator
 		);
 
 		expect(result).toEqual({
-			name: "Maria",
-			reason: "Calling about the appointment"
-		});
-
-		expect(extractor.extract).toHaveBeenCalledWith({
 			transcript: "This is Maria calling about the appointment.",
-			language: "en"
+			language: "en",
+			name: "Maria",
+			reason: "Calling about the appointment",
+			nameAccepted: true,
+			reasonAccepted: true,
+			deduction: 0,
+			value: 100
 		});
 	});
 
-	it("allows extracted values to remain missing", async () => {
-		const extractor: CallerResponseExtractor = {
-			extract: vi.fn().mockResolvedValue({
+	it("deducts fifteen points for each unacceptable answer", async () => {
+		const evaluator: CallerResponseEvaluator = {
+			evaluate: vi.fn().mockResolvedValue({
 				name: null,
-				reason: null
+				reason: "Calling about something",
+				nameAccepted: false,
+				reasonAccepted: false
 			})
 		};
 
-		const result = await extractCallerResponse(
-			"Hello.",
-			null,
-			extractor
+		const result = await evaluateCallerResponse(
+			"Calling about something.",
+			"en",
+			evaluator
 		);
 
-		expect(result).toEqual({
-			name: null,
-			reason: null
-		});
+		expect(result.deduction).toBe(30);
+		expect(result.value).toBe(70);
 	});
 
-	it("returns empty extraction results without calling the extractor", async () => {
-		const extractor: CallerResponseExtractor = {
-			extract: vi.fn()
+	it("fails both requested parts when the transcript is empty", async () => {
+		const evaluator: CallerResponseEvaluator = {
+			evaluate: vi.fn()
 		};
 
-		const result = await extractCallerResponse(
+		const result = await evaluateCallerResponse(
 			"   ",
-			"en",
-			extractor
+			null,
+			evaluator
 		);
 
 		expect(result).toEqual({
+			transcript: "   ",
+			language: null,
 			name: null,
-			reason: null
+			reason: null,
+			nameAccepted: false,
+			reasonAccepted: false,
+			deduction: 30,
+			value: 70
 		});
 
-		expect(extractor.extract).not.toHaveBeenCalled();
+		expect(evaluator.evaluate).not.toHaveBeenCalled();
 	});
 });
