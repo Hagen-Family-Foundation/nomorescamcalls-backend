@@ -23,6 +23,7 @@ describe("Evidence Engine call state", () => {
 		const secondCall = createCallEvidence();
 
 		firstCall.deductions.push({
+			source: "stage_1",
 			reason: "test deduction",
 			points: 10
 		});

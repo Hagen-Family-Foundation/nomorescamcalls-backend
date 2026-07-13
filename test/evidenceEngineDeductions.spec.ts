@@ -1,31 +1,25 @@
 import { describe, expect, it } from "vitest";
+import {
+	createCallEvidence
+} from "../src/services/evidenceEngine";
 import { applyDeduction } from "../src/services/evidenceEngine/deductions";
-import type { CallEvidence } from "../src/services/evidenceEngine";
 
 describe("Evidence Engine deductions", () => {
-	function createCall(): CallEvidence {
-		return {
-			standing: 100,
-			deductions: [],
-			ipqsRequested: false,
-			ipqsCompleted: false,
-			released: false,
-			observing: false
-		};
-	}
-
 	it("applies a deduction", () => {
-		const result = applyDeduction(createCall(), {
+		const result = applyDeduction(createCallEvidence(), {
+			source: "stage_1",
 			reason: "test",
 			points: 10
 		});
 
 		expect(result.standing).toBe(90);
 		expect(result.deductions).toHaveLength(1);
+		expect(result.deductions[0].source).toBe("stage_1");
 	});
 
 	it("never allows standing below zero", () => {
-		const result = applyDeduction(createCall(), {
+		const result = applyDeduction(createCallEvidence(), {
+			source: "caller_response",
 			reason: "large deduction",
 			points: 500
 		});
@@ -35,7 +29,8 @@ describe("Evidence Engine deductions", () => {
 
 	it("rejects negative deductions", () => {
 		expect(() =>
-			applyDeduction(createCall(), {
+			applyDeduction(createCallEvidence(), {
+				source: "stage_1",
 				reason: "bad",
 				points: -1
 			})

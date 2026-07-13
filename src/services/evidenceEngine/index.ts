@@ -34,7 +34,8 @@ export function evaluateCurrentCall(
 	const call = createCallEvidence();
 
 	call.standing = currentStanding;
-	call.deductions = input.deductions.map(({ reason, points }) => ({
+	call.deductions = input.deductions.map(({ source, reason, points }) => ({
+		source,
 		reason,
 		points
 	}));

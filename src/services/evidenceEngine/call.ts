@@ -1,9 +1,13 @@
-import { INITIAL_CALL_STANDING } from "./types";
+import {
+	INITIAL_CALL_STANDING,
+	type EvidenceSource
+} from "./types";
 
 export interface CallEvidence {
 	standing: number;
 
 	deductions: {
+		source: EvidenceSource;
 		reason: string;
 		points: number;
 	}[];

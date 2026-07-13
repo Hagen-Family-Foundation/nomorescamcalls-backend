@@ -1,6 +1,8 @@
 import type { CallEvidence } from "./call";
+import type { EvidenceSource } from "./types";
 
 export interface DeductionInput {
+	source: EvidenceSource;
 	reason: string;
 	points: number;
 }
@@ -19,6 +21,7 @@ export function applyDeduction(
 		deductions: [
 			...call.deductions,
 			{
+				source: deduction.source,
 				reason: deduction.reason,
 				points: deduction.points
 			}
