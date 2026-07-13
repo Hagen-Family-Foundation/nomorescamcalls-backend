@@ -57,3 +57,5 @@ export * from "./evidenceCatalog";
 export * from "./stage1";
 
 export * from "./responseFacts";
+
+export * from "./responseExtraction";
