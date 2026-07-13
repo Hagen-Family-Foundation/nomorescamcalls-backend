@@ -1,11 +1,9 @@
 import type { CallEvidence } from "./call";
-import { applyDeduction } from "./deductions";
+import {
+	applyDeduction,
+	type DeductionInput
+} from "./deductions";
 import { determineAction } from "./action";
-
-export interface DeductionInput {
-	reason: string;
-	points: number;
-}
 
 export function processCall(
 	call: CallEvidence,

@@ -1,14 +1,30 @@
-import { determineNextStep } from "./determination";
+import { determineAction } from "./action";
 import { calculateCurrentStanding } from "./scoring";
 import {
 	INITIAL_CALL_STANDING,
 	type EvidenceDeduction,
-	type EvidenceEngineState
+	type EvidenceEngineState,
+	type EvidenceEngineNextStep
 } from "./types";
+import type { CallEvidence } from "./call";
 
 export interface EvaluateCurrentCallInput {
 	deductions: EvidenceDeduction[];
 	ipqsCompleted?: boolean;
+}
+
+function mapAction(
+	action: "release" | "ipqs" | "observe"
+): EvidenceEngineNextStep {
+	if (action === "ipqs") {
+		return "request_ipqs";
+	}
+
+	if (action === "observe") {
+		return "continue_observation";
+	}
+
+	return "release";
 }
 
 export function evaluateCurrentCall(
@@ -16,13 +32,23 @@ export function evaluateCurrentCall(
 ): EvidenceEngineState {
 	const currentStanding = calculateCurrentStanding(input.deductions);
 
+	const call: CallEvidence = {
+		standing: currentStanding,
+		deductions: input.deductions.map(({ reason, points }) => ({
+			reason,
+			points
+		})),
+		ipqsRequested: false,
+		ipqsCompleted: input.ipqsCompleted ?? false,
+		released: false,
+		observing: false
+	};
+
 	return {
 		initialStanding: INITIAL_CALL_STANDING,
 		currentStanding,
 		deductions: [...input.deductions],
-		nextStep: determineNextStep(currentStanding, {
-			ipqsCompleted: input.ipqsCompleted ?? false
-		})
+		nextStep: mapAction(determineAction(call))
 	};
 }
 

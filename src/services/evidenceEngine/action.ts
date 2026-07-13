@@ -1,4 +1,8 @@
 import type { CallEvidence } from "./call";
+import {
+	IPQS_RANGE_MAX,
+	IPQS_RANGE_MIN
+} from "./types";
 
 export type CallAction =
 	| "release"
@@ -8,13 +12,19 @@ export type CallAction =
 export function determineAction(
 	call: CallEvidence
 ): CallAction {
-	if (!call.ipqsCompleted &&
-		call.standing >= 76 &&
-		call.standing <= 85) {
+	if (!Number.isFinite(call.standing)) {
+		throw new Error("Call standing must be a finite number.");
+	}
+
+	if (
+		!call.ipqsCompleted &&
+		call.standing >= IPQS_RANGE_MIN &&
+		call.standing <= IPQS_RANGE_MAX
+	) {
 		return "ipqs";
 	}
 
-	if (call.standing >= 76) {
+	if (call.standing >= IPQS_RANGE_MIN) {
 		return "release";
 	}
 
