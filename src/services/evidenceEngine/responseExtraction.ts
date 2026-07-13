@@ -1,6 +1,5 @@
 const MISSING_NAME_DEDUCTION = 15;
 const MISSING_REASON_DEDUCTION = 15;
-const RESPONSE_STARTING_VALUE = 100;
 
 export interface CallerResponseInput {
 	transcript: string;
@@ -24,7 +23,6 @@ export interface CallerResponseResult extends CallerResponseEvaluation {
 	transcript: string;
 	language: string | null;
 	deduction: number;
-	value: number;
 }
 
 export async function evaluateCallerResponse(
@@ -42,10 +40,6 @@ export async function evaluateCallerResponse(
 			reasonAccepted: false,
 			deduction:
 				MISSING_NAME_DEDUCTION +
-				MISSING_REASON_DEDUCTION,
-			value:
-				RESPONSE_STARTING_VALUE -
-				MISSING_NAME_DEDUCTION -
 				MISSING_REASON_DEDUCTION
 		};
 	}
@@ -69,7 +63,6 @@ export async function evaluateCallerResponse(
 		transcript,
 		language,
 		...evaluation,
-		deduction,
-		value: Math.max(0, RESPONSE_STARTING_VALUE - deduction)
+		deduction
 	};
 }

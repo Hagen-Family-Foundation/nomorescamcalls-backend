@@ -5,7 +5,7 @@ import {
 } from "../src/services/evidenceEngine";
 
 describe("Evidence Engine caller response evaluation", () => {
-	it("returns full value when both answers satisfy the request", async () => {
+	it("returns no deduction when both answers satisfy the request", async () => {
 		const evaluator: CallerResponseEvaluator = {
 			evaluate: vi.fn().mockResolvedValue({
 				name: "Maria",
@@ -28,8 +28,7 @@ describe("Evidence Engine caller response evaluation", () => {
 			reason: "Calling about the appointment",
 			nameAccepted: true,
 			reasonAccepted: true,
-			deduction: 0,
-			value: 100
+			deduction: 0
 		});
 	});
 
@@ -50,7 +49,6 @@ describe("Evidence Engine caller response evaluation", () => {
 		);
 
 		expect(result.deduction).toBe(30);
-		expect(result.value).toBe(70);
 	});
 
 	it("fails both requested parts when the transcript is empty", async () => {
@@ -71,8 +69,7 @@ describe("Evidence Engine caller response evaluation", () => {
 			reason: null,
 			nameAccepted: false,
 			reasonAccepted: false,
-			deduction: 30,
-			value: 70
+			deduction: 30
 		});
 
 		expect(evaluator.evaluate).not.toHaveBeenCalled();
