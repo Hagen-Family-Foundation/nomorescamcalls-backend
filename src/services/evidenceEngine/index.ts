@@ -52,7 +52,6 @@ export function evaluateCurrentCall(
 export * from "./types";
 export * from "./call";
 
-export * from "./evidenceCatalog";
 
 export * from "./stage1";
 
