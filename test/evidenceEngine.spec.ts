@@ -1,9 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { evaluateCurrentCall } from "../src/services/evidenceEngine";
+import { runBlock5 } from "../src/services/evidenceEngine";
 
-describe("Evidence Engine", () => {
+describe("Evidence Engine Block 5", () => {
 	it("starts every call at 100", () => {
-		const result = evaluateCurrentCall({
+		const result = runBlock5({
 			deductions: []
 		});
 
@@ -13,7 +13,7 @@ describe("Evidence Engine", () => {
 	});
 
 	it("releases a call at 86 without requesting IPQS", () => {
-		const result = evaluateCurrentCall({
+		const result = runBlock5({
 			deductions: [
 				{
 					source: "stage_1",
@@ -28,7 +28,7 @@ describe("Evidence Engine", () => {
 	});
 
 	it("requests IPQS at the upper boundary of 85", () => {
-		const result = evaluateCurrentCall({
+		const result = runBlock5({
 			deductions: [
 				{
 					source: "response_comparison",
@@ -43,7 +43,7 @@ describe("Evidence Engine", () => {
 	});
 
 	it("requests IPQS at the lower boundary of 76", () => {
-		const result = evaluateCurrentCall({
+		const result = runBlock5({
 			deductions: [
 				{
 					source: "caller_response",
@@ -58,7 +58,7 @@ describe("Evidence Engine", () => {
 	});
 
 	it("releases a call at 76 after IPQS is complete", () => {
-		const result = evaluateCurrentCall({
+		const result = runBlock5({
 			ipqsCompleted: true,
 			deductions: [
 				{
@@ -74,7 +74,7 @@ describe("Evidence Engine", () => {
 	});
 
 	it("continues observation at 75 or below", () => {
-		const result = evaluateCurrentCall({
+		const result = runBlock5({
 			deductions: [
 				{
 					source: "caller_response",
@@ -89,7 +89,7 @@ describe("Evidence Engine", () => {
 	});
 
 	it("applies IPQS deductions before final determination", () => {
-		const result = evaluateCurrentCall({
+		const result = runBlock5({
 			ipqsCompleted: true,
 			deductions: [
 				{
@@ -111,7 +111,7 @@ describe("Evidence Engine", () => {
 
 	it("rejects invalid negative deductions", () => {
 		expect(() => {
-			evaluateCurrentCall({
+			runBlock5({
 				deductions: [
 					{
 						source: "stage_1",
