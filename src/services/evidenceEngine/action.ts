@@ -1,4 +1,3 @@
-import type { CallEvidence } from "./call";
 import {
 	IPQS_RANGE_MAX,
 	IPQS_RANGE_MIN
@@ -9,22 +8,27 @@ export type CallAction =
 	| "ipqs"
 	| "observe";
 
+export interface DetermineActionInput {
+	standing: number;
+	ipqsCompleted: boolean;
+}
+
 export function determineAction(
-	call: CallEvidence
+	input: DetermineActionInput
 ): CallAction {
-	if (!Number.isFinite(call.standing)) {
+	if (!Number.isFinite(input.standing)) {
 		throw new Error("Call standing must be a finite number.");
 	}
 
 	if (
-		!call.ipqsCompleted &&
-		call.standing >= IPQS_RANGE_MIN &&
-		call.standing <= IPQS_RANGE_MAX
+		!input.ipqsCompleted &&
+		input.standing >= IPQS_RANGE_MIN &&
+		input.standing <= IPQS_RANGE_MAX
 	) {
 		return "ipqs";
 	}
 
-	if (call.standing >= IPQS_RANGE_MIN) {
+	if (input.standing >= IPQS_RANGE_MIN) {
 		return "release";
 	}
 

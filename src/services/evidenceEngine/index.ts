@@ -1,5 +1,4 @@
 import { determineAction } from "./action";
-import { createCallEvidence } from "./call";
 import { calculateCurrentStanding } from "./scoring";
 import {
 	INITIAL_CALL_STANDING,
@@ -31,26 +30,20 @@ export function evaluateCurrentCall(
 	input: EvaluateCurrentCallInput
 ): EvidenceEngineState {
 	const currentStanding = calculateCurrentStanding(input.deductions);
-	const call = createCallEvidence();
-
-	call.standing = currentStanding;
-	call.deductions = input.deductions.map(({ source, reason, points }) => ({
-		source,
-		reason,
-		points
-	}));
-	call.ipqsCompleted = input.ipqsCompleted ?? false;
-
 	return {
 		initialStanding: INITIAL_CALL_STANDING,
 		currentStanding,
 		deductions: [...input.deductions],
-		nextStep: mapAction(determineAction(call))
+		nextStep: mapAction(
+			determineAction({
+				standing: currentStanding,
+				ipqsCompleted: input.ipqsCompleted ?? false
+			})
+		)
 	};
 }
 
 export * from "./types";
-export * from "./call";
 
 
 export * from "./stage1";
