@@ -5,11 +5,9 @@ import {
 } from "../src/services/evidenceEngine";
 
 describe("Evidence Engine caller response evaluation", () => {
-	it("returns no deduction when both answers satisfy the request", async () => {
+	it("returns no deduction when both requested parts are usable", async () => {
 		const evaluator: CallerResponseEvaluator = {
 			evaluate: vi.fn().mockResolvedValue({
-				name: "Maria",
-				reason: "Calling about the appointment",
 				nameAccepted: true,
 				reasonAccepted: true
 			})
@@ -24,19 +22,15 @@ describe("Evidence Engine caller response evaluation", () => {
 		expect(result).toEqual({
 			transcript: "This is Maria calling about the appointment.",
 			language: "en",
-			name: "Maria",
-			reason: "Calling about the appointment",
 			nameAccepted: true,
 			reasonAccepted: true,
 			deduction: 0
 		});
 	});
 
-	it("deducts fifteen points for each unacceptable answer", async () => {
+	it("deducts fifteen points for each unusable requested part", async () => {
 		const evaluator: CallerResponseEvaluator = {
 			evaluate: vi.fn().mockResolvedValue({
-				name: null,
-				reason: "Calling about something",
 				nameAccepted: false,
 				reasonAccepted: false
 			})
@@ -48,7 +42,13 @@ describe("Evidence Engine caller response evaluation", () => {
 			evaluator
 		);
 
-		expect(result.deduction).toBe(30);
+		expect(result).toEqual({
+			transcript: "Calling about something.",
+			language: "en",
+			nameAccepted: false,
+			reasonAccepted: false,
+			deduction: 30
+		});
 	});
 
 	it("fails both requested parts when the transcript is empty", async () => {
@@ -65,8 +65,6 @@ describe("Evidence Engine caller response evaluation", () => {
 		expect(result).toEqual({
 			transcript: "   ",
 			language: null,
-			name: null,
-			reason: null,
 			nameAccepted: false,
 			reasonAccepted: false,
 			deduction: 30

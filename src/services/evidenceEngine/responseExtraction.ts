@@ -7,8 +7,6 @@ export interface CallerResponseInput {
 }
 
 export interface CallerResponseEvaluation {
-	name: string | null;
-	reason: string | null;
 	nameAccepted: boolean;
 	reasonAccepted: boolean;
 }
@@ -34,8 +32,6 @@ export async function evaluateCallerResponse(
 		return {
 			transcript,
 			language,
-			name: null,
-			reason: null,
 			nameAccepted: false,
 			reasonAccepted: false,
 			deduction:
