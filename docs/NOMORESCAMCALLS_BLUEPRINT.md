@@ -1,6 +1,6 @@
 # NoMoreScamCalls Blueprint — How It's Built
 
-_Last updated: 2026-07-01_
+_Last updated: 2026-07-18_
 
 ## Mission
 
@@ -59,13 +59,40 @@ The system should provide guided help based on:
 ## Core Call Path
 
 Carrier phone number
-→ forwarded to Telnyx screening DID
+
+→ forwarded to the assigned Telnyx screening DID
+
 → Telnyx Call Control webhook
+
 → Cloudflare Worker
-→ screening engine
-→ allow / challenge / block decision
-→ approved calls delivered to SIP/WebRTC endpoint
-→ customer receives clean call experience
+
+→ Evidence Engine Block 1
+
+→ completed Block 1 Evidence Box
+
+→ Evidence Engine Block 2
+
+→ completed Block 2 Evidence Box
+
+→ Evidence Engine Block 3
+
+→ completed Block 3 Evidence Box
+
+→ Evidence Engine Block 4
+
+→ completed Evidence Box and deterministic routing outcome
+
+A released call is delivered to the subscriber immediately.
+
+A call assigned to observation remains connected through the approved observation period, receives the unavailable message at approximately 55 seconds, and is terminated before 60 seconds.
+
+Block 4 sends the completed Evidence Box to the Evidence Library.
+
+Telnyx does not receive the Evidence Box.
+
+Telnyx completes the live call, produces the recording, and then waits for the next inbound call.
+
+When the recording later becomes available, it is correlated by `call_session_id` and associated with the already archived Evidence Box.
 
 ## Proven Production Milestone
 
@@ -75,7 +102,7 @@ On 2026-07-01, the production call path was successfully validated:
 - production user id: 6,
 - production screening number: +1 913-956-2493,
 - SIP username: usersupport15892,
-- allow-list bypass worked,
+- allow-list bypass worked under the production architecture active at that time,
 - Telnyx live transfer executed,
 - Linphone rang,
 - two-way audio worked,
@@ -83,7 +110,11 @@ On 2026-07-01, the production call path was successfully validated:
 - MOS reported 4.50,
 - live execution returned to false.
 
-This proves the core production routing architecture is viable.
+The allow-list bypass result is preserved as historical production evidence.
+
+It is not part of the approved Evidence Engine architecture. Under the approved architecture, every inbound call enters the Evidence Engine and is evaluated.
+
+This milestone proves the core production routing architecture is viable.
 
 ## Customer Dashboard Philosophy
 
@@ -146,22 +177,39 @@ System-wide. Only legitimate scammers verified through evidence and vetting shou
 
 One user’s complaint must not automatically poison the global system.
 
+These lists preserve subscriber preferences and administrative knowledge.
+
+They do not replace current-call evidence.
+
+Under the approved Evidence Engine architecture:
+
+- every inbound call still enters the Evidence Engine,
+- no list creates an automatic pass,
+- historical information does not alter the starting standing,
+- only objective evidence from the current call produces live deductions,
+- subscriber-specific preferences do not create system-wide caller reputation.
+
 ## Admin-Only Data
 
 Admin systems may expose:
 
-- detailed call events,
-- caller reputation,
-- challenge outcomes,
-- blocked/diverted caller data,
-- scam intelligence,
+- archived Evidence Boxes,
+- objective evidence collected during each call,
+- deductions originated by the responsible blocks,
+- final standing,
+- final disposition,
+- IPQS trigger and findings when applicable,
+- recording references,
+- transcript references,
 - provisioning state,
+- operational errors,
 - failed transfers,
 - Telnyx audit events,
-- operational health,
-- investigation evidence.
+- system health.
 
-This information is not customer-facing.
+This information is operational and administrative only.
+
+It is not customer-facing.
 
 ## Onboarding Strategy
 
@@ -214,10 +262,10 @@ Current backend:
 
 Important behavior:
 
-- live Telnyx execution is normally disabled,
-- `TELNYX_LIVE_EXECUTION=false` is the safe default,
-- enable live execution only for deliberate controlled tests,
-- disable immediately afterward.
+- live Telnyx execution is normally disabled outside deliberate live operation,
+- `TELNYX_LIVE_EXECUTION=false` is the safe development and testing default,
+- enable live execution only for deliberate controlled tests or approved production operation,
+- return it to the appropriate safe state immediately after controlled testing.
 
 ## Production Evidence Rule
 
@@ -247,28 +295,39 @@ Any `555` or old simulation number is test-only unless explicitly proven otherwi
 - Evidence first.
 - Verify from source.
 - Do not fix symptoms; identify and replace the faulty circuit.
-- Avoid parallel old/new code paths unless temporarily required for migration.
+- Do not preserve obsolete or parallel architecture without an approved temporary migration purpose.
 - Keep the codebase lean, readable, conventional, and maintainable.
 - Build for reliability, efficiency, effectiveness, strength, and scalability.
 - Do not expand product scope beyond scam-call protection.
 - If a feature does not improve protection, activation, trust, or operational reliability, defer it.
+- Approved architecture comes before SOPs.
+- Approved SOPs come before implementation.
+- Implementation must be tested before commit.
+- Operational failures are never caller evidence.
 
 ## Beta Priority
 
-The immediate objective is beta readiness as soon as possible.
+The immediate objective is to prepare the approved Evidence Engine and surrounding service for controlled beta deployment.
 
 Beta must validate:
 
 - onboarding flow,
 - call-forwarding activation,
-- live allow path,
-- live challenge path,
-- blocked/scam path,
+- live Evidence Engine processing,
+- spoken evidence collection,
+- deterministic routing,
+- release handling,
+- conditional IPQS handling,
+- observation handling,
+- unavailable-message timing,
+- termination before 60 seconds,
+- Evidence Box archival,
+- asynchronous recording association,
 - dashboard value display,
 - customer confidence,
 - operational monitoring.
 
-July 7 is a drop-dead beta date, not the target. Sooner is better.
+Each beta milestone should increase confidence in production readiness through measurable evidence.
 
 ## Market-Facing Product Direction
 
@@ -308,57 +367,73 @@ The Telnyx Recordings API returned completed recordings for live calls, includin
 - duration,
 - MP3 download URL.
 
-This changes the voice-analysis problem.
+This changed the voice-evidence problem.
 
-The primary problem is no longer how to capture the caller's voice.
+The primary problem is no longer how to capture the caller’s voice.
 
-The primary problem is how to reliably retrieve the correct recording by call_session_id and use it for transcription and analysis.
+The primary recording problem is how to retrieve the correct recording reliably by `call_session_id` and associate it with the completed archived Evidence Box.
 
 ## Voice Evidence Architecture Direction
 
-The long-term challenge flow should move away from keypad input.
+The caller hears:
 
-The caller should hear only:
+> Please state your name and reason for calling.
 
-"Please state your name and reason for calling."
+The spoken response becomes evidence for the current call.
 
-The system should then use the resulting voice evidence for future analysis.
+The approved live architecture does not wait for the completed Telnyx recording before determining the call disposition.
 
-The preferred correlation key is Telnyx call_session_id because it appears in:
-
-- live Call Control webhook events,
-- challenge events,
-- bridge/transfer events,
-- hangup events,
-- Telnyx recording records.
-
-The next architecture brick is to determine whether recordings can be fetched directly or deterministically by call_session_id.
-
-If proven, the future flow becomes:
+The live flow is:
 
 Incoming call
-→ screen
-→ challenge if needed
-→ caller states name and reason
-→ recording is retrieved by call_session_id
-→ recording is transcribed
-→ transcript and voice evidence are analyzed
-→ final risk decision
-→ transfer or terminate
 
-This follows the permanent project rule:
+→ Evidence Engine Blocks 1 through 4
 
-The evidence will tell us what to do next.
-We only use evidence as our guide.
-We do not use anything else.
+→ current-call evidence collected
+
+→ deductions originated by the responsible blocks
+
+→ deductions passed forward without applying global standing outside the approved decision responsibility
+
+→ final standing and deterministic disposition produced
+
+→ call released or retained through observation
+
+→ completed Evidence Box sent to the Evidence Library
+
+The recording flow is separate and asynchronous:
+
+Telnyx completes the live call
+
+→ Telnyx produces the recording
+
+→ the recording becomes available after live processing
+
+→ the recording is retrieved or located using `call_session_id`
+
+→ the recording reference is associated with the existing archived Evidence Box
+
+The Evidence Box is not sent to Telnyx.
+
+The live call is not delayed while waiting for the recording.
+
+The recording completes the historical archive after the live Evidence Engine has finished its work.
+
+The permanent project rule remains:
+
+> The evidence will tell us what to do next.
+>
+> We use objective evidence as our guide.
+>
+> We do not use assumptions.
 
 ## 2026-07-01 Recording Correlation Proof
 
-Production evidence proved that Telnyx recordings can be matched back to live call events by call_session_id.
+Production evidence proved that Telnyx recordings can be matched back to live call events by `call_session_id`.
 
 The Worker now supports a recordings diagnostic query:
 
-/telnyx/recordings?call_session_id=<call_session_id>
+`/telnyx/recordings?call_session_id=<call_session_id>`
 
 This returned the correct completed recording for the live test call, including:
 
@@ -374,59 +449,22 @@ This returned the correct completed recording for the live test call, including:
 This proves the core correlation path:
 
 live call event
-→ call_session_id
+
+→ `call_session_id`
+
 → Telnyx recording
+
 → MP3 download URL
 
-This is the backbone for the future spoken-caller analysis flow.
+This is the backbone of the asynchronous recording-association process.
 
 The immediate beta-focused meaning is:
 
-NoMoreScamCalls does not need to prove basic call control or audio capture anymore before beta planning can continue.
+NoMoreScamCalls does not need to prove basic call control or audio capture again before beta planning can continue.
 
 Those bricks are proven.
 
-The remaining work should now focus on getting the service safe, understandable, supportable, and testable for real beta users.
-
-From this point forward, next-step decisions should be evaluated by one question:
-
-Does this help get NoMoreScamCalls into the hands of beta testers safely and with evidence?
-
-## 2026-07-01 Recording Correlation Proof
-
-Production evidence proved that Telnyx recordings can be matched back to live call events by call_session_id.
-
-The Worker now supports a recordings diagnostic query:
-
-/telnyx/recordings?call_session_id=<call_session_id>
-
-This returned the correct completed recording for the live test call, including:
-
-- recording id,
-- call_session_id,
-- call_leg_id,
-- caller number,
-- screening number,
-- duration,
-- recording start and end timestamps,
-- MP3 download URL.
-
-This proves the core correlation path:
-
-live call event
-→ call_session_id
-→ Telnyx recording
-→ MP3 download URL
-
-This is the backbone for the future spoken-caller analysis flow.
-
-The immediate beta-focused meaning is:
-
-NoMoreScamCalls does not need to prove basic call control or audio capture anymore before beta planning can continue.
-
-Those bricks are proven.
-
-The remaining work should now focus on getting the service safe, understandable, supportable, and testable for real beta users.
+The remaining work should focus on making the service safe, understandable, supportable, and testable for real beta users.
 
 From this point forward, next-step decisions should be evaluated by one question:
 
