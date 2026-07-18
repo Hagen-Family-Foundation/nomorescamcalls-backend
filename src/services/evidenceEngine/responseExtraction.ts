@@ -1,6 +1,3 @@
-const MISSING_NAME_DEDUCTION = 15;
-const MISSING_REASON_DEDUCTION = 15;
-
 export interface CallerResponseInput {
 	transcript: string;
 	language: string | null;
@@ -17,11 +14,9 @@ export interface CallerResponseEvaluator {
 	): Promise<CallerResponseEvaluation>;
 }
 
-export interface CallerResponseResult extends CallerResponseEvaluation {
-	transcript: string;
-	language: string | null;
-	deduction: number;
-}
+export interface CallerResponseResult
+	extends CallerResponseInput,
+		CallerResponseEvaluation {}
 
 export async function evaluateCallerResponse(
 	transcript: string,
@@ -33,10 +28,7 @@ export async function evaluateCallerResponse(
 			transcript,
 			language,
 			nameAccepted: false,
-			reasonAccepted: false,
-			deduction:
-				MISSING_NAME_DEDUCTION +
-				MISSING_REASON_DEDUCTION
+			reasonAccepted: false
 		};
 	}
 
@@ -45,20 +37,10 @@ export async function evaluateCallerResponse(
 		language
 	});
 
-	let deduction = 0;
-
-	if (!evaluation.nameAccepted) {
-		deduction += MISSING_NAME_DEDUCTION;
-	}
-
-	if (!evaluation.reasonAccepted) {
-		deduction += MISSING_REASON_DEDUCTION;
-	}
-
 	return {
 		transcript,
 		language,
-		...evaluation,
-		deduction
+		nameAccepted: evaluation.nameAccepted,
+		reasonAccepted: evaluation.reasonAccepted
 	};
 }

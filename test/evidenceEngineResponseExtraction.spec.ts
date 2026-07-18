@@ -4,54 +4,32 @@ import {
 	type CallerResponseEvaluator
 } from "../src/services/evidenceEngine";
 
-describe("Evidence Engine caller response evaluation", () => {
-	it("returns no deduction when both requested parts are usable", async () => {
+describe("Evidence Engine caller response evaluator", () => {
+	it("returns only caller-response facts", async () => {
 		const evaluator: CallerResponseEvaluator = {
 			evaluate: vi.fn().mockResolvedValue({
 				nameAccepted: true,
-				reasonAccepted: true
-			})
-		};
-
-		const result = await evaluateCallerResponse(
-			"This is Maria calling about the appointment.",
-			"en",
-			evaluator
-		);
-
-		expect(result).toEqual({
-			transcript: "This is Maria calling about the appointment.",
-			language: "en",
-			nameAccepted: true,
-			reasonAccepted: true,
-			deduction: 0
-		});
-	});
-
-	it("deducts fifteen points for each unusable requested part", async () => {
-		const evaluator: CallerResponseEvaluator = {
-			evaluate: vi.fn().mockResolvedValue({
-				nameAccepted: false,
 				reasonAccepted: false
 			})
 		};
 
 		const result = await evaluateCallerResponse(
-			"Calling about something.",
+			"This is Maria calling.",
 			"en",
 			evaluator
 		);
 
 		expect(result).toEqual({
-			transcript: "Calling about something.",
+			transcript: "This is Maria calling.",
 			language: "en",
-			nameAccepted: false,
-			reasonAccepted: false,
-			deduction: 30
+			nameAccepted: true,
+			reasonAccepted: false
 		});
+
+		expect(result).not.toHaveProperty("deduction");
 	});
 
-	it("fails both requested parts when the transcript is empty", async () => {
+	it("returns unusable facts without calling the evaluator when the transcript is empty", async () => {
 		const evaluator: CallerResponseEvaluator = {
 			evaluate: vi.fn()
 		};
@@ -66,8 +44,7 @@ describe("Evidence Engine caller response evaluation", () => {
 			transcript: "   ",
 			language: null,
 			nameAccepted: false,
-			reasonAccepted: false,
-			deduction: 30
+			reasonAccepted: false
 		});
 
 		expect(evaluator.evaluate).not.toHaveBeenCalled();
