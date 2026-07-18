@@ -1,235 +1,387 @@
-# Architectural Revision: Evidence Engine & Master Operational Blueprint
+# NoMoreScamCalls Product Architecture
 
 ## Purpose
 
-NoMoreScamCalls has evolved beyond a traditional call screening platform.
+NoMoreScamCalls is an evidence-driven call protection service.
 
-The system is now architected as an **Evidence Engine** whose first application is protecting subscribers from scam and unwanted telephone calls.
+Its mission is:
 
-The mission of the product remains unchanged:
+> Keep scammers and unwanted callers away from subscribers while allowing legitimate callers through as quickly as possible.
 
-> **Keep scammers and unwanted callers away from subscribers while allowing legitimate callers through as quickly as possible.**
+The product screens every inbound call before it reaches the subscriber.
 
-The method by which that mission is accomplished has matured significantly.
-
-The platform no longer makes decisions from isolated observations. Instead, it continuously gathers objective evidence, compares newly observed behavior against previously established facts, and determines whether the accumulated evidence satisfies the required threshold for the call to proceed.
+The system evaluates the current call using objective evidence gathered during that call. It does not grade people, predict intent, or rely on assumptions.
 
 ---
 
-# The Master Operational Blueprint
+## Product Scope
 
-The Master Operational Blueprint is the canonical operational reference for NoMoreScamCalls.
+NoMoreScamCalls exists solely to protect subscribers from scam and unwanted telephone calls.
 
-It serves as the primary reference for:
+The platform is not:
 
-* Product architecture
-* Backend implementation
-* Engineering documentation
-* Onboarding
-* Beta operations
-* Sales training
-* Support documentation
-* Future architectural decisions
+- a voicemail service
+- a general communications platform
+- a messaging service
+- a caller investigation service
+- a historical reputation engine controlling live calls
 
-As the product evolves through Beta, revisions should refine the contents of each operational stage while preserving the overall structure of the Blueprint whenever practical.
-
-The Blueprint is the authoritative representation of how the platform operates.
+Every feature must directly support call protection, subscriber activation, operational reliability, or evidence-based improvement of the service.
 
 ---
 
-# Evidence Relationship Model
+## Evidence Engine
 
-The most significant architectural advancement is the transition from independent evaluation stages to a continuous evidence relationship model.
-
-Earlier concepts viewed Stage 1 and Stage 2 as separate scoring events.
-
-That model has been replaced.
-
-Stage 1 establishes objective facts.
-
-Stage 2 gathers live behavioral evidence.
-
-Those two bodies of evidence are continuously compared throughout the screening process.
-
-The relationships between them become evidence themselves.
-
-The platform does not rely upon isolated observations.
-
-Evidence gains meaning through its consistency—or inconsistency—with other evidence already established.
-
----
-
-# Stage 1 – Objective Evidence
-
-Stage 1 establishes known facts before behavioral evaluation begins.
-
-Examples include, but are not limited to:
-
-* Calling Number
-* STIR/SHAKEN verification
-* CNAM information
-* IPQS intelligence
-* Carrier and line characteristics
-* Historical evidence
-* Existing reputation
-
-Stage 1 remains active throughout the entire screening process.
-
-These facts are never discarded once behavioral collection begins.
-
----
-
-# Stage 2 – Behavioral Evidence
-
-Version 1 behavioral collection begins with a single request:
-
-> "Please state your name and reason for calling."
-
-Only two pieces of information are requested.
-
-The platform is not attempting to conduct an interview.
-
-Instead, it observes how the caller responds.
-
-Behavioral evidence may include willingness to respond, response quality, consistency with known facts, hesitation, unsolicited statements, environmental observations, or any other objectively observable behavior.
-
-No assumptions are made.
-
-Only observed evidence is considered.
-
----
-
-# Second Opportunity
-
-If sufficient behavioral evidence is not obtained during the initial request, the caller is given a second opportunity.
-
-The platform plays:
-
-> "Please hold while I try to connect you."
-
-After a brief observation period, the original request is repeated without modification.
-
-The wording does not change.
-
-The purpose is not clarification.
-
-The purpose is to obtain an additional behavioral measurement under naturally evolving circumstances.
-
----
-
-# Passive Observation
-
-Passive observation is an intentional architectural component of the Evidence Engine.
-
-During these periods the platform stops requesting information and simply observes naturally occurring behavior.
-
-Potential observations may include:
-
-* Silence
-* Unsolicited remarks
-* Frustration
-* Conversations with nearby individuals
-* Environmental characteristics
-* Attempts to influence the system
-* Any other objectively observable behavior
-
-The platform records observations without speculation or assumption.
-
-Future Beta evidence will determine the long-term value assigned to each observation type.
-
----
-
-# Universal Screening
+The live screening system is called the Evidence Engine.
 
 Every inbound call enters the Evidence Engine.
 
 There are no automatic passes.
 
-There are no exempt callers.
+Each call is evaluated independently using evidence from that call.
 
-Every call receives evidence collection.
+Previous calls do not determine the standing, deductions, or disposition of the current call.
 
-Every call receives evaluation.
-
-Every call receives a score.
-
-The score alone determines whether the call satisfies the required threshold for release.
+Historical information may be preserved for future analysis, but it does not control live screening.
 
 ---
 
-# Call Release
+## Evidence Boxes
 
-When a call satisfies the required evidence threshold, the platform immediately releases the call toward its intended destination.
+Information moves through the Evidence Engine in Evidence Boxes.
 
-At that point, the platform's responsibility for that specific call is complete.
+Each block:
 
-The platform does not manage conversations.
+1. Receives the completed Evidence Box from the preceding block.
+2. Performs only the responsibilities assigned to its approved SOP.
+3. Adds its completed information to the Evidence Box.
+4. Passes the completed Evidence Box to the next block.
 
-It does not participate in completed calls.
+Each block is intentionally isolated.
 
-Its purpose is to determine whether sufficient evidence exists for the call to continue.
+A block knows only:
+
+- the Evidence Box it receives
+- its own assigned responsibility
+- the Evidence Box or record it must produce
+
+A block does not perform work assigned to another block.
 
 ---
 
-# Continued Observation
+## Block 1 — Call Intake
 
-Calls that fail to satisfy the required evidence threshold remain under observation.
+Block 1 begins when Telnyx notifies the platform of a new inbound call.
 
-These calls continue generating evidence until the screening process concludes.
+Block 1 receives:
 
-This represents the primary area of engineering interest because unsuccessful calls provide the greatest opportunity for improving future evidence collection and evaluation.
+- inbound call information
+- the Telnyx call record
+- billing timer information
+
+Block 1 places this information into the Block 1 Evidence Box and passes the completed box to Block 2.
+
+Block 1 performs no screening, scoring, evidence evaluation, deduction, or routing.
+
+The governing document is:
+
+`docs/evidence-engine/BLOCK_1_CALL_INTAKE_SOP.md`
 
 ---
 
-# Subscriber Experience
+## Block 2 — Telnyx Screening
+
+Block 2 begins when it receives the completed Block 1 Evidence Box.
+
+Every call begins Block 2 with a standing of 100.
+
+Block 2 receives the screening information produced by Telnyx, including:
+
+- calling-number information
+- STIR/SHAKEN information
+- CNAM information
+- carrier and line-lookup information
+
+Block 2 places the starting standing and Telnyx screening information into the Block 2 Evidence Box and passes the completed box to Block 3.
+
+Block 2 does not interpret or modify the information received from Telnyx.
+
+Block 2 does not assign deductions, gather caller responses, perform IPQS, determine disposition, or route the call.
+
+The governing document is:
+
+`docs/evidence-engine/BLOCK_2_TELNYX_SCREENING_SOP.md`
+
+---
+
+## Block 3 — Caller Response
+
+Block 3 owns the caller-response process.
+
+The initial request is:
+
+> "Please state your name and reason for calling."
+
+Block 3 captures, records, transcribes, and evaluates the caller's response.
+
+The live scoring rules are objective:
+
+- missing or unusable name: 15-point deduction
+- missing or unusable reason for calling: 15-point deduction
+- empty or unusable response containing neither: 30-point deduction
+
+When the first response is insufficient, Block 3 may perform the approved second-prompt process.
+
+No more than two requests are made.
+
+Block 3 preserves the caller-response evidence, deductions, transcripts, recording references, and evaluation results inside the Evidence Box.
+
+### IPQS
+
+IPQS is used only when the standing after caller-response deductions is between 76 and 85 inclusive.
+
+- standing 86–100: no IPQS lookup
+- standing 76–85: perform IPQS lookup
+- standing 75 or below: no IPQS lookup
+
+A derogatory IPQS result may apply the approved deduction.
+
+Block 3 completes its responsibility and passes the completed Block 3 Evidence Box to Block 4.
+
+The governing document is:
+
+`docs/evidence-engine/BLOCK_3_CALLER_RESPONSE_SOP.md`
+
+---
+
+## Block 4 — Routing
+
+Block 4 receives the completed Block 3 Evidence Box.
+
+Block 4 performs routing only.
+
+It does not:
+
+- gather new evidence
+- interpret evidence
+- assign deductions
+- modify standing
+- perform IPQS
+- repeat caller-response evaluation
+
+Routing follows the final standing contained in the Evidence Box.
+
+### Successful Result
+
+Calls with an approved standing are connected to the subscriber through the active Telnyx call-control path.
+
+The call is released as quickly as practical once screening is complete.
+
+### Unsuccessful Result
+
+Calls at or below the approved failure threshold remain connected through the observation period.
+
+At approximately 55 seconds, the caller hears:
+
+> "We’re sorry, but the party you are trying to reach is unavailable at this time. Please try your call again later."
+
+The call is disconnected before the second billable minute begins.
+
+### Routing Record
+
+Block 4 adds the routing result to the Evidence Box, including:
+
+- final standing
+- routing action
+- routing timestamp
+- routing completion information
+- call completion information
+
+At the conclusion of the call, Block 4 sends the completed Evidence Box to the Evidence Library.
+
+The governing document is:
+
+`docs/evidence-engine/BLOCK_4_ROUTING_SOP.md`
+
+---
+
+## Telnyx Responsibility
+
+Telnyx provides the telephony infrastructure used during the call.
+
+Its responsibilities include:
+
+- receiving the inbound call
+- creating the Telnyx call record
+- initiating the billing timer
+- providing available telephony screening information
+- executing call-control instructions
+- connecting approved calls to the subscriber endpoint
+- maintaining and completing the call media
+- producing the call recording when recording is enabled
+
+Telnyx does not receive the completed Evidence Box.
+
+Block 4 does not hand the Evidence Box to Telnyx.
+
+After the call ends and the recording is made available, Telnyx has no further responsibility for that call.
+
+Its next operational responsibility begins when it receives the next inbound call.
+
+---
+
+## Evidence Library
+
+The Evidence Library is separate from the live Evidence Engine.
+
+Its purpose is historical storage, categorization, and future analytical research.
+
+At the end of each call, Block 4 sends the completed Evidence Box to the Evidence Library.
+
+The completed Evidence Box contains the available call information accumulated across Blocks 1 through 4, including:
+
+- call identity
+- Telnyx call information
+- billing and timing information
+- Telnyx screening information
+- starting standing
+- caller prompts
+- caller responses
+- transcripts
+- response evaluation results
+- deductions
+- IPQS findings when applicable
+- final standing
+- routing result
+- call completion information
+
+The Telnyx call recording is a separate artifact.
+
+The Evidence Library stores the completed Evidence Box without waiting for the recording.
+
+When the recording becomes available, it is retrieved from Telnyx and associated with the correct Evidence Library record using the matching Telnyx call identifier or call-session identifier.
+
+The archived call may therefore move through two storage states:
+
+1. Evidence Box received; recording pending.
+2. Evidence Box and recording complete.
+
+The Evidence Library does not modify the outcome of a completed call.
+
+Historical analysis may inform future engineering decisions, but historical records do not alter the live standing or disposition of another call.
+
+---
+
+## Observation Mode
+
+Caller-side audio may be observed and recorded during the screening process.
+
+Observation begins during the active call and continues until transfer or disconnection.
+
+Observable information may include:
+
+- requested responses
+- unsolicited statements
+- silence
+- timing
+- background audio
+- other objectively measurable call characteristics
+
+Observation does not permit speculation.
+
+Research information that is not part of approved live scoring is preserved for later analysis only.
+
+---
+
+## Current-Call Evidence Rule
+
+Every live deduction must originate from objective evidence gathered during the current call.
+
+The system does not apply deductions based on:
+
+- assumptions
+- demographics
+- geography alone
+- political or social characteristics
+- unverified intent
+- prior call behavior
+- historical reputation
+- generalized caller profiles
+
+Every deduction must be traceable to an approved rule and preserved in the Evidence Box.
+
+---
+
+## Operational Error Handling
+
+Implementation failures are operational events.
+
+They are not caller evidence.
+
+When an implementation error prevents the call from completing normally, the caller hears:
+
+> "We are sorry, but we are having technical difficulties at this time and cannot complete your call. Please try your call again later. Goodbye."
+
+The call is then disconnected.
+
+Operational failures do not alter standing or create caller deductions.
+
+---
+
+## Subscriber Experience
 
 The subscriber experience remains intentionally simple.
 
 Subscribers receive:
 
-* Automatic scam call screening
-* Rapid connection for legitimate callers
-* Protection from unwanted callers
-* A straightforward and predictable experience
+- automatic screening
+- rapid connection of qualifying calls
+- protection from scam and unwanted calls
+- a predictable service experience
 
-Subscribers are intentionally insulated from:
+Subscribers are insulated from:
 
-* Internal scoring
-* Evidence relationships
-* Behavioral deductions
-* Decision logic
-* AI reasoning
-* System complexity
+- internal standing
+- deductions
+- evidence evaluation
+- IPQS processing
+- routing logic
+- Evidence Library research
+- internal system complexity
 
-Complexity belongs inside the Evidence Engine—not in the subscriber experience.
-
----
-
-# Beta Philosophy
-
-Beta is an evidence gathering program.
-
-Its purpose is to refine evidence weighting, improve behavioral interpretation, and validate operational assumptions using measurable real-world results.
-
-Beta is not intended to redefine the architectural principles described in this document.
-
-The architecture remains stable while evidence continuously improves the quality of future decisions.
+The subscriber purchases protection, not investigative data.
 
 ---
 
-# Permanent Engineering Principles
+## Engineering Authority
 
-The following principles govern the long-term evolution of NoMoreScamCalls:
+The approved SOP for each block is the authoritative implementation source.
 
-* Evidence is collected continuously throughout the screening process.
-* Evidence is never interpreted in isolation.
-* Relationships between objective facts and observed behavior determine the strength of the evidence.
-* Every inbound call is evaluated.
-* Every inbound call receives a score.
-* Calls meeting the required threshold are immediately released.
-* Calls failing to meet the required threshold remain under observation until the process concludes.
-* The platform's responsibility ends once a qualifying call is released.
-* Engineering effort should focus primarily on understanding and improving the evaluation of calls that fail the evidence threshold.
-* Complexity belongs within the Evidence Engine while the subscriber experience remains simple, fast, and understandable.
+The required development order is:
 
-This revision establishes the Evidence Engine and the Master Operational Blueprint as the permanent architectural foundation upon which future versions of NoMoreScamCalls will be built.
+1. Architecture
+2. SOP
+3. Implementation
+4. Tests
+5. Commit
+
+If implementation conflicts with an approved SOP, the SOP governs and the implementation must be corrected.
+
+Obsolete architectures, duplicate processing paths, abandoned stage models, and parallel systems are not retained inside the current Evidence Engine.
+
+---
+
+## Governing Principles
+
+- Every inbound call enters the Evidence Engine.
+- Every call begins with a standing of 100.
+- Every call is evaluated independently.
+- Only current-call evidence affects live deductions.
+- Each block performs one defined responsibility.
+- Evidence moves forward through completed Evidence Boxes.
+- Approved calls are connected promptly.
+- Unsuccessful calls complete the observation path and disconnect before the second billable minute.
+- Block 4 sends the completed Evidence Box to the Evidence Library.
+- Telnyx recordings are associated with the archived call after they become available.
+- Historical evidence supports research and engineering, not live-call control.
+- The product remains focused solely on scam and unwanted-call protection.
