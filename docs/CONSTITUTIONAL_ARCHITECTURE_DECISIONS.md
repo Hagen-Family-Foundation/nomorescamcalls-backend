@@ -1,188 +1,184 @@
-# Architecture Decisions — July 4, 2026
+# Constitutional Architecture Decisions
 
-## Product Identity
+These constitutional decisions define the permanent architectural principles of NoMoreScamCalls.
 
-NoMoreScamCalls is an evidence-driven call protection platform.
+Implementation may evolve.
 
-It is **not** an AI investigation platform.
+Evidence collection may improve.
 
-Its mission is singular:
+Technology may change.
 
-> Keep as many scammers and unwanted callers away from subscribers as humanly possible while allowing legitimate callers through whenever possible.
-
-Every internal capability exists solely to fulfill that promise.
+These principles govern the architecture unless they are intentionally revised through an approved architectural decision.
 
 ---
 
-## Core Decision Philosophy
+# Article 1 — Product Mission
 
-The platform grades **calls**, not people.
+NoMoreScamCalls exists for one purpose:
 
-Every call is evaluated using available evidence.
+> Protect subscribers from scam and unwanted telephone calls while allowing legitimate callers through as quickly as possible.
 
-The Decision Engine produces one of three outcomes:
+Every feature, service, and engineering decision shall directly support that mission.
 
-* Allow
-* Allow with Score
-* Divert with Score
-
-The Decision Engine is the only component responsible for determining call disposition.
+The platform shall not expand beyond its intended purpose without an approved architectural revision.
 
 ---
 
-## Historical Standing
+# Article 2 — Evidence Engine
 
-Every previously unseen number begins with a standing of **100**.
+Every inbound call enters the Evidence Engine.
 
-Returning numbers begin with their previously earned standing.
-
-Automatic scoring may only reduce a number's standing.
-
-A standing may only be improved through verified administrative review, such as confirmed telephone number reassignment or other verified circumstances.
-
----
-
-## Passive Evidence First
-
-Every incoming call undergoes passive evidence collection before any conversational interaction occurs.
-
-Passive evidence may include:
-
-* Subscriber lists
-* Historical standing
-* Confirmed scam history
-* Network authentication
-* Reputation services
-* Telephony information
-* Other objective evidence available before opening the line
-
-The objective is to make the best possible decision before engaging the caller.
-
----
-
-## Metadata vs. Behavioral Evidence
-
-NoMoreScamCalls distinguishes between two categories of information.
-
-### Metadata
-
-Metadata is collected and preserved.
-
-Examples include:
-
-* Geographic information
-* Carrier
-* Time of call
-* Previous encounter count
-* Network identifiers
-* Telephony identifiers
-
-Metadata primarily supports:
-
-* Historical analysis
-* Pattern recognition
-* Administrative review
-* Lawful investigative requests
-
-Metadata does not automatically affect a call's score.
-
-### Behavioral Evidence
-
-Behavioral observations may affect scoring.
-
-Behavior represents what the caller actually does during the interaction.
-
-Behavior is scored because it directly contributes to evaluating the quality of the current call.
-
-**Guiding Principle**
-
-> Metadata informs. Behavior scores.
-
----
-
-## Conversational Screening
-
-Conversation is opened only when passive evidence leaves sufficient uncertainty.
-
-Version 1 uses a single request:
-
-> "Please state your name and reason for calling."
-
-The objective is to obtain the highest-value information using the simplest possible interaction.
-
-Conversation is not intended to conduct an investigation.
-
-It exists only to gather additional evidence when passive evidence alone is insufficient.
-
----
-
-## Objective Scoring
-
-Version 1 scoring is intentionally simple.
-
-Only objective observations receive deductions.
-
-No subjective interpretation is used.
-
-Scoring values may be adjusted only after operational evidence demonstrates that a different value improves performance.
-
-Evidence—not opinion—drives scoring changes.
-
----
-
-## Intelligence Collection Mode
-
-When a call reaches a divert decision, that decision is final.
-
-The platform immediately enters **Intelligence Collection Mode**.
-
-During this phase the system may:
-
-* Listen to inbound audio.
-* Generate transcripts when possible.
-* Capture timing information.
-* Record disconnect behavior.
-* Preserve available metadata.
-* Archive intelligence for future analysis.
-
-Nothing collected during Intelligence Collection Mode changes the outcome of the current call.
-
-Its purpose is to improve future decisions and expand the platform's historical intelligence.
-
-At the conclusion of the collection interval, the caller hears the standard message:
-
-> "I'm sorry, but the person you are calling is unavailable at this time. Please try your call again. Goodbye."
-
-This message intentionally provides no indication that the caller has interacted with a screening system.
-
----
-
-## Operational Principles
+There are no automatic passes.
 
 Every call is evaluated.
 
-Every decision is evidence-based.
+Every call produces evidence.
 
-Every deduction must be objective.
-
-Metadata is preserved.
-
-Behavior is scored.
-
-The platform never teaches callers how to defeat its screening methods.
-
-The evidence tells us what to change.
-
-The product remains intentionally simple for subscribers while internal capabilities evolve only when supported by operational evidence.
+Every call concludes with a completed Evidence Box.
 
 ---
 
-## Guiding Principle
+# Article 3 — Current-Call Independence
 
-> Collect broadly. Score narrowly.
+Every inbound call begins with a standing of 100.
 
-Preserve information that may become valuable later.
+Only objective evidence gathered during the current call may affect the live standing.
 
-Score only information that has demonstrated value in distinguishing legitimate calls from unwanted or fraudulent calls.
+Historical information may be preserved for research but shall never determine the live outcome of another call.
 
-This philosophy keeps NoMoreScamCalls understandable, maintainable, and focused on its core promise.
+---
+
+# Article 4 — Evidence Boxes
+
+Information moves through the Evidence Engine in completed Evidence Boxes.
+
+Each processing block:
+
+- receives the completed Evidence Box from the previous block,
+- performs only its assigned responsibility,
+- adds its completed information,
+- produces a completed Evidence Box for the next block.
+
+Evidence always moves forward.
+
+---
+
+# Article 5 — Block Independence
+
+Each block is intentionally independent.
+
+A block knows only:
+
+- the completed Evidence Box it receives,
+- its approved responsibility,
+- the completed Evidence Box it must produce.
+
+A block shall not perform responsibilities assigned to another block.
+
+---
+
+# Article 6 — Objective Evidence
+
+The Evidence Engine operates solely upon objective evidence.
+
+No deductions shall originate from:
+
+- assumptions,
+- demographics,
+- political or social characteristics,
+- geography alone,
+- generalized caller profiles,
+- speculation,
+- unverified intent.
+
+Every deduction must be traceable to an approved rule supported by observable evidence.
+
+---
+
+# Article 7 — Evidence Library
+
+The Evidence Library is independent from the live Evidence Engine.
+
+Its purpose is:
+
+- historical preservation,
+- engineering research,
+- operational review,
+- future analytical improvement.
+
+The Evidence Library never changes the completed outcome of a call.
+
+Historical evidence supports future engineering.
+
+It never changes live call disposition.
+
+---
+
+# Article 8 — Subscriber Experience
+
+Subscribers purchase protection.
+
+They do not purchase investigative information.
+
+Internal complexity belongs within the Evidence Engine.
+
+The subscriber experience shall remain:
+
+- simple,
+- predictable,
+- understandable,
+- fast.
+
+---
+
+# Article 9 — Operational Errors
+
+Implementation failures are operational events.
+
+They are never caller evidence.
+
+Operational failures shall not create deductions, modify standing, or alter the Evidence Box.
+
+---
+
+# Article 10 — Architectural Authority
+
+Approved Standard Operating Procedures govern implementation.
+
+When implementation and an approved SOP differ, the SOP is the authoritative source.
+
+Development proceeds in the following order:
+
+1. Architecture
+2. Standard Operating Procedure
+3. Implementation
+4. Testing
+5. Commit
+
+---
+
+# Article 11 — Architectural Replacement
+
+The approved architecture replaces obsolete architecture.
+
+Parallel systems, duplicate processing paths, abandoned structures, and superseded architectural models shall not remain part of the production architecture except during an approved migration.
+
+Git history preserves previous work.
+
+The production architecture remains clean.
+
+---
+
+# Article 12 — Long-Term Engineering Principles
+
+Engineering decisions shall favor:
+
+- simplicity,
+- readability,
+- maintainability,
+- objective evidence,
+- clear responsibility boundaries,
+- long-term serviceability,
+- conventional engineering practices.
+
+The objective is to build a system that remains understandable, supportable, and reliable for many years while remaining focused exclusively on protecting subscribers from scam and unwanted telephone calls.
