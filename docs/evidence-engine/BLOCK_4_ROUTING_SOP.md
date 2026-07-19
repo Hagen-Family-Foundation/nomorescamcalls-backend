@@ -4,7 +4,12 @@
 
 Block 4 is the Routing Block of the Evidence Engine.
 
-Its sole responsibility is to route the call according to the final standing received from Block 3.
+Its sole responsibility is to route both:
+
+- the live call
+- the completed Evidence Box
+
+according to the completed Block 3 Evidence Box.
 
 Block 4 performs no analysis.
 
@@ -14,7 +19,7 @@ Block 4 makes no decisions.
 
 Block 4 does not calculate or modify standing.
 
-Block 4 simply routes the call according to this SOP.
+Block 4 simply routes the call and the completed Evidence Box according to this SOP.
 
 ---
 
@@ -40,8 +45,6 @@ Block 4 neither starts nor stops Observation Mode.
 
 Block 4 begins execution immediately upon receiving the completed Block 3 Evidence Box.
 
-The Evidence Box represents the completed screening results for the current call.
-
 ---
 
 # Input
@@ -66,15 +69,15 @@ Read the final standing.
 
 ### Step 3
 
-Match the final standing to the routing rules defined by this SOP.
+Execute the required call routing.
 
 ### Step 4
 
-Execute the required routing action.
+Route the completed Evidence Box to the Evidence Library.
 
 ### Step 5
 
-Record the routing action performed.
+Record completion of both routing operations.
 
 ---
 
@@ -82,46 +85,48 @@ Record the routing action performed.
 
 ## Standing 86–100
 
-Trigger the approved Telnyx call-control action to connect the caller to the subscriber.
+Transfer the caller to the protected subscriber.
 
-Observation Mode continues until control of the call is transferred.
+Route the completed Evidence Box to the Evidence Library.
 
 ---
 
 ## Standing 76–85
 
-Block 3 has already completed IPQS processing when required.
+IPQS processing has already been completed by Block 3.
 
-Trigger the approved Telnyx call-control action to connect the caller to the subscriber.
+Transfer the caller to the protected subscriber.
 
-Observation Mode continues until control of the call is transferred.
+Route the completed Evidence Box to the Evidence Library.
 
 ---
 
 ## Standing 0–75
 
-Maintain control of the call until approximately the fifty-five second mark.
+Maintain control of the call until approximately the fifty-fifth second.
 
 Continue Observation Mode throughout this period.
 
-At approximately the fifty-five second mark, play the following message:
+Play:
 
 > "We're sorry, but the party you are trying to reach is unavailable at this time. Please try your call again later."
 
-Terminate the call before the beginning of the second billing minute.
+Disconnect before the second billing minute begins.
+
+Route the completed Evidence Box to the Evidence Library.
 
 ---
 
 # Output
 
-Block 4 produces a Routing Record containing:
+Block 4 produces:
 
-* Final standing
-* Routing action executed
-* Routing timestamp
-* Routing completion status
+- Completed call routing
+- Completed Evidence Box delivery to the Evidence Library
+- Routing timestamp
+- Routing completion status
 
-The Routing Record becomes the output of Block 4.
+The archived Evidence Box may later have the Telnyx recording associated with it after the recording becomes available.
 
 ---
 
@@ -129,46 +134,36 @@ The Routing Record becomes the output of Block 4.
 
 Block 4 knows only:
 
-* the completed Block 3 Evidence Box
-* the final standing
-* the routing rules defined by this SOP
+- the completed Block 3 Evidence Box
+- the final standing
+- the routing rules defined by this SOP
 
 Block 4 does not know:
 
-* how evidence was collected
-* how deductions were assigned
-* how the standing was calculated
-* why a particular standing was produced
-* how future blocks operate
+- how evidence was collected
+- how deductions originated
+- how standing was calculated
+- why the standing exists
+- how future processing operates
 
-Block 4 receives a completed Evidence Box.
-
-Block 4 reads the final standing.
-
-Block 4 performs the routing required by this SOP.
-
-Block 4 produces a Routing Record.
-
-Block 4 performs no other function.
+Block 4 performs routing only.
 
 ---
 
 # Error Handling
 
-If Block 4 encounters an implementation error that prevents completion of its routing responsibility, the caller shall be played the standard system error message:
+If Block 4 cannot complete its routing responsibility, play:
 
 > "We are sorry, but we are having technical difficulties at this time and cannot complete your call. Please try your call again later. Goodbye."
 
-Immediately following the message, the call shall be disconnected.
+Disconnect the call.
 
-Implementation errors are operational events only.
-
-They are never considered caller evidence and shall not alter the caller's standing, recorded evidence, or any other information contained within the Evidence Box.
+Implementation failures never alter the Evidence Box.
 
 ---
 
 # Change Control
 
-Changes to routing thresholds, routing actions, or Block 4 responsibilities require an approved revision to the Evidence Engine architecture.
+Changes to Block 4 responsibilities require an approved revision to the Evidence Engine architecture.
 
-If implementation and this SOP differ, this SOP is the authoritative source.
+If implementation and this SOP differ, this SOP is authoritative.
