@@ -17,7 +17,7 @@ import { syncTelnyxInventory } from "./services/telnyxInventorySync";
 import { syncTelnyxSipCredentials } from "./services/telnyxSipCredentialSync";
 import { fetchTelnyxVoiceApplication } from "./services/telnyxVoiceApplicationsClient";
 import { fetchTelnyxRecordings } from "./services/telnyxRecordingsClient";
-import { redeemBetaInviteCode } from "./services/betaInviteCodes";
+import { registerBetaParticipant } from "./services/betaRegistration";
 
 export default {
 	async fetch(request: Request, env: Env): Promise<Response> {
@@ -304,40 +304,86 @@ export default {
 			});
 		}
 
-		// Beta Invite Redemption Endpoint
-		if (request.method === "POST" && url.pathname === "/beta/invites/redeem") {
+		// Beta Participant Registration Endpoint
+		if (request.method === "POST" && url.pathname === "/beta/register") {
 			const body = await request.json() as {
 				code?: string;
+				firstName?: string;
+				lastName?: string;
+				email?: string;
+				phoneNumber?: string;
+				carrier?: string;
+				contactMethod?: string;
+				password?: string;
 			};
 
 			const code = body.code?.trim() ?? "";
+			const firstName = body.firstName?.trim() ?? "";
+			const lastName = body.lastName?.trim() ?? "";
+			const email = body.email?.trim() ?? "";
+			const phoneNumber = body.phoneNumber?.trim() ?? "";
+			const carrier = body.carrier?.trim() ?? "";
+			const contactMethod = body.contactMethod?.trim() ?? "";
+			const password = body.password ?? "";
 
-			if (!code) {
+			if (
+				!code
+				|| !firstName
+				|| !lastName
+				|| !email
+				|| !phoneNumber
+				|| !carrier
+				|| !contactMethod
+				|| !password
+			) {
 				return Response.json({
-					error: "code is required"
+					error: "code, firstName, lastName, email, phoneNumber, carrier, contactMethod, and password are required"
 				}, {
 					status: 400
 				});
 			}
 
-			const invite = await redeemBetaInviteCode(
-				env.nomorescamcalls_db,
-				code
-			);
+			try {
+				const registration = await registerBetaParticipant(
+					env.nomorescamcalls_db,
+					{
+						code,
+						firstName,
+						lastName,
+						email,
+						phoneNumber,
+						carrier,
+						contactMethod,
+						password
+					}
+				);
 
-			if (!invite) {
+				if (!registration) {
+					return Response.json({
+						error: "Beta invite code is invalid or unavailable"
+					}, {
+						status: 409
+					});
+				}
+
 				return Response.json({
-					error: "Beta invite code is invalid or unavailable"
+					registered: true,
+					registration
+				}, {
+					status: 201
+				});
+			} catch (error) {
+				const reason = error instanceof Error
+					? error.message
+					: "Registration failed";
+
+				return Response.json({
+					error: "Registration failed",
+					reason
 				}, {
 					status: 409
 				});
 			}
-
-			return Response.json({
-				redeemed: true,
-				registrationAllowed: true,
-				invite
-			});
 		}
 
 		// Allow List Endpoint

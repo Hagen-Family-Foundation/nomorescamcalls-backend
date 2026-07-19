@@ -35,6 +35,7 @@ async function ensureTestSchema(): Promise<void> {
 				max_uses INTEGER NOT NULL DEFAULT 1,
 				use_count INTEGER NOT NULL DEFAULT 0,
 				created_by_user_id INTEGER,
+				redeemed_by_user_id INTEGER,
 				created_at TEXT DEFAULT CURRENT_TIMESTAMP,
 				updated_at TEXT DEFAULT CURRENT_TIMESTAMP
 			)
@@ -916,7 +917,7 @@ describe("NoMoreScamCalls Worker", () => {
 		expect(Array.isArray(body.events)).toBe(true);
 	});
 
-	it("redeems an active beta invite code once", async () => {
+	it("registers a beta participant and associates the invite", async () => {
 		await env.nomorescamcalls_db
 			.prepare(`
 				INSERT INTO beta_invite_codes (
@@ -930,71 +931,137 @@ describe("NoMoreScamCalls Worker", () => {
 					status = 'active',
 					max_uses = 1,
 					use_count = 0,
-					expires_at = NULL
+					expires_at = NULL,
+					redeemed_by_user_id = NULL
 			`)
-			.bind("BETA-ONE-TIME")
+			.bind("BETA-REGISTER-ONE")
 			.run();
 
 		const response = await SELF.fetch(
-			"http://example.com/beta/invites/redeem",
+			"http://example.com/beta/register",
 			{
 				method: "POST",
 				headers: {
 					"content-type": "application/json"
 				},
 				body: JSON.stringify({
-					code: "BETA-ONE-TIME"
+					code: "BETA-REGISTER-ONE",
+					firstName: "Kelly",
+					lastName: "Hagen",
+					email: "kelly.beta@example.com",
+					phoneNumber: "+15550001001",
+					carrier: "Example Carrier",
+					contactMethod: "email",
+					password: "beta-password"
 				})
 			}
 		);
 
-		expect(response.status).toBe(200);
+		expect(response.status).toBe(201);
 
 		const body = await response.json<{
-			redeemed: boolean;
-			registrationAllowed: boolean;
-			invite: {
-				code: string;
-				status: string;
-				maxUses: number;
-				useCount: number;
+			registered: boolean;
+			registration: {
+				inviteCode: string;
+				user: {
+					id: number;
+					firstName: string;
+					lastName: string;
+					email: string;
+					phoneNumber: string;
+					carrier: string;
+					contactMethod: string;
+					role: string;
+					accountStatus: string;
+					setupStatus: string;
+					coverageStatus: string;
+				};
 			};
 		}>();
 
-		expect(body.redeemed).toBe(true);
-		expect(body.registrationAllowed).toBe(true);
-		expect(body.invite.code).toBe("BETA-ONE-TIME");
-		expect(body.invite.status).toBe("used");
-		expect(body.invite.maxUses).toBe(1);
-		expect(body.invite.useCount).toBe(1);
+		expect(body.registered).toBe(true);
+		expect(body.registration.inviteCode).toBe("BETA-REGISTER-ONE");
+		expect(body.registration.user.firstName).toBe("Kelly");
+		expect(body.registration.user.lastName).toBe("Hagen");
+		expect(body.registration.user.email).toBe("kelly.beta@example.com");
+		expect(body.registration.user.phoneNumber).toBe("+15550001001");
+		expect(body.registration.user.carrier).toBe("Example Carrier");
+		expect(body.registration.user.contactMethod).toBe("email");
+		expect(body.registration.user.role).toBe("participant");
+		expect(body.registration.user.accountStatus).toBe("active");
+		expect(body.registration.user.setupStatus).toBe("account_created");
+		expect(body.registration.user.coverageStatus).toBe("pending");
+
+		const storedUser = await env.nomorescamcalls_db
+			.prepare(`
+				SELECT id, password_hash
+				FROM users
+				WHERE phone_number = ?
+			`)
+			.bind("+15550001001")
+			.first<{
+				id: number;
+				password_hash: string;
+			}>();
+
+		expect(storedUser).not.toBeNull();
+		expect(storedUser?.password_hash).not.toBe("beta-password");
+		expect(storedUser?.password_hash.startsWith("pbkdf2_sha256$")).toBe(true);
+
+		const storedInvite = await env.nomorescamcalls_db
+			.prepare(`
+				SELECT status, use_count, redeemed_by_user_id
+				FROM beta_invite_codes
+				WHERE code = ?
+			`)
+			.bind("BETA-REGISTER-ONE")
+			.first<{
+				status: string;
+				use_count: number;
+				redeemed_by_user_id: number | null;
+			}>();
+
+		expect(storedInvite?.status).toBe("used");
+		expect(storedInvite?.use_count).toBe(1);
+		expect(storedInvite?.redeemed_by_user_id).toBe(storedUser?.id);
 	});
 
-	it("rejects reuse of a consumed beta invite code", async () => {
+	it("rejects reuse of a registered beta invite", async () => {
 		const response = await SELF.fetch(
-			"http://example.com/beta/invites/redeem",
+			"http://example.com/beta/register",
 			{
 				method: "POST",
 				headers: {
 					"content-type": "application/json"
 				},
 				body: JSON.stringify({
-					code: "BETA-ONE-TIME"
+					code: "BETA-REGISTER-ONE",
+					firstName: "Second",
+					lastName: "Participant",
+					email: "second.beta@example.com",
+					phoneNumber: "+15550001002",
+					carrier: "Example Carrier",
+					contactMethod: "email",
+					password: "second-password"
 				})
 			}
 		);
 
 		expect(response.status).toBe(409);
 
-		const body = await response.json<{
-			error: string;
-		}>();
+		const secondUser = await env.nomorescamcalls_db
+			.prepare(`
+				SELECT id
+				FROM users
+				WHERE phone_number = ?
+			`)
+			.bind("+15550001002")
+			.first();
 
-		expect(body.error).toBe(
-			"Beta invite code is invalid or unavailable"
-		);
+		expect(secondUser).toBeNull();
 	});
 
-	it("rejects an expired beta invite code", async () => {
+	it("rejects an expired beta invite during registration", async () => {
 		await env.nomorescamcalls_db
 			.prepare(`
 				INSERT INTO beta_invite_codes (
@@ -1009,23 +1076,31 @@ describe("NoMoreScamCalls Worker", () => {
 					status = 'active',
 					expires_at = excluded.expires_at,
 					max_uses = 1,
-					use_count = 0
+					use_count = 0,
+					redeemed_by_user_id = NULL
 			`)
 			.bind(
-				"BETA-EXPIRED",
+				"BETA-REGISTER-EXPIRED",
 				"2020-01-01T00:00:00.000Z"
 			)
 			.run();
 
 		const response = await SELF.fetch(
-			"http://example.com/beta/invites/redeem",
+			"http://example.com/beta/register",
 			{
 				method: "POST",
 				headers: {
 					"content-type": "application/json"
 				},
 				body: JSON.stringify({
-					code: "BETA-EXPIRED"
+					code: "BETA-REGISTER-EXPIRED",
+					firstName: "Expired",
+					lastName: "Participant",
+					email: "expired.beta@example.com",
+					phoneNumber: "+15550001003",
+					carrier: "Example Carrier",
+					contactMethod: "email",
+					password: "expired-password"
 				})
 			}
 		);
@@ -1033,15 +1108,17 @@ describe("NoMoreScamCalls Worker", () => {
 		expect(response.status).toBe(409);
 	});
 
-	it("requires a beta invite code", async () => {
+	it("requires all beta registration fields", async () => {
 		const response = await SELF.fetch(
-			"http://example.com/beta/invites/redeem",
+			"http://example.com/beta/register",
 			{
 				method: "POST",
 				headers: {
 					"content-type": "application/json"
 				},
-				body: JSON.stringify({})
+				body: JSON.stringify({
+					code: "BETA-INCOMPLETE"
+				})
 			}
 		);
 
@@ -1051,7 +1128,9 @@ describe("NoMoreScamCalls Worker", () => {
 			error: string;
 		}>();
 
-		expect(body.error).toBe("code is required");
+		expect(body.error).toBe(
+			"code, firstName, lastName, email, phoneNumber, carrier, contactMethod, and password are required"
+		);
 	});
 
 });
