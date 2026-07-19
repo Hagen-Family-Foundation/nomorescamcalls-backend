@@ -1,12 +1,26 @@
-import { describe, expect, it, vi } from "vitest";
+import {
+	describe,
+	expect,
+	it,
+	vi
+} from "vitest";
 import {
 	completeBlock1,
 	completeBlock2,
-	completeBlock3,
-	type CallerResponseEvaluator
+	completeBlock3
+} from "../src/services/evidenceEngine";
+import type {
+	CallerResponseEvaluator,
+	IpqsLookup
 } from "../src/services/evidenceEngine";
 
-function createBlock2EvidenceBox() {
+function createBlock2EvidenceBox(
+	deductions: Array<{
+		finding: string;
+		reason: string;
+		points: number;
+	}> = []
+) {
 	const block1EvidenceBox = completeBlock1({
 		callInformation: {},
 		callRecord: {},
@@ -20,53 +34,52 @@ function createBlock2EvidenceBox() {
 			stirShakenInformation: {},
 			cnamInformation: {},
 			carrierLineLookupInformation: {}
-		}
+		},
+		deductions
 	});
 }
 
 describe("Evidence Engine Block 3", () => {
-	it("preserves two-prompt evidence and originates no deductions when both responses are usable", async () => {
+	it("makes no caller-response deduction when either attempt supplies each required answer", async () => {
 		const evaluator: CallerResponseEvaluator = {
-			evaluate: vi.fn().mockResolvedValue({
-				nameAccepted: true,
-				reasonAccepted: true
-			})
+			evaluate: vi
+				.fn()
+				.mockResolvedValueOnce({
+					nameAccepted: true,
+					reasonAccepted: false
+				})
+				.mockResolvedValueOnce({
+					nameAccepted: false,
+					reasonAccepted: true
+				})
 		};
 
-		const block2EvidenceBox =
-			createBlock2EvidenceBox();
-
 		const result = await completeBlock3({
-			block2EvidenceBox,
+			block2EvidenceBox:
+				createBlock2EvidenceBox(),
 			prompt1: {
 				audioRecordingReference: "audio-1",
-				transcript:
-					"This is Maria calling about the appointment.",
+				transcript: "This is Maria.",
 				language: "en"
 			},
 			prompt2: {
 				audioRecordingReference: "audio-2",
 				transcript:
-					"Maria, regarding tomorrow's appointment.",
+					"I am calling about tomorrow's appointment.",
 				language: "en"
 			},
 			evaluator
 		});
 
-		expect(result.block2EvidenceBox).toBe(
-			block2EvidenceBox
-		);
-		expect(result.prompt1.deductions).toEqual([]);
-		expect(result.prompt2.deductions).toEqual([]);
-		expect(result.deductions).toEqual([]);
-		expect(result.totalBlock3Deductions).toBe(0);
+		expect(result.block3Deductions).toEqual([]);
+		expect(result.finalStanding).toBe(100);
+		expect(result.ipqsPerformed).toBe(false);
 		expect(result).not.toHaveProperty(
-			"currentStanding"
+			"routingInstruction"
 		);
-		expect(result).not.toHaveProperty("nextStep");
 	});
 
-	it("originates deductions independently for both prompts", async () => {
+	it("deducts fifteen points only when both name attempts fail", async () => {
 		const evaluator: CallerResponseEvaluator = {
 			evaluate: vi
 				.fn()
@@ -76,7 +89,7 @@ describe("Evidence Engine Block 3", () => {
 				})
 				.mockResolvedValueOnce({
 					nameAccepted: false,
-					reasonAccepted: false
+					reasonAccepted: true
 				})
 		};
 
@@ -90,40 +103,39 @@ describe("Evidence Engine Block 3", () => {
 			},
 			prompt2: {
 				audioRecordingReference: "audio-2",
-				transcript: "Something.",
+				transcript:
+					"It concerns the same bill.",
 				language: "en"
 			},
-			evaluator
+			evaluator,
+			ipqsLookup: {
+				lookup: vi.fn().mockResolvedValue({
+					adverseFinding: false,
+					finding: null,
+					reason: null
+				})
+			}
 		});
 
-		expect(result.prompt1.deductions).toEqual([
+		expect(result.block3Deductions).toEqual([
 			{
-				source: "caller_response",
+				finding:
+					"Both name attempts failed",
 				reason:
-					"prompt_1_missing_or_unusable_name",
+					"The caller did not provide an acceptable name in either response.",
 				points: 15
 			}
 		]);
 
-		expect(result.prompt2.deductions).toEqual([
-			{
-				source: "caller_response",
-				reason:
-					"prompt_2_missing_or_unusable_name",
-				points: 15
-			},
-			{
-				source: "caller_response",
-				reason:
-					"prompt_2_missing_or_unusable_reason",
-				points: 15
-			}
-		]);
-
-		expect(result.totalBlock3Deductions).toBe(45);
+		expect(result.standingBeforeIpqs).toBe(85);
+		expect(result.finalStanding).toBe(85);
+		expect(result.ipqsPerformed).toBe(true);
+		expect(result).not.toHaveProperty(
+			"routingInstruction"
+		);
 	});
 
-	it("originates the maximum sixty points when both transcripts are empty", async () => {
+	it("deducts a maximum of thirty points when both name and reason fail twice", async () => {
 		const evaluator: CallerResponseEvaluator = {
 			evaluate: vi.fn()
 		};
@@ -144,8 +156,88 @@ describe("Evidence Engine Block 3", () => {
 			evaluator
 		});
 
-		expect(result.totalBlock3Deductions).toBe(60);
-		expect(result.deductions).toHaveLength(4);
+		expect(result.block3Deductions).toHaveLength(2);
+		expect(result.finalStanding).toBe(70);
+		expect(result.ipqsPerformed).toBe(false);
 		expect(evaluator.evaluate).not.toHaveBeenCalled();
+		expect(result).not.toHaveProperty(
+			"routingInstruction"
+		);
+	});
+
+	it("performs all math from Block 2, caller responses, and IPQS", async () => {
+		const evaluator: CallerResponseEvaluator = {
+			evaluate: vi.fn().mockResolvedValue({
+				nameAccepted: true,
+				reasonAccepted: true
+			})
+		};
+
+		const ipqsLookup: IpqsLookup = {
+			lookup: vi.fn().mockResolvedValue({
+				adverseFinding: true,
+				finding:
+					"IPQS calling-number anomaly",
+				reason:
+					"IPQS reported an adverse finding for the calling number."
+			})
+		};
+
+		const result = await completeBlock3({
+			block2EvidenceBox:
+				createBlock2EvidenceBox([
+					{
+						finding:
+							"STIR/SHAKEN anomaly",
+						reason:
+							"Telnyx authentication information produced an approved deduction.",
+						points: 5
+					},
+					{
+						finding:
+							"CNAM anomaly",
+						reason:
+							"Telnyx caller-name information produced an approved deduction.",
+						points: 5
+					},
+					{
+						finding:
+							"Carrier information anomaly",
+						reason:
+							"Telnyx carrier information produced an approved deduction.",
+						points: 5
+					}
+				]),
+			prompt1: {
+				audioRecordingReference: "audio-1",
+				transcript:
+					"Maria calling about an appointment.",
+				language: "en"
+			},
+			prompt2: {
+				audioRecordingReference: "audio-2",
+				transcript:
+					"Maria calling about tomorrow's appointment.",
+				language: "en"
+			},
+			evaluator,
+			ipqsLookup
+		});
+
+		expect(result.standingBeforeIpqs).toBe(85);
+		expect(result.ipqsPerformed).toBe(true);
+		expect(result.ipqsDeductions).toEqual([
+			{
+				finding:
+					"IPQS calling-number anomaly",
+				reason:
+					"IPQS reported an adverse finding for the calling number.",
+				points: 10
+			}
+		]);
+		expect(result.finalStanding).toBe(75);
+		expect(result).not.toHaveProperty(
+			"routingInstruction"
+		);
 	});
 });

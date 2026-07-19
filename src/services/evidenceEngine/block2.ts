@@ -12,9 +12,16 @@ export interface Block2ScreeningInformation {
 	carrierLineLookupInformation: unknown;
 }
 
+export interface Block2Deduction {
+	finding: string;
+	reason: string;
+	points: number;
+}
+
 export interface Block2Input {
 	block1EvidenceBox: Block1EvidenceBox;
 	screeningInformation: Block2ScreeningInformation;
+	deductions?: Block2Deduction[];
 }
 
 export interface Block2EvidenceBox {
@@ -24,6 +31,7 @@ export interface Block2EvidenceBox {
 	stirShakenInformation: unknown;
 	cnamInformation: unknown;
 	carrierLineLookupInformation: unknown;
+	deductions: Block2Deduction[];
 }
 
 export function completeBlock2(
@@ -39,6 +47,7 @@ export function completeBlock2(
 		cnamInformation:
 			input.screeningInformation.cnamInformation,
 		carrierLineLookupInformation:
-			input.screeningInformation.carrierLineLookupInformation
+			input.screeningInformation.carrierLineLookupInformation,
+		deductions: input.deductions ?? []
 	};
 }
