@@ -18,6 +18,7 @@ import { syncTelnyxSipCredentials } from "./services/telnyxSipCredentialSync";
 import { fetchTelnyxVoiceApplication } from "./services/telnyxVoiceApplicationsClient";
 import { fetchTelnyxRecordings } from "./services/telnyxRecordingsClient";
 import { registerBetaParticipant } from "./services/betaRegistration";
+import { loginBetaParticipant } from "./services/betaLogin";
 
 export default {
 	async fetch(request: Request, env: Env): Promise<Response> {
@@ -384,6 +385,44 @@ export default {
 					status: 409
 				});
 			}
+		}
+
+		// Beta Participant Login Endpoint
+		if (request.method === "POST" && url.pathname === "/beta/login") {
+			const body = await request.json() as {
+				email?: string;
+				password?: string;
+			};
+
+			const email = body.email?.trim() ?? "";
+			const password = body.password ?? "";
+
+			if (!email || !password) {
+				return Response.json({
+					error: "email and password are required"
+				}, {
+					status: 400
+				});
+			}
+
+			const login = await loginBetaParticipant(
+				env.nomorescamcalls_db,
+				email,
+				password
+			);
+
+			if (!login) {
+				return Response.json({
+					error: "Invalid email or password"
+				}, {
+					status: 401
+				});
+			}
+
+			return Response.json({
+				authenticated: true,
+				login
+			});
 		}
 
 		// Allow List Endpoint

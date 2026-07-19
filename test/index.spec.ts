@@ -44,6 +44,20 @@ async function ensureTestSchema(): Promise<void> {
 
 	await env.nomorescamcalls_db
 		.prepare(`
+			CREATE TABLE IF NOT EXISTS portal_sessions (
+				id INTEGER PRIMARY KEY AUTOINCREMENT,
+				user_id INTEGER NOT NULL,
+				token_hash TEXT NOT NULL UNIQUE,
+				expires_at TEXT NOT NULL,
+				last_used_at TEXT,
+				revoked_at TEXT,
+				created_at TEXT DEFAULT CURRENT_TIMESTAMP
+			)
+		`)
+		.run();
+
+	await env.nomorescamcalls_db
+		.prepare(`
 			CREATE TABLE IF NOT EXISTS block_list (
 				id INTEGER PRIMARY KEY AUTOINCREMENT,
 				user_id INTEGER,
@@ -1130,6 +1144,179 @@ describe("NoMoreScamCalls Worker", () => {
 
 		expect(body.error).toBe(
 			"code, firstName, lastName, email, phoneNumber, carrier, contactMethod, and password are required"
+		);
+	});
+
+	it("logs in a registered beta participant and creates a session", async () => {
+		await env.nomorescamcalls_db
+			.prepare(`
+				INSERT INTO beta_invite_codes (
+					code,
+					status,
+					max_uses,
+					use_count
+				)
+				VALUES (?, 'active', 1, 0)
+			`)
+			.bind("BETA-LOGIN-ONE")
+			.run();
+
+		const registrationResponse = await SELF.fetch(
+			"http://example.com/beta/register",
+			{
+				method: "POST",
+				headers: {
+					"content-type": "application/json"
+				},
+				body: JSON.stringify({
+					code: "BETA-LOGIN-ONE",
+					firstName: "Kelly",
+					lastName: "Hagen",
+					email: "kelly.beta@example.com",
+					phoneNumber: "+15550001004",
+					carrier: "Example Carrier",
+					contactMethod: "email",
+					password: "beta-password"
+				})
+			}
+		);
+
+		expect(registrationResponse.status).toBe(201);
+
+		const response = await SELF.fetch(
+			"http://example.com/beta/login",
+			{
+				method: "POST",
+				headers: {
+					"content-type": "application/json"
+				},
+				body: JSON.stringify({
+					email: "KELLY.BETA@EXAMPLE.COM",
+					password: "beta-password"
+				})
+			}
+		);
+
+		expect(response.status).toBe(200);
+
+		const body = await response.json<{
+			authenticated: boolean;
+			login: {
+				sessionToken: string;
+				expiresAt: string;
+				user: {
+					id: number;
+					email: string;
+					role: string;
+					accountStatus: string;
+				};
+			};
+		}>();
+
+		expect(body.authenticated).toBe(true);
+		expect(body.login.sessionToken.length).toBeGreaterThan(20);
+		expect(body.login.user.email).toBe("kelly.beta@example.com");
+		expect(body.login.user.role).toBe("participant");
+		expect(body.login.user.accountStatus).toBe("active");
+		expect(
+			new Date(body.login.expiresAt).getTime()
+		).toBeGreaterThan(Date.now());
+
+		const storedSession = await env.nomorescamcalls_db
+			.prepare(`
+				SELECT
+					token_hash,
+					expires_at,
+					revoked_at
+				FROM portal_sessions
+				WHERE user_id = ?
+				ORDER BY id DESC
+				LIMIT 1
+			`)
+			.bind(body.login.user.id)
+			.first<{
+				token_hash: string;
+				expires_at: string;
+				revoked_at: string | null;
+			}>();
+
+		expect(storedSession).not.toBeNull();
+		expect(storedSession?.token_hash).not.toBe(
+			body.login.sessionToken
+		);
+		expect(storedSession?.token_hash).toMatch(
+			/^[a-f0-9]{64}$/
+		);
+		expect(storedSession?.expires_at).toBe(
+			body.login.expiresAt
+		);
+		expect(storedSession?.revoked_at).toBeNull();
+	});
+
+	it("rejects an incorrect beta participant password", async () => {
+		const response = await SELF.fetch(
+			"http://example.com/beta/login",
+			{
+				method: "POST",
+				headers: {
+					"content-type": "application/json"
+				},
+				body: JSON.stringify({
+					email: "kelly.beta@example.com",
+					password: "incorrect-password"
+				})
+			}
+		);
+
+		expect(response.status).toBe(401);
+
+		const body = await response.json<{
+			error: string;
+		}>();
+
+		expect(body.error).toBe("Invalid email or password");
+	});
+
+	it("rejects an unknown beta participant email", async () => {
+		const response = await SELF.fetch(
+			"http://example.com/beta/login",
+			{
+				method: "POST",
+				headers: {
+					"content-type": "application/json"
+				},
+				body: JSON.stringify({
+					email: "unknown.beta@example.com",
+					password: "beta-password"
+				})
+			}
+		);
+
+		expect(response.status).toBe(401);
+	});
+
+	it("requires beta login credentials", async () => {
+		const response = await SELF.fetch(
+			"http://example.com/beta/login",
+			{
+				method: "POST",
+				headers: {
+					"content-type": "application/json"
+				},
+				body: JSON.stringify({
+					email: "kelly.beta@example.com"
+				})
+			}
+		);
+
+		expect(response.status).toBe(400);
+
+		const body = await response.json<{
+			error: string;
+		}>();
+
+		expect(body.error).toBe(
+			"email and password are required"
 		);
 	});
 
