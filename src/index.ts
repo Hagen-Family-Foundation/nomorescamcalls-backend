@@ -17,6 +17,7 @@ import { syncTelnyxInventory } from "./services/telnyxInventorySync";
 import { syncTelnyxSipCredentials } from "./services/telnyxSipCredentialSync";
 import { fetchTelnyxVoiceApplication } from "./services/telnyxVoiceApplicationsClient";
 import { fetchTelnyxRecordings } from "./services/telnyxRecordingsClient";
+import { redeemBetaInviteCode } from "./services/betaInviteCodes";
 
 export default {
 	async fetch(request: Request, env: Env): Promise<Response> {
@@ -300,6 +301,42 @@ export default {
 
 			return Response.json({
 				user
+			});
+		}
+
+		// Beta Invite Redemption Endpoint
+		if (request.method === "POST" && url.pathname === "/beta/invites/redeem") {
+			const body = await request.json() as {
+				code?: string;
+			};
+
+			const code = body.code?.trim() ?? "";
+
+			if (!code) {
+				return Response.json({
+					error: "code is required"
+				}, {
+					status: 400
+				});
+			}
+
+			const invite = await redeemBetaInviteCode(
+				env.nomorescamcalls_db,
+				code
+			);
+
+			if (!invite) {
+				return Response.json({
+					error: "Beta invite code is invalid or unavailable"
+				}, {
+					status: 409
+				});
+			}
+
+			return Response.json({
+				redeemed: true,
+				registrationAllowed: true,
+				invite
 			});
 		}
 

@@ -27,6 +27,22 @@ async function ensureTestSchema(): Promise<void> {
 
 	await env.nomorescamcalls_db
 		.prepare(`
+			CREATE TABLE IF NOT EXISTS beta_invite_codes (
+				id INTEGER PRIMARY KEY AUTOINCREMENT,
+				code TEXT NOT NULL UNIQUE,
+				status TEXT NOT NULL DEFAULT 'active',
+				expires_at TEXT,
+				max_uses INTEGER NOT NULL DEFAULT 1,
+				use_count INTEGER NOT NULL DEFAULT 0,
+				created_by_user_id INTEGER,
+				created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+				updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+			)
+		`)
+		.run();
+
+	await env.nomorescamcalls_db
+		.prepare(`
 			CREATE TABLE IF NOT EXISTS block_list (
 				id INTEGER PRIMARY KEY AUTOINCREMENT,
 				user_id INTEGER,
@@ -898,6 +914,144 @@ describe("NoMoreScamCalls Worker", () => {
 		}>();
 
 		expect(Array.isArray(body.events)).toBe(true);
+	});
+
+	it("redeems an active beta invite code once", async () => {
+		await env.nomorescamcalls_db
+			.prepare(`
+				INSERT INTO beta_invite_codes (
+					code,
+					status,
+					max_uses,
+					use_count
+				)
+				VALUES (?, 'active', 1, 0)
+				ON CONFLICT(code) DO UPDATE SET
+					status = 'active',
+					max_uses = 1,
+					use_count = 0,
+					expires_at = NULL
+			`)
+			.bind("BETA-ONE-TIME")
+			.run();
+
+		const response = await SELF.fetch(
+			"http://example.com/beta/invites/redeem",
+			{
+				method: "POST",
+				headers: {
+					"content-type": "application/json"
+				},
+				body: JSON.stringify({
+					code: "BETA-ONE-TIME"
+				})
+			}
+		);
+
+		expect(response.status).toBe(200);
+
+		const body = await response.json<{
+			redeemed: boolean;
+			registrationAllowed: boolean;
+			invite: {
+				code: string;
+				status: string;
+				maxUses: number;
+				useCount: number;
+			};
+		}>();
+
+		expect(body.redeemed).toBe(true);
+		expect(body.registrationAllowed).toBe(true);
+		expect(body.invite.code).toBe("BETA-ONE-TIME");
+		expect(body.invite.status).toBe("used");
+		expect(body.invite.maxUses).toBe(1);
+		expect(body.invite.useCount).toBe(1);
+	});
+
+	it("rejects reuse of a consumed beta invite code", async () => {
+		const response = await SELF.fetch(
+			"http://example.com/beta/invites/redeem",
+			{
+				method: "POST",
+				headers: {
+					"content-type": "application/json"
+				},
+				body: JSON.stringify({
+					code: "BETA-ONE-TIME"
+				})
+			}
+		);
+
+		expect(response.status).toBe(409);
+
+		const body = await response.json<{
+			error: string;
+		}>();
+
+		expect(body.error).toBe(
+			"Beta invite code is invalid or unavailable"
+		);
+	});
+
+	it("rejects an expired beta invite code", async () => {
+		await env.nomorescamcalls_db
+			.prepare(`
+				INSERT INTO beta_invite_codes (
+					code,
+					status,
+					expires_at,
+					max_uses,
+					use_count
+				)
+				VALUES (?, 'active', ?, 1, 0)
+				ON CONFLICT(code) DO UPDATE SET
+					status = 'active',
+					expires_at = excluded.expires_at,
+					max_uses = 1,
+					use_count = 0
+			`)
+			.bind(
+				"BETA-EXPIRED",
+				"2020-01-01T00:00:00.000Z"
+			)
+			.run();
+
+		const response = await SELF.fetch(
+			"http://example.com/beta/invites/redeem",
+			{
+				method: "POST",
+				headers: {
+					"content-type": "application/json"
+				},
+				body: JSON.stringify({
+					code: "BETA-EXPIRED"
+				})
+			}
+		);
+
+		expect(response.status).toBe(409);
+	});
+
+	it("requires a beta invite code", async () => {
+		const response = await SELF.fetch(
+			"http://example.com/beta/invites/redeem",
+			{
+				method: "POST",
+				headers: {
+					"content-type": "application/json"
+				},
+				body: JSON.stringify({})
+			}
+		);
+
+		expect(response.status).toBe(400);
+
+		const body = await response.json<{
+			error: string;
+		}>();
+
+		expect(body.error).toBe("code is required");
 	});
 
 });
