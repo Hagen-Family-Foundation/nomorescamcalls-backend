@@ -6,7 +6,14 @@ async function ensureTestSchema(): Promise<void> {
 		.prepare(`
 			CREATE TABLE IF NOT EXISTS users (
 				id INTEGER PRIMARY KEY AUTOINCREMENT,
-				full_name TEXT,
+				first_name TEXT,
+				last_name TEXT,
+				carrier TEXT,
+				contact_method TEXT,
+				password_hash TEXT,
+				role TEXT NOT NULL DEFAULT 'participant',
+				account_status TEXT NOT NULL DEFAULT 'active',
+				setup_status TEXT NOT NULL DEFAULT 'account_created',
 				email TEXT UNIQUE,
 				phone_number TEXT NOT NULL UNIQUE,
 				screening_number TEXT UNIQUE,
@@ -597,7 +604,8 @@ describe("NoMoreScamCalls Worker", () => {
 				"content-type": "application/json"
 			},
 			body: JSON.stringify({
-				fullName: "Mary Example",
+				firstName: "Mary",
+				lastName: "Example",
 				email: "mary@example.com",
 				phoneNumber: "+18165550100"
 			})
@@ -610,7 +618,8 @@ describe("NoMoreScamCalls Worker", () => {
 				coverageStatus: string;
 				provisioningStatus: string;
 				user: {
-					fullName: string;
+					firstName: string;
+					lastName: string;
 					email: string;
 					phoneNumber: string;
 					screeningNumber: string;
@@ -627,7 +636,8 @@ describe("NoMoreScamCalls Worker", () => {
 
 		expect(body.provisioning.provisioningStatus).toBe("active");
 		expect(body.provisioning.coverageStatus).toBe("active");
-		expect(body.provisioning.user.fullName).toBe("Mary Example");
+		expect(body.provisioning.user.firstName).toBe("Mary");
+		expect(body.provisioning.user.lastName).toBe("Example");
 		expect(body.provisioning.user.email).toBe("mary@example.com");
 		expect(body.provisioning.user.phoneNumber).toBe("+18165550100");
 		expect(body.provisioning.user.screeningNumber).toBe("+19139562000");
@@ -663,7 +673,8 @@ describe("NoMoreScamCalls Worker", () => {
 				"content-type": "application/json"
 			},
 			body: JSON.stringify({
-				fullName: "Failed Provisioning Test",
+				firstName: "Failed Provisioning",
+				lastName: "Test",
 				email: "failed-provisioning@example.com",
 				phoneNumber: "+18165550101"
 			})

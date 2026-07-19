@@ -222,18 +222,20 @@ export default {
 		// Provision Subscriber Endpoint
 		if (request.method === "POST" && url.pathname === "/provisioning/subscribers") {
 			const body = await request.json() as {
-				fullName?: string;
+				firstName?: string;
+				lastName?: string;
 				email?: string;
 				phoneNumber?: string;
 			};
 
-			const fullName = body.fullName ?? "";
+			const firstName = body.firstName ?? "";
+			const lastName = body.lastName ?? "";
 			const email = body.email ?? "";
 			const phoneNumber = body.phoneNumber ?? "";
 
-			if (!fullName || !email || !phoneNumber) {
+			if (!firstName || !lastName || !email || !phoneNumber) {
 				return Response.json({
-					error: "fullName, email, and phoneNumber are required"
+					error: "firstName, lastName, email, and phoneNumber are required"
 				}, {
 					status: 400
 				});
@@ -243,7 +245,8 @@ export default {
 				const provisioning = await provisionSubscriber(
 					env.nomorescamcalls_db,
 					{
-						fullName,
+						firstName,
+						lastName,
 						email,
 						phoneNumber
 					}
@@ -531,6 +534,14 @@ export default {
 
 		// Telnyx Voice Application Diagnostic Endpoint
 		if (request.method === "GET" && url.pathname === "/telnyx/voice-application") {
+			if (!env.TELNYX_VOICE_APPLICATION_ID) {
+				return Response.json({
+					error: "TELNYX_VOICE_APPLICATION_ID is not configured"
+				}, {
+					status: 503
+				});
+			}
+
 			const voiceApplication = await fetchTelnyxVoiceApplication(
 				env.TELNYX_VOICE_APPLICATION_ID,
 				{

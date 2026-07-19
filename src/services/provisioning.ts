@@ -15,7 +15,8 @@ import {
 } from "./sipCredentialInventory";
 
 export interface ProvisionSubscriberInput {
-	fullName: string;
+	firstName: string;
+	lastName: string;
 	email: string;
 	phoneNumber: string;
 }
@@ -57,7 +58,8 @@ export async function provisionSubscriber(
 	const pendingUser = await createUser(
 		db,
 		{
-			fullName: input.fullName,
+			firstName: input.firstName,
+			lastName: input.lastName,
 			email: input.email,
 			phoneNumber: input.phoneNumber,
 			status: "provisioning",

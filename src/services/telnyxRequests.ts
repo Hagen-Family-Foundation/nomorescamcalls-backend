@@ -9,7 +9,7 @@ export interface TelnyxRequestMetadata {
 	liveApiReady: boolean;
 	command: TelnyxPlannedCommand["command"];
 	destinationType?: string;
-	sipUsername?: string;
+	sipUsername?: string | null;
 	routingReason?: string;
 	challengeExpectedInput?: string;
 	challengeMaxAttempts?: number;

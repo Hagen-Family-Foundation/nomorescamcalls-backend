@@ -1,43 +1,86 @@
 export interface UserRecord {
 	id: number;
-	fullName: string | null;
+	firstName: string | null;
+	lastName: string | null;
 	email: string | null;
 	phoneNumber: string;
 	screeningNumber: string | null;
 	sipUsername: string | null;
+	carrier: string | null;
+	contactMethod: string | null;
+	role: string;
+	accountStatus: string;
+	setupStatus: string;
 	status: string;
 	coverageStatus: string;
 }
 
 export interface CreateUserInput {
-	fullName?: string | null;
+	firstName?: string | null;
+	lastName?: string | null;
 	email?: string | null;
 	phoneNumber: string;
 	screeningNumber?: string | null;
 	sipUsername?: string | null;
+	carrier?: string | null;
+	contactMethod?: string | null;
+	role?: string;
+	accountStatus?: string;
+	setupStatus?: string;
 	status?: string;
 	coverageStatus?: string;
 }
 
-function mapUserRow(row: {
+interface UserRow {
 	id: number;
-	full_name?: string | null;
-	email?: string | null;
+	first_name: string | null;
+	last_name: string | null;
+	email: string | null;
 	phone_number: string;
 	screening_number: string | null;
 	sip_username: string | null;
+	carrier: string | null;
+	contact_method: string | null;
+	role: string;
+	account_status: string;
+	setup_status: string;
 	status: string;
-	coverage_status?: string | null;
-}): UserRecord {
+	coverage_status: string;
+}
+
+const USER_COLUMNS = `
+	id,
+	first_name,
+	last_name,
+	email,
+	phone_number,
+	screening_number,
+	sip_username,
+	carrier,
+	contact_method,
+	role,
+	account_status,
+	setup_status,
+	status,
+	coverage_status
+`;
+
+function mapUserRow(row: UserRow): UserRecord {
 	return {
 		id: row.id,
-		fullName: row.full_name ?? null,
-		email: row.email ?? null,
+		firstName: row.first_name,
+		lastName: row.last_name,
+		email: row.email,
 		phoneNumber: row.phone_number,
 		screeningNumber: row.screening_number,
 		sipUsername: row.sip_username,
+		carrier: row.carrier,
+		contactMethod: row.contact_method,
+		role: row.role,
+		accountStatus: row.account_status,
+		setupStatus: row.setup_status,
 		status: row.status,
-		coverageStatus: row.coverage_status ?? row.status
+		coverageStatus: row.coverage_status
 	};
 }
 
@@ -51,38 +94,53 @@ export async function createUser(
 	await db
 		.prepare(`
 			INSERT INTO users (
-				full_name,
+				first_name,
+				last_name,
 				email,
 				phone_number,
 				screening_number,
 				sip_username,
+				carrier,
+				contact_method,
+				role,
+				account_status,
+				setup_status,
 				status,
 				coverage_status
 			)
-			VALUES (?, ?, ?, ?, ?, ?, ?)
+			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 			ON CONFLICT(phone_number) DO UPDATE SET
-				full_name = excluded.full_name,
+				first_name = excluded.first_name,
+				last_name = excluded.last_name,
 				email = excluded.email,
 				screening_number = excluded.screening_number,
 				sip_username = excluded.sip_username,
+				carrier = excluded.carrier,
+				contact_method = excluded.contact_method,
+				role = excluded.role,
+				account_status = excluded.account_status,
+				setup_status = excluded.setup_status,
 				status = excluded.status,
 				coverage_status = excluded.coverage_status
 		`)
 		.bind(
-			input.fullName ?? null,
+			input.firstName ?? null,
+			input.lastName ?? null,
 			input.email ?? null,
 			input.phoneNumber,
 			input.screeningNumber ?? null,
 			input.sipUsername ?? null,
+			input.carrier ?? null,
+			input.contactMethod ?? null,
+			input.role ?? "participant",
+			input.accountStatus ?? "active",
+			input.setupStatus ?? "account_created",
 			status,
 			coverageStatus
 		)
 		.run();
 
-	const user = await findUserByPhoneNumber(
-		db,
-		input.phoneNumber
-	);
+	const user = await findUserByPhoneNumber(db, input.phoneNumber);
 
 	if (!user) {
 		throw new Error("Failed to create or update user");
@@ -97,30 +155,13 @@ export async function findUserById(
 ): Promise<UserRecord | null> {
 	const row = await db
 		.prepare(`
-			SELECT
-				id,
-				full_name,
-				email,
-				phone_number,
-				screening_number,
-				sip_username,
-				status,
-				coverage_status
+			SELECT ${USER_COLUMNS}
 			FROM users
 			WHERE id = ?
 				AND status = 'active'
 		`)
 		.bind(id)
-		.first<{
-			id: number;
-			full_name: string | null;
-			email: string | null;
-			phone_number: string;
-			screening_number: string | null;
-			sip_username: string | null;
-			status: string;
-			coverage_status: string | null;
-		}>();
+		.first<UserRow>();
 
 	return row ? mapUserRow(row) : null;
 }
@@ -131,29 +172,12 @@ export async function findUserByPhoneNumber(
 ): Promise<UserRecord | null> {
 	const row = await db
 		.prepare(`
-			SELECT
-				id,
-				full_name,
-				email,
-				phone_number,
-				screening_number,
-				sip_username,
-				status,
-				coverage_status
+			SELECT ${USER_COLUMNS}
 			FROM users
 			WHERE phone_number = ?
 		`)
 		.bind(phoneNumber)
-		.first<{
-			id: number;
-			full_name: string | null;
-			email: string | null;
-			phone_number: string;
-			screening_number: string | null;
-			sip_username: string | null;
-			status: string;
-			coverage_status: string | null;
-		}>();
+		.first<UserRow>();
 
 	return row ? mapUserRow(row) : null;
 }
@@ -208,29 +232,12 @@ async function findUserByIdIncludingInactive(
 ): Promise<UserRecord | null> {
 	const row = await db
 		.prepare(`
-			SELECT
-				id,
-				full_name,
-				email,
-				phone_number,
-				screening_number,
-				sip_username,
-				status,
-				coverage_status
+			SELECT ${USER_COLUMNS}
 			FROM users
 			WHERE id = ?
 		`)
 		.bind(id)
-		.first<{
-			id: number;
-			full_name: string | null;
-			email: string | null;
-			phone_number: string;
-			screening_number: string | null;
-			sip_username: string | null;
-			status: string;
-			coverage_status: string | null;
-		}>();
+		.first<UserRow>();
 
 	return row ? mapUserRow(row) : null;
 }
@@ -241,30 +248,13 @@ export async function findUserByScreeningNumber(
 ): Promise<UserRecord | null> {
 	const row = await db
 		.prepare(`
-			SELECT
-				id,
-				full_name,
-				email,
-				phone_number,
-				screening_number,
-				sip_username,
-				status,
-				coverage_status
+			SELECT ${USER_COLUMNS}
 			FROM users
 			WHERE screening_number = ?
 				AND status = 'active'
 		`)
 		.bind(screeningNumber)
-		.first<{
-			id: number;
-			full_name: string | null;
-			email: string | null;
-			phone_number: string;
-			screening_number: string | null;
-			sip_username: string | null;
-			status: string;
-			coverage_status: string | null;
-		}>();
+		.first<UserRow>();
 
 	return row ? mapUserRow(row) : null;
 }
@@ -275,30 +265,13 @@ export async function listUsers(
 ): Promise<UserRecord[]> {
 	const result = await db
 		.prepare(`
-			SELECT
-				id,
-				full_name,
-				email,
-				phone_number,
-				screening_number,
-				sip_username,
-				status,
-				coverage_status
+			SELECT ${USER_COLUMNS}
 			FROM users
 			ORDER BY id DESC
 			LIMIT ?
 		`)
 		.bind(limit)
-		.all<{
-			id: number;
-			full_name: string | null;
-			email: string | null;
-			phone_number: string;
-			screening_number: string | null;
-			sip_username: string | null;
-			status: string;
-			coverage_status: string | null;
-		}>();
+		.all<UserRow>();
 
 	return result.results.map(mapUserRow);
 }
