@@ -19,6 +19,7 @@ import { fetchTelnyxVoiceApplication } from "./services/telnyxVoiceApplicationsC
 import { fetchTelnyxRecordings } from "./services/telnyxRecordingsClient";
 import { registerBetaParticipant } from "./services/betaRegistration";
 import { loginBetaParticipant } from "./services/betaLogin";
+import { authenticateBetaSession } from "./services/betaSession";
 
 export default {
 	async fetch(request: Request, env: Env): Promise<Response> {
@@ -422,6 +423,41 @@ export default {
 			return Response.json({
 				authenticated: true,
 				login
+			});
+		}
+
+		// Beta Participant Session Endpoint
+		if (request.method === "GET" && url.pathname === "/beta/session") {
+			const authorization = request.headers.get("authorization") ?? "";
+			const [scheme, sessionToken] = authorization.split(" ", 2);
+
+			if (
+				scheme?.toLowerCase() !== "bearer"
+				|| !sessionToken
+			) {
+				return Response.json({
+					error: "Valid beta session required"
+				}, {
+					status: 401
+				});
+			}
+
+			const session = await authenticateBetaSession(
+				env.nomorescamcalls_db,
+				sessionToken
+			);
+
+			if (!session) {
+				return Response.json({
+					error: "Valid beta session required"
+				}, {
+					status: 401
+				});
+			}
+
+			return Response.json({
+				authenticated: true,
+				session
 			});
 		}
 

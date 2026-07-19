@@ -1320,4 +1320,240 @@ describe("NoMoreScamCalls Worker", () => {
 		);
 	});
 
+
+	it("authenticates an active beta portal session", async () => {
+		await env.nomorescamcalls_db
+			.prepare(`
+				INSERT INTO beta_invite_codes (
+					code,
+					status,
+					max_uses,
+					use_count
+				)
+				VALUES (?, 'active', 1, 0)
+			`)
+			.bind("BETA-SESSION-ACTIVE")
+			.run();
+
+		const registrationResponse = await SELF.fetch(
+			"http://example.com/beta/register",
+			{
+				method: "POST",
+				headers: {
+					"content-type": "application/json"
+				},
+				body: JSON.stringify({
+					code: "BETA-SESSION-ACTIVE",
+					firstName: "Active",
+					lastName: "Participant",
+					email: "active.session@example.com",
+					phoneNumber: "+15550001005",
+					carrier: "Example Carrier",
+					contactMethod: "email",
+					password: "beta-password"
+				})
+			}
+		);
+
+		expect(registrationResponse.status).toBe(201);
+
+		const loginResponse = await SELF.fetch(
+			"http://example.com/beta/login",
+			{
+				method: "POST",
+				headers: {
+					"content-type": "application/json"
+				},
+				body: JSON.stringify({
+					email: "active.session@example.com",
+					password: "beta-password"
+				})
+			}
+		);
+
+		expect(loginResponse.status).toBe(200);
+
+		const loginBody = await loginResponse.json<{
+			login: {
+				sessionToken: string;
+				user: {
+					id: number;
+				};
+			};
+		}>();
+
+		await env.nomorescamcalls_db
+			.prepare(`
+				UPDATE portal_sessions
+				SET last_used_at = NULL
+				WHERE user_id = ?
+			`)
+			.bind(loginBody.login.user.id)
+			.run();
+
+		const response = await SELF.fetch(
+			"http://example.com/beta/session",
+			{
+				method: "GET",
+				headers: {
+					authorization: `Bearer ${loginBody.login.sessionToken}`
+				}
+			}
+		);
+
+		expect(response.status).toBe(200);
+
+		const body = await response.json<{
+			authenticated: boolean;
+			session: {
+				expiresAt: string;
+				user: {
+					id: number;
+					email: string;
+					role: string;
+				};
+			};
+		}>();
+
+		expect(body.authenticated).toBe(true);
+		expect(body.session.user.id).toBe(loginBody.login.user.id);
+		expect(body.session.user.email).toBe(
+			"active.session@example.com"
+		);
+		expect(body.session.user.role).toBe("participant");
+
+		const storedSession = await env.nomorescamcalls_db
+			.prepare(`
+				SELECT last_used_at
+				FROM portal_sessions
+				WHERE user_id = ?
+				ORDER BY id DESC
+				LIMIT 1
+			`)
+			.bind(loginBody.login.user.id)
+			.first<{
+				last_used_at: string | null;
+			}>();
+
+		expect(storedSession?.last_used_at).not.toBeNull();
+	});
+
+	it("rejects a missing beta portal session token", async () => {
+		const response = await SELF.fetch(
+			"http://example.com/beta/session"
+		);
+
+		expect(response.status).toBe(401);
+
+		const body = await response.json<{
+			error: string;
+		}>();
+
+		expect(body.error).toBe("Valid beta session required");
+	});
+
+	it("rejects an unknown beta portal session token", async () => {
+		const response = await SELF.fetch(
+			"http://example.com/beta/session",
+			{
+				headers: {
+					authorization: "Bearer unknown-session-token"
+				}
+			}
+		);
+
+		expect(response.status).toBe(401);
+	});
+
+	it("rejects revoked and expired beta portal sessions", async () => {
+		const userInsert = await env.nomorescamcalls_db
+			.prepare(`
+				INSERT INTO users (
+					first_name,
+					last_name,
+					email,
+					phone_number,
+					role,
+					account_status,
+					setup_status,
+					status,
+					coverage_status
+				)
+				VALUES (
+					'Session',
+					'Tester',
+					'session.states@example.com',
+					'+15550001006',
+					'participant',
+					'active',
+					'registered',
+					'active',
+					'pending'
+				)
+			`)
+			.run();
+
+		const userId = Number(userInsert.meta.last_row_id);
+		const revokedToken = "revoked-beta-session-token";
+		const expiredToken = "expired-beta-session-token";
+
+		const hashToken = async (token: string): Promise<string> => {
+			const digest = await crypto.subtle.digest(
+				"SHA-256",
+				new TextEncoder().encode(token)
+			);
+
+			return Array.from(new Uint8Array(digest))
+				.map((byte) => byte.toString(16).padStart(2, "0"))
+				.join("");
+		};
+
+		await env.nomorescamcalls_db
+			.prepare(`
+				INSERT INTO portal_sessions (
+					user_id,
+					token_hash,
+					expires_at,
+					revoked_at
+				)
+				VALUES (?, ?, ?, ?)
+			`)
+			.bind(
+				userId,
+				await hashToken(revokedToken),
+				new Date(Date.now() + 60_000).toISOString(),
+				new Date().toISOString()
+			)
+			.run();
+
+		await env.nomorescamcalls_db
+			.prepare(`
+				INSERT INTO portal_sessions (
+					user_id,
+					token_hash,
+					expires_at
+				)
+				VALUES (?, ?, ?)
+			`)
+			.bind(
+				userId,
+				await hashToken(expiredToken),
+				new Date(Date.now() - 60_000).toISOString()
+			)
+			.run();
+
+		for (const sessionToken of [revokedToken, expiredToken]) {
+			const response = await SELF.fetch(
+				"http://example.com/beta/session",
+				{
+					headers: {
+						authorization: `Bearer ${sessionToken}`
+					}
+				}
+			);
+
+			expect(response.status).toBe(401);
+		}
+	});
+
 });
