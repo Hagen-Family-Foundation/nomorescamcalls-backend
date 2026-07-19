@@ -1556,4 +1556,124 @@ describe("NoMoreScamCalls Worker", () => {
 		}
 	});
 
+
+	it("logs out an authenticated beta participant", async () => {
+		await env.nomorescamcalls_db
+			.prepare(`
+				INSERT INTO beta_invite_codes (
+					code,
+					status,
+					max_uses,
+					use_count
+				)
+				VALUES (?, 'active', 1, 0)
+			`)
+			.bind("BETA-LOGOUT-ONE")
+			.run();
+
+		const registrationResponse = await SELF.fetch(
+			"http://example.com/beta/register",
+			{
+				method: "POST",
+				headers: {
+					"content-type": "application/json"
+				},
+				body: JSON.stringify({
+					code: "BETA-LOGOUT-ONE",
+					firstName: "Logout",
+					lastName: "Participant",
+					email: "logout.beta@example.com",
+					phoneNumber: "+15550001007",
+					carrier: "Example Carrier",
+					contactMethod: "email",
+					password: "beta-password"
+				})
+			}
+		);
+
+		expect(registrationResponse.status).toBe(201);
+
+		const loginResponse = await SELF.fetch(
+			"http://example.com/beta/login",
+			{
+				method: "POST",
+				headers: {
+					"content-type": "application/json"
+				},
+				body: JSON.stringify({
+					email: "logout.beta@example.com",
+					password: "beta-password"
+				})
+			}
+		);
+
+		expect(loginResponse.status).toBe(200);
+
+		const loginBody = await loginResponse.json<{
+			login: {
+				sessionToken: string;
+			};
+		}>();
+
+		const response = await SELF.fetch(
+			"http://example.com/beta/logout",
+			{
+				method: "POST",
+				headers: {
+					authorization: `Bearer ${loginBody.login.sessionToken}`
+				}
+			}
+		);
+
+		expect(response.status).toBe(200);
+
+		const body = await response.json<{
+			loggedOut: boolean;
+		}>();
+
+		expect(body.loggedOut).toBe(true);
+
+		const sessionResponse = await SELF.fetch(
+			"http://example.com/beta/session",
+			{
+				headers: {
+					authorization: `Bearer ${loginBody.login.sessionToken}`
+				}
+			}
+		);
+
+		expect(sessionResponse.status).toBe(401);
+	});
+
+	it("rejects a missing beta logout session token", async () => {
+		const response = await SELF.fetch(
+			"http://example.com/beta/logout",
+			{
+				method: "POST"
+			}
+		);
+
+		expect(response.status).toBe(401);
+
+		const body = await response.json<{
+			error: string;
+		}>();
+
+		expect(body.error).toBe("Valid beta session required");
+	});
+
+	it("rejects an unknown beta logout session token", async () => {
+		const response = await SELF.fetch(
+			"http://example.com/beta/logout",
+			{
+				method: "POST",
+				headers: {
+					authorization: "Bearer unknown-logout-token"
+				}
+			}
+		);
+
+		expect(response.status).toBe(401);
+	});
+
 });
