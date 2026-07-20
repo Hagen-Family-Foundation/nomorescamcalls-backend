@@ -1,4 +1,4 @@
-export interface BetaAgreementRecord {
+			export interface BetaAgreementRecord {
 	version: string;
 	title: string;
 	contentHash: string;

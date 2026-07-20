@@ -21,6 +21,10 @@ import { registerBetaParticipant } from "./services/betaRegistration";
 import { loginBetaParticipant } from "./services/betaLogin";
 import { authenticateBetaSession } from "./services/betaSession";
 import { logoutBetaParticipant } from "./services/betaLogout";
+import {
+	getCurrentBetaAgreement,
+	hasAcceptedCurrentBetaAgreement
+} from "./services/betaAgreement";
 
 export default {
 	async fetch(request: Request, env: Env): Promise<Response> {
@@ -459,6 +463,60 @@ export default {
 			return Response.json({
 				authenticated: true,
 				session
+			});
+		}
+
+		// Current Beta Agreement Endpoint
+		if (request.method === "GET" && url.pathname === "/beta/agreement") {
+			const authorization = request.headers.get("authorization") ?? "";
+			const [scheme, sessionToken] = authorization.split(" ", 2);
+
+			if (
+				scheme?.toLowerCase() !== "bearer"
+				|| !sessionToken
+			) {
+				return Response.json({
+					error: "Valid beta session required"
+				}, {
+					status: 401
+				});
+			}
+
+			const session = await authenticateBetaSession(
+				env.nomorescamcalls_db,
+				sessionToken
+			);
+
+			if (!session) {
+				return Response.json({
+					error: "Valid beta session required"
+				}, {
+					status: 401
+				});
+			}
+
+			const agreement = await getCurrentBetaAgreement(
+				env.nomorescamcalls_db
+			);
+
+			if (!agreement) {
+				return Response.json({
+					error: "No active beta agreement"
+				}, {
+					status: 404
+				});
+			}
+
+			const accepted = await hasAcceptedCurrentBetaAgreement(
+				env.nomorescamcalls_db,
+				session.user.id
+			);
+
+			return Response.json({
+				agreement: {
+					...agreement,
+					accepted
+				}
 			});
 		}
 
