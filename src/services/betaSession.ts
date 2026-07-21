@@ -76,7 +76,7 @@ export async function authenticateBetaSession(
 			WHERE portal_sessions.token_hash = ?
 				AND portal_sessions.revoked_at IS NULL
 				AND portal_sessions.expires_at > ?
-				AND users.role = 'participant'
+				AND users.role IN ('participant', 'admin', 'administrator')
 				AND users.account_status = 'active'
 				AND users.status = 'active'
 			LIMIT 1

@@ -77,7 +77,7 @@ export async function loginBetaParticipant(
 				coverage_status
 			FROM users
 			WHERE email = ?
-				AND role = 'participant'
+				AND role IN ('participant', 'admin', 'administrator')
 				AND account_status = 'active'
 				AND status = 'active'
 		`)
