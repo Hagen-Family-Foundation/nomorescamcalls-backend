@@ -17,14 +17,52 @@ import { syncTelnyxInventory } from "./services/telnyxInventorySync";
 import { syncTelnyxSipCredentials } from "./services/telnyxSipCredentialSync";
 import { fetchTelnyxVoiceApplication } from "./services/telnyxVoiceApplicationsClient";
 import { fetchTelnyxRecordings } from "./services/telnyxRecordingsClient";
+import { validateBetaInviteCode } from "./services/betaInviteCodes";
 import { registerBetaParticipant } from "./services/betaRegistration";
 import { loginBetaParticipant } from "./services/betaLogin";
 import { authenticateBetaSession } from "./services/betaSession";
 import { logoutBetaParticipant } from "./services/betaLogout";
 import {
+	acceptCurrentBetaAgreement,
 	getCurrentBetaAgreement,
 	hasAcceptedCurrentBetaAgreement
 } from "./services/betaAgreement";
+
+
+const PORTAL_CORS_HEADERS = {
+	"Access-Control-Allow-Origin": "*",
+	"Access-Control-Allow-Headers":
+		"Authorization, Content-Type, Accept",
+	"Access-Control-Allow-Methods":
+		"GET, POST, PATCH, OPTIONS"
+};
+
+function portalJson(
+	body: unknown,
+	status = 200
+): Response {
+	return Response.json(body, {
+		status,
+		headers: PORTAL_CORS_HEADERS
+	});
+}
+
+function getBearerToken(request: Request): string | null {
+	const authorization =
+		request.headers.get("authorization") ?? "";
+
+	const [scheme, token] =
+		authorization.split(" ", 2);
+
+	if (
+		scheme?.toLowerCase() !== "bearer"
+		|| !token
+	) {
+		return null;
+	}
+
+	return token;
+}
 
 export default {
 	async fetch(request: Request, env: Env): Promise<Response> {
@@ -308,6 +346,422 @@ export default {
 
 			return Response.json({
 				user
+			});
+		}
+
+
+		// Subscriber Portal CORS Preflight
+		if (
+			request.method === "OPTIONS"
+			&& url.pathname.startsWith("/portal/")
+		) {
+			return new Response(null, {
+				status: 204,
+				headers: PORTAL_CORS_HEADERS
+			});
+		}
+
+		// Subscriber Portal Invite Validation
+		if (
+			request.method === "POST"
+			&& url.pathname === "/portal/invite-codes/validate"
+		) {
+			const body = await request.json() as {
+				code?: string;
+			};
+
+			const code =
+				body.code?.trim().toUpperCase() ?? "";
+
+			if (!code) {
+				return portalJson(
+					{
+						valid: false,
+						error: "Invitation code is required"
+					},
+					400
+				);
+			}
+
+			const invite = await validateBetaInviteCode(
+				env.nomorescamcalls_db,
+				code
+			);
+
+			if (!invite) {
+				return portalJson(
+					{
+						valid: false,
+						message:
+							"This invitation code is not valid or is no longer available."
+					},
+					404
+				);
+			}
+
+			return portalJson({
+				valid: true,
+				code: invite.code,
+				expiresAt: invite.expiresAt
+			});
+		}
+
+		// Subscriber Portal Registration
+		if (
+			request.method === "POST"
+			&& url.pathname === "/portal/auth/register"
+		) {
+			const body = await request.json() as {
+				code?: string;
+				firstName?: string;
+				lastName?: string;
+				email?: string;
+				phoneNumber?: string;
+				carrier?: string;
+				contactMethod?: string;
+				password?: string;
+			};
+
+			const code =
+				body.code?.trim().toUpperCase() ?? "";
+			const firstName =
+				body.firstName?.trim() ?? "";
+			const lastName =
+				body.lastName?.trim() ?? "";
+			const email =
+				body.email?.trim() ?? "";
+			const phoneNumber =
+				body.phoneNumber?.trim() ?? "";
+			const carrier =
+				body.carrier?.trim() ?? "";
+			const contactMethod =
+				body.contactMethod?.trim() ?? "";
+			const password =
+				body.password ?? "";
+
+			if (
+				!code
+				|| !firstName
+				|| !lastName
+				|| !email
+				|| !phoneNumber
+				|| !carrier
+				|| !contactMethod
+				|| !password
+			) {
+				return portalJson(
+					{
+						error:
+							"code, firstName, lastName, email, phoneNumber, carrier, contactMethod, and password are required"
+					},
+					400
+				);
+			}
+
+			try {
+				const registration =
+					await registerBetaParticipant(
+						env.nomorescamcalls_db,
+						{
+							code,
+							firstName,
+							lastName,
+							email,
+							phoneNumber,
+							carrier,
+							contactMethod,
+							password
+						}
+					);
+
+				if (!registration) {
+					return portalJson(
+						{
+							error:
+								"Invitation code is invalid or unavailable"
+						},
+						409
+					);
+				}
+
+				const login =
+					await loginBetaParticipant(
+						env.nomorescamcalls_db,
+						email,
+						password
+					);
+
+				if (!login) {
+					return portalJson(
+						{
+							error:
+								"Account was created but the portal session could not be started"
+						},
+						500
+					);
+				}
+
+				return portalJson(
+					{
+						registered: true,
+						token: login.sessionToken,
+						sessionToken:
+							login.sessionToken,
+						expiresAt:
+							login.expiresAt,
+						user:
+							login.user
+					},
+					201
+				);
+			} catch (error) {
+				const reason =
+					error instanceof Error
+						? error.message
+						: "Registration failed";
+
+				return portalJson(
+					{
+						error:
+							"Registration failed",
+						reason
+					},
+					409
+				);
+			}
+		}
+
+		// Subscriber Portal Login
+		if (
+			request.method === "POST"
+			&& url.pathname === "/portal/auth/login"
+		) {
+			const body = await request.json() as {
+				email?: string;
+				password?: string;
+			};
+
+			const email =
+				body.email?.trim() ?? "";
+			const password =
+				body.password ?? "";
+
+			if (!email || !password) {
+				return portalJson(
+					{
+						error:
+							"email and password are required"
+					},
+					400
+				);
+			}
+
+			const login =
+				await loginBetaParticipant(
+					env.nomorescamcalls_db,
+					email,
+					password
+				);
+
+			if (!login) {
+				return portalJson(
+					{
+						error:
+							"Invalid email or password"
+					},
+					401
+				);
+			}
+
+			return portalJson({
+				authenticated: true,
+				token: login.sessionToken,
+				sessionToken:
+					login.sessionToken,
+				expiresAt:
+					login.expiresAt,
+				user:
+					login.user
+			});
+		}
+
+		// Subscriber Portal Current User
+		if (
+			request.method === "GET"
+			&& url.pathname === "/portal/me"
+		) {
+			const sessionToken =
+				getBearerToken(request);
+
+			if (!sessionToken) {
+				return portalJson(
+					{
+						error:
+							"Valid portal session required"
+					},
+					401
+				);
+			}
+
+			const session =
+				await authenticateBetaSession(
+					env.nomorescamcalls_db,
+					sessionToken
+				);
+
+			if (!session) {
+				return portalJson(
+					{
+						error:
+							"Valid portal session required"
+					},
+					401
+				);
+			}
+
+			const agreementAccepted =
+				await hasAcceptedCurrentBetaAgreement(
+					env.nomorescamcalls_db,
+					session.user.id
+				);
+
+			return portalJson({
+				user: {
+					...session.user,
+					agreementAccepted
+				},
+				expiresAt:
+					session.expiresAt
+			});
+		}
+
+		// Subscriber Portal Agreement Acceptance
+		if (
+			request.method === "POST"
+			&& url.pathname === "/portal/agreement/accept"
+		) {
+			const sessionToken =
+				getBearerToken(request);
+
+			if (!sessionToken) {
+				return portalJson(
+					{
+						error:
+							"Valid portal session required"
+					},
+					401
+				);
+			}
+
+			const session =
+				await authenticateBetaSession(
+					env.nomorescamcalls_db,
+					sessionToken
+				);
+
+			if (!session) {
+				return portalJson(
+					{
+						error:
+							"Valid portal session required"
+					},
+					401
+				);
+			}
+
+			const body = await request.json() as {
+				version?: string;
+			};
+
+			const agreement =
+				await getCurrentBetaAgreement(
+					env.nomorescamcalls_db
+				);
+
+			if (!agreement) {
+				return portalJson(
+					{
+						error:
+							"No active beta agreement"
+					},
+					404
+				);
+			}
+
+			if (
+				body.version
+				&& body.version !== agreement.version
+			) {
+				return portalJson(
+					{
+						error:
+							"Agreement version is not current"
+					},
+					409
+				);
+			}
+
+			const acceptance =
+				await acceptCurrentBetaAgreement(
+					env.nomorescamcalls_db,
+					session.user.id
+				);
+
+			if (!acceptance) {
+				return portalJson(
+					{
+						error:
+							"No active beta agreement"
+					},
+					404
+				);
+			}
+
+			return portalJson({
+				accepted: true,
+				agreement:
+					acceptance.agreement,
+				acceptedAt:
+					acceptance.acceptedAt
+			});
+		}
+
+		// Subscriber Portal Logout
+		if (
+			request.method === "POST"
+			&& url.pathname === "/portal/auth/logout"
+		) {
+			const sessionToken =
+				getBearerToken(request);
+
+			if (!sessionToken) {
+				return portalJson(
+					{
+						error:
+							"Valid portal session required"
+					},
+					401
+				);
+			}
+
+			const loggedOut =
+				await logoutBetaParticipant(
+					env.nomorescamcalls_db,
+					sessionToken
+				);
+
+			if (!loggedOut) {
+				return portalJson(
+					{
+						error:
+							"Valid portal session required"
+					},
+					401
+				);
+			}
+
+			return portalJson({
+				loggedOut: true
 			});
 		}
 

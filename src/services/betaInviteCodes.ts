@@ -29,6 +29,44 @@ function mapBetaInviteCodeRow(
 	};
 }
 
+
+export async function validateBetaInviteCode(
+	db: D1Database,
+	code: string
+): Promise<RedeemedBetaInviteCode | null> {
+	const normalizedCode = code.trim();
+	const now = new Date().toISOString();
+
+	if (!normalizedCode) {
+		return null;
+	}
+
+	const row = await db
+		.prepare(`
+			SELECT
+				id,
+				code,
+				status,
+				max_uses,
+				use_count,
+				expires_at
+			FROM beta_invite_codes
+			WHERE code = ?
+				AND status = 'active'
+				AND use_count < max_uses
+				AND redeemed_by_user_id IS NULL
+				AND (
+					expires_at IS NULL
+					OR expires_at > ?
+				)
+			LIMIT 1
+		`)
+		.bind(normalizedCode, now)
+		.first<BetaInviteCodeRow>();
+
+	return row ? mapBetaInviteCodeRow(row) : null;
+}
+
 export async function redeemBetaInviteCode(
 	db: D1Database,
 	code: string
