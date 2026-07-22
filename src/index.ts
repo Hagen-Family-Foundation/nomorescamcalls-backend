@@ -520,6 +520,11 @@ export default {
 						? error.message
 						: "Registration failed";
 
+				console.error("Portal registration failed", {
+					reason,
+					error
+				});
+
 				return portalJson(
 					{
 						error:
@@ -582,6 +587,226 @@ export default {
 					login.expiresAt,
 				user:
 					login.user
+			});
+		}
+
+		// Subscriber Portal Dashboard Summary
+		if (
+			request.method === "GET"
+			&& url.pathname === "/portal/me/summary"
+		) {
+			const sessionToken =
+				getBearerToken(request);
+
+			if (!sessionToken) {
+				return portalJson(
+					{
+						error:
+							"Valid portal session required"
+					},
+					401
+				);
+			}
+
+			const session =
+				await authenticateBetaSession(
+					env.nomorescamcalls_db,
+					sessionToken
+				);
+
+			if (!session) {
+				return portalJson(
+					{
+						error:
+							"Valid portal session required"
+					},
+					401
+				);
+			}
+
+			interface PortalCallSummaryRow {
+				total_calls: number;
+				successful_calls: number;
+				diverted_calls: number;
+				last_call_at: string | null;
+			}
+
+			const callSummary =
+				await env.nomorescamcalls_db
+					.prepare(`
+						SELECT
+							COUNT(*) AS total_calls,
+							COALESCE(
+								SUM(
+									CASE
+										WHEN LOWER(decision) IN (
+											'allow',
+											'allowed',
+											'release',
+											'released',
+											'connect',
+											'connected',
+											'successful'
+										)
+										THEN 1
+										ELSE 0
+									END
+								),
+								0
+							) AS successful_calls,
+							COALESCE(
+								SUM(
+									CASE
+										WHEN LOWER(decision) IN (
+											'allow',
+											'allowed',
+											'release',
+											'released',
+											'connect',
+											'connected',
+											'successful'
+										)
+										THEN 0
+										ELSE 1
+									END
+								),
+								0
+							) AS diverted_calls,
+							MAX(created_at) AS last_call_at
+						FROM call_events
+						WHERE user_id = ?
+					`)
+					.bind(session.user.id)
+					.first<PortalCallSummaryRow>();
+
+			return portalJson({
+				service_status:
+					session.user.setupStatus,
+				screening_number:
+					session.user.screeningNumber,
+				total_calls:
+					callSummary?.total_calls ?? 0,
+				successful_calls:
+					callSummary?.successful_calls ?? 0,
+				diverted_calls:
+					callSummary?.diverted_calls ?? 0,
+				last_call_at:
+					callSummary?.last_call_at ?? null
+			});
+		}
+
+		// Subscriber Portal Recent Calls
+		if (
+			request.method === "GET"
+			&& url.pathname === "/portal/me/calls"
+		) {
+			const sessionToken =
+				getBearerToken(request);
+
+			if (!sessionToken) {
+				return portalJson(
+					{
+						error:
+							"Valid portal session required"
+					},
+					401
+				);
+			}
+
+			const session =
+				await authenticateBetaSession(
+					env.nomorescamcalls_db,
+					sessionToken
+				);
+
+			if (!session) {
+				return portalJson(
+					{
+						error:
+							"Valid portal session required"
+					},
+					401
+				);
+			}
+
+			const requestedLimit =
+				Number.parseInt(
+					url.searchParams.get("limit") ?? "20",
+					10
+				);
+
+			const limit =
+				Number.isFinite(requestedLimit)
+					? Math.max(
+						1,
+						Math.min(requestedLimit, 100)
+					)
+					: 20;
+
+			interface PortalCallRow {
+				id: number;
+				decision: string;
+				score: number;
+				reason: string;
+				created_at: string;
+			}
+
+			const result =
+				await env.nomorescamcalls_db
+					.prepare(`
+						SELECT
+							id,
+							decision,
+							score,
+							reason,
+							created_at
+						FROM call_events
+						WHERE user_id = ?
+						ORDER BY id DESC
+						LIMIT ?
+					`)
+					.bind(
+						session.user.id,
+						limit
+					)
+					.all<PortalCallRow>();
+
+			const calls =
+				result.results.map((call) => {
+					const successfulDecisions =
+						new Set([
+							"allow",
+							"allowed",
+							"release",
+							"released",
+							"connect",
+							"connected",
+							"successful"
+						]);
+
+					const outcome =
+						successfulDecisions.has(
+							call.decision.toLowerCase()
+						)
+							? "successful"
+							: "diverted";
+
+					return {
+						id: call.id,
+						call_id: call.id,
+						occurred_at:
+							call.created_at,
+						outcome,
+						status: outcome,
+						decision:
+							call.decision,
+						score: call.score,
+						reason: call.reason
+					};
+				});
+
+			return portalJson({
+				calls
 			});
 		}
 

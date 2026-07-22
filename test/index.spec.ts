@@ -1273,4 +1273,288 @@ describe("NoMoreScamCalls Worker", () => {
 
 		expect(response.status).toBe(401);
 	});
+
+	it("returns the authenticated participant dashboard summary", async () => {
+		await env.nomorescamcalls_db
+			.prepare(`
+				INSERT INTO beta_invite_codes (
+					code,
+					status,
+					max_uses,
+					use_count
+				)
+				VALUES (?, 'active', 1, 0)
+			`)
+			.bind("BETA-DASHBOARD-SUMMARY")
+			.run();
+
+		const registrationResponse = await SELF.fetch(
+			"http://example.com/portal/auth/register",
+			{
+				method: "POST",
+				headers: {
+					"content-type": "application/json"
+				},
+				body: JSON.stringify({
+					code: "BETA-DASHBOARD-SUMMARY",
+					firstName: "Dashboard",
+					lastName: "Summary",
+					email: "dashboard.summary@example.com",
+					phoneNumber: "+15550002001",
+					carrier: "Example Carrier",
+					contactMethod: "email",
+					password: "beta-password"
+				})
+			}
+		);
+
+		expect(registrationResponse.status).toBe(201);
+
+		const loginResponse = await SELF.fetch(
+			"http://example.com/portal/auth/login",
+			{
+				method: "POST",
+				headers: {
+					"content-type": "application/json"
+				},
+				body: JSON.stringify({
+					email: "dashboard.summary@example.com",
+					password: "beta-password"
+				})
+			}
+		);
+
+		expect(loginResponse.status).toBe(200);
+
+		const loginBody = await loginResponse.json<{
+			sessionToken: string;
+			user: {
+				id: number;
+			};
+		}>();
+
+		await env.nomorescamcalls_db
+			.prepare(`
+				UPDATE users
+				SET
+					screening_number = ?,
+					setup_status = ?
+				WHERE id = ?
+			`)
+			.bind(
+				"+15550002999",
+				"forwarding_ready",
+				loginBody.user.id
+			)
+			.run();
+
+		await env.nomorescamcalls_db
+			.prepare(`
+				INSERT INTO call_events (
+					user_id,
+					caller_hash,
+					decision,
+					score,
+					reason,
+					created_at
+				)
+				VALUES
+					(?, 'summary-caller-one', 'release', 95, 'released', '2026-07-20T10:00:00.000Z'),
+					(?, 'summary-caller-two', 'observe', 70, 'diverted', '2026-07-21T11:00:00.000Z'),
+					(NULL, 'other-user-call', 'release', 100, 'unrelated', '2026-07-22T12:00:00.000Z')
+			`)
+			.bind(
+				loginBody.user.id,
+				loginBody.user.id
+			)
+			.run();
+
+		const response = await SELF.fetch(
+			"http://example.com/portal/me/summary",
+			{
+				headers: {
+					authorization:
+						`Bearer ${loginBody.sessionToken}`
+				}
+			}
+		);
+
+		expect(response.status).toBe(200);
+
+		const body = await response.json<{
+			service_status: string;
+			screening_number: string | null;
+			total_calls: number;
+			successful_calls: number;
+			diverted_calls: number;
+			last_call_at: string | null;
+		}>();
+
+		expect(body).toEqual({
+			service_status: "forwarding_ready",
+			screening_number: "+15550002999",
+			total_calls: 2,
+			successful_calls: 1,
+			diverted_calls: 1,
+			last_call_at: "2026-07-21T11:00:00.000Z"
+		});
+	});
+
+	it("returns only the authenticated participant recent calls", async () => {
+		await env.nomorescamcalls_db
+			.prepare(`
+				INSERT INTO beta_invite_codes (
+					code,
+					status,
+					max_uses,
+					use_count
+				)
+				VALUES (?, 'active', 1, 0)
+			`)
+			.bind("BETA-DASHBOARD-CALLS")
+			.run();
+
+		const registrationResponse = await SELF.fetch(
+			"http://example.com/portal/auth/register",
+			{
+				method: "POST",
+				headers: {
+					"content-type": "application/json"
+				},
+				body: JSON.stringify({
+					code: "BETA-DASHBOARD-CALLS",
+					firstName: "Dashboard",
+					lastName: "Calls",
+					email: "dashboard.calls@example.com",
+					phoneNumber: "+15550002002",
+					carrier: "Example Carrier",
+					contactMethod: "email",
+					password: "beta-password"
+				})
+			}
+		);
+
+		expect(registrationResponse.status).toBe(201);
+
+		const loginResponse = await SELF.fetch(
+			"http://example.com/portal/auth/login",
+			{
+				method: "POST",
+				headers: {
+					"content-type": "application/json"
+				},
+				body: JSON.stringify({
+					email: "dashboard.calls@example.com",
+					password: "beta-password"
+				})
+			}
+		);
+
+		expect(loginResponse.status).toBe(200);
+
+		const loginBody = await loginResponse.json<{
+			sessionToken: string;
+			user: {
+				id: number;
+			};
+		}>();
+
+		await env.nomorescamcalls_db
+			.prepare(`
+				INSERT INTO call_events (
+					user_id,
+					caller_hash,
+					decision,
+					score,
+					reason,
+					created_at
+				)
+				VALUES
+					(?, 'calls-caller-one', 'release', 94, 'released', '2026-07-19T09:00:00.000Z'),
+					(?, 'calls-caller-two', 'observe', 68, 'diverted', '2026-07-20T10:00:00.000Z'),
+					(?, 'calls-caller-three', 'connect', 90, 'connected', '2026-07-21T11:00:00.000Z'),
+					(NULL, 'calls-other-user', 'release', 100, 'unrelated', '2026-07-22T12:00:00.000Z')
+			`)
+			.bind(
+				loginBody.user.id,
+				loginBody.user.id,
+				loginBody.user.id
+			)
+			.run();
+
+		const response = await SELF.fetch(
+			"http://example.com/portal/me/calls?limit=2",
+			{
+				headers: {
+					authorization:
+						`Bearer ${loginBody.sessionToken}`
+				}
+			}
+		);
+
+		expect(response.status).toBe(200);
+
+		const body = await response.json<{
+			calls: Array<{
+				id: number;
+				call_id: number;
+				occurred_at: string;
+				outcome: string;
+				status: string;
+				decision: string;
+				score: number;
+				reason: string;
+			}>;
+		}>();
+
+		expect(body.calls).toHaveLength(2);
+
+		expect(body.calls[0]).toMatchObject({
+			occurred_at: "2026-07-21T11:00:00.000Z",
+			outcome: "successful",
+			status: "successful",
+			decision: "connect",
+			score: 90,
+			reason: "connected"
+		});
+
+		expect(body.calls[1]).toMatchObject({
+			occurred_at: "2026-07-20T10:00:00.000Z",
+			outcome: "diverted",
+			status: "diverted",
+			decision: "observe",
+			score: 68,
+			reason: "diverted"
+		});
+
+		expect(body.calls[0].call_id).toBe(
+			body.calls[0].id
+		);
+
+		expect(body.calls[1].call_id).toBe(
+			body.calls[1].id
+		);
+	});
+
+	it("rejects unauthenticated participant dashboard requests", async () => {
+		for (const path of [
+			"/portal/me/summary",
+			"/portal/me/calls"
+		]) {
+			const response = await SELF.fetch(
+				`http://example.com${path}`
+			);
+
+			expect(response.status).toBe(401);
+
+			const body = await response.json<{
+				error: string;
+			}>();
+
+			expect(body.error).toBe(
+				"Valid portal session required"
+			);
+		}
+	});
+
 });
