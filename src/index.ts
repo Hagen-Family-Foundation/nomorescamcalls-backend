@@ -844,16 +844,35 @@ export default {
 				);
 			}
 
-			const agreementAccepted =
-				await hasAcceptedCurrentBetaAgreement(
-					env.nomorescamcalls_db,
-					session.user.id
+			const agreement =
+				await getCurrentBetaAgreement(
+					env.nomorescamcalls_db
 				);
+
+			const agreementAccepted =
+				agreement
+					? await hasAcceptedCurrentBetaAgreement(
+							env.nomorescamcalls_db,
+							session.user.id
+						)
+					: false;
 
 			return portalJson({
 				user: {
 					...session.user,
-					agreementAccepted
+					account_status:
+						session.user.accountStatus,
+					setup_status:
+						session.user.setupStatus,
+					screening_number:
+						session.user.screeningNumber,
+					agreementAccepted,
+					agreementVersion:
+						agreement?.version ?? null,
+					agreement_accepted:
+						agreementAccepted,
+					agreement_version:
+						agreement?.version ?? null
 				},
 				expiresAt:
 					session.expiresAt
