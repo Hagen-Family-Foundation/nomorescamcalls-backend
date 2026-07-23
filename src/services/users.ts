@@ -89,7 +89,7 @@ export async function createUser(
 	input: CreateUserInput
 ): Promise<UserRecord> {
 	const status = input.status ?? "active";
-	const coverageStatus = input.coverageStatus ?? status;
+	const coverageStatus = input.coverageStatus ?? "inactive";
 
 	await db
 		.prepare(`
@@ -134,7 +134,7 @@ export async function createUser(
 			input.contactMethod ?? null,
 			input.role ?? "participant",
 			input.accountStatus ?? "active",
-			input.setupStatus ?? "account_created",
+			input.setupStatus ?? "registration_information_completed",
 			status,
 			coverageStatus
 		)
@@ -193,7 +193,8 @@ export async function updateUserProvisioningAssignment(
 			UPDATE users
 			SET screening_number = ?,
 				sip_username = ?,
-				coverage_status = 'pending'
+				setup_status = 'sip_credential_assigned',
+				coverage_status = 'inactive'
 			WHERE id = ?
 				AND status = 'active'
 		`)
@@ -206,8 +207,9 @@ export async function updateUserProvisioningAssignment(
 		!user
 		|| user.screeningNumber !== screeningNumber
 		|| user.sipUsername !== sipUsername
+		|| user.setupStatus !== "sip_credential_assigned"
 		|| user.status !== "active"
-		|| user.coverageStatus !== "pending"
+		|| user.coverageStatus !== "inactive"
 	) {
 		throw new Error(
 			"Failed to assign subscriber provisioning resources"

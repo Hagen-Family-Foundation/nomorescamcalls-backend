@@ -63,13 +63,13 @@ export async function provisionSubscriber(
 	}
 
 	try {
-		const reservedNumber =
+		const assignedScreeningNumber =
 			await reserveAvailableScreeningNumber(
 				db,
 				userId
 			);
 
-		const reservedSipCredential =
+		const assignedSipCredential =
 			await reserveAvailableSipCredential(
 				db,
 				userId
@@ -79,8 +79,8 @@ export async function provisionSubscriber(
 			await updateUserProvisioningAssignment(
 				db,
 				userId,
-				reservedNumber.phoneNumber,
-				reservedSipCredential.sipUsername
+				assignedScreeningNumber.phoneNumber,
+				assignedSipCredential.sipUsername
 			);
 
 		return {
@@ -93,16 +93,15 @@ export async function provisionSubscriber(
 					status: "complete"
 				},
 				{
-					name:
-						"screening_number_reserved_from_inventory",
+					name: "screening_number_assigned",
 					status: "complete"
 				},
 				{
-					name: "sip_username_assigned",
+					name: "sip_credential_assigned",
 					status: "complete"
 				},
 				{
-					name: "coverage_pending_verification",
+					name: "coverage_inactive_pending_test_call",
 					status: "complete"
 				}
 			]

@@ -191,7 +191,7 @@ describe('subscriber portal API', () => {
 			},
 			provisioning: {
 				status: 'active',
-				coverageStatus: 'pending',
+				coverageStatus: 'inactive',
 				screeningNumber: '+15550002020',
 				sipUsername: 'portal_integration_user',
 			},
@@ -218,7 +218,7 @@ describe('subscriber portal API', () => {
 		expect(provisionedUser).toEqual({
 			screening_number: '+15550002020',
 			sip_username: 'portal_integration_user',
-			coverage_status: 'pending',
+			coverage_status: 'inactive',
 		});
 
 		const logoutResponse = await SELF.fetch('http://example.com/portal/auth/logout', {

@@ -636,8 +636,8 @@ describe("NoMoreScamCalls Worker", () => {
 		expect(body.registration.user.contactMethod).toBe("email");
 		expect(body.registration.user.role).toBe("participant");
 		expect(body.registration.user.accountStatus).toBe("active");
-		expect(body.registration.user.setupStatus).toBe("account_created");
-		expect(body.registration.user.coverageStatus).toBe("pending");
+		expect(body.registration.user.setupStatus).toBe("registration_information_completed");
+		expect(body.registration.user.coverageStatus).toBe("inactive");
 
 		const storedUser = await env.nomorescamcalls_db
 			.prepare(`
@@ -944,9 +944,9 @@ describe("NoMoreScamCalls Worker", () => {
 					'+15550001006',
 					'participant',
 					'active',
-					'registered',
+					'registration_information_completed',
 					'active',
-					'pending'
+					'inactive'
 				)
 			`)
 			.run();

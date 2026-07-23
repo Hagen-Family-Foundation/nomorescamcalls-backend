@@ -12,13 +12,13 @@ export async function ensureTestSchema(): Promise<void> {
 				password_hash TEXT,
 				role TEXT NOT NULL DEFAULT 'participant',
 				account_status TEXT NOT NULL DEFAULT 'active',
-				setup_status TEXT NOT NULL DEFAULT 'account_created',
+				setup_status TEXT NOT NULL DEFAULT 'registration_information_completed',
 				email TEXT UNIQUE,
 				phone_number TEXT NOT NULL UNIQUE,
 				screening_number TEXT UNIQUE,
 				sip_username TEXT UNIQUE,
 				status TEXT NOT NULL DEFAULT 'active',
-				coverage_status TEXT NOT NULL DEFAULT 'active',
+				coverage_status TEXT NOT NULL DEFAULT 'inactive',
 				created_at TEXT DEFAULT CURRENT_TIMESTAMP
 			)
 		`)
@@ -169,7 +169,6 @@ export async function ensureTestSchema(): Promise<void> {
 			)
 		`)
 		.run();
-
 
 	await env.nomorescamcalls_db
 		.prepare(`

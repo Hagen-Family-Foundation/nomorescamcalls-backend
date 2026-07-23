@@ -59,9 +59,9 @@ export async function registerBetaParticipant(
 					?,
 					'participant',
 					'active',
-					'account_created',
+					'registration_information_completed',
 					'active',
-					'pending'
+					'inactive'
 				FROM beta_invite_codes
 				WHERE code = ?
 					AND status = 'active'
