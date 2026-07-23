@@ -1,7 +1,5 @@
 import {
-	createUser,
-	deleteUserById,
-	findUserByPhoneNumber,
+	findUserById,
 	updateUserProvisioningAssignment,
 	type UserRecord
 } from "./users";
@@ -13,13 +11,6 @@ import {
 	releaseSipCredentialForUser,
 	reserveAvailableSipCredential
 } from "./sipCredentialInventory";
-
-export interface ProvisionSubscriberInput {
-	firstName: string;
-	lastName: string;
-	email: string;
-	phoneNumber: string;
-}
 
 export interface ProvisionSubscriberResult {
 	user: UserRecord;
@@ -33,11 +24,18 @@ export interface ProvisionSubscriberResult {
 
 export async function provisionSubscriber(
 	db: D1Database,
-	input: ProvisionSubscriberInput
+	userId: number
 ): Promise<ProvisionSubscriberResult> {
-	const existingUser = await findUserByPhoneNumber(db, input.phoneNumber);
+	const existingUser = await findUserById(db, userId);
 
-	if (existingUser?.screeningNumber && existingUser.sipUsername) {
+	if (!existingUser) {
+		throw new Error("Subscriber not found");
+	}
+
+	if (
+		existingUser.screeningNumber
+		&& existingUser.sipUsername
+	) {
 		return {
 			user: existingUser,
 			coverageStatus: existingUser.coverageStatus,
@@ -48,42 +46,42 @@ export async function provisionSubscriber(
 					status: "complete"
 				},
 				{
-					name: "coverage_active",
+					name: "telephony_resources_already_assigned",
 					status: "complete"
 				}
 			]
 		};
 	}
 
-	const pendingUser = await createUser(
-		db,
-		{
-			firstName: input.firstName,
-			lastName: input.lastName,
-			email: input.email,
-			phoneNumber: input.phoneNumber,
-			status: "provisioning",
-			coverageStatus: "pending"
-		}
-	);
+	if (
+		existingUser.screeningNumber
+		|| existingUser.sipUsername
+	) {
+		throw new Error(
+			"Subscriber has incomplete provisioning state"
+		);
+	}
 
 	try {
-		const reservedNumber = await reserveAvailableScreeningNumber(
-			db,
-			pendingUser.id
-		);
+		const reservedNumber =
+			await reserveAvailableScreeningNumber(
+				db,
+				userId
+			);
 
-		const reservedSipCredential = await reserveAvailableSipCredential(
-			db,
-			pendingUser.id
-		);
+		const reservedSipCredential =
+			await reserveAvailableSipCredential(
+				db,
+				userId
+			);
 
-		const user = await updateUserProvisioningAssignment(
-			db,
-			pendingUser.id,
-			reservedNumber.phoneNumber,
-			reservedSipCredential.sipUsername
-		);
+		const user =
+			await updateUserProvisioningAssignment(
+				db,
+				userId,
+				reservedNumber.phoneNumber,
+				reservedSipCredential.sipUsername
+			);
 
 		return {
 			user,
@@ -91,11 +89,12 @@ export async function provisionSubscriber(
 			provisioningStatus: "active",
 			steps: [
 				{
-					name: "subscriber_record_created",
+					name: "existing_subscriber_found",
 					status: "complete"
 				},
 				{
-					name: "screening_number_reserved_from_inventory",
+					name:
+						"screening_number_reserved_from_inventory",
 					status: "complete"
 				},
 				{
@@ -103,15 +102,14 @@ export async function provisionSubscriber(
 					status: "complete"
 				},
 				{
-					name: "coverage_activated",
+					name: "coverage_pending_verification",
 					status: "complete"
 				}
 			]
 		};
 	} catch (error) {
-		await releaseScreeningNumberForUser(db, pendingUser.id);
-		await releaseSipCredentialForUser(db, pendingUser.id);
-		await deleteUserById(db, pendingUser.id);
+		await releaseScreeningNumberForUser(db, userId);
+		await releaseSipCredentialForUser(db, userId);
 
 		throw error;
 	}

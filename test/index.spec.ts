@@ -377,147 +377,7 @@ describe("NoMoreScamCalls Worker", () => {
 		expect(body.sync.reason).toContain("TELNYX_API_KEY");
 	});
 
-	it("provisions a subscriber with active coverage", async () => {
-		await env.nomorescamcalls_db
-			.prepare(`
-				INSERT INTO screening_number_inventory (phone_number, status)
-				VALUES (?, 'available')
-				ON CONFLICT(phone_number) DO UPDATE SET
-					status = 'available',
-					assigned_user_id = NULL,
-					assigned_at = NULL
-			`)
-			.bind("+19139562000")
-			.run();
 
-		await env.nomorescamcalls_db
-			.prepare(`
-				INSERT INTO sip_credential_inventory (sip_username, status)
-				VALUES (?, 'available')
-				ON CONFLICT(sip_username) DO UPDATE SET
-					status = 'available',
-					assigned_user_id = NULL,
-					assigned_at = NULL
-			`)
-			.bind("usersupport15892")
-			.run();
-
-		const response = await SELF.fetch("http://example.com/provisioning/subscribers", {
-			method: "POST",
-			headers: {
-				"content-type": "application/json"
-			},
-			body: JSON.stringify({
-				firstName: "Mary",
-				lastName: "Example",
-				email: "mary@example.com",
-				phoneNumber: "+18165550100"
-			})
-		});
-
-		expect(response.status).toBe(200);
-
-		const body = await response.json<{
-			provisioning: {
-				coverageStatus: string;
-				provisioningStatus: string;
-				user: {
-					firstName: string;
-					lastName: string;
-					email: string;
-					phoneNumber: string;
-					screeningNumber: string;
-					sipUsername: string;
-					status: string;
-					coverageStatus: string;
-				};
-				steps: Array<{
-					name: string;
-					status: string;
-				}>;
-			};
-		}>();
-
-		expect(body.provisioning.provisioningStatus).toBe("active");
-		expect(body.provisioning.coverageStatus).toBe("active");
-		expect(body.provisioning.user.firstName).toBe("Mary");
-		expect(body.provisioning.user.lastName).toBe("Example");
-		expect(body.provisioning.user.email).toBe("mary@example.com");
-		expect(body.provisioning.user.phoneNumber).toBe("+18165550100");
-		expect(body.provisioning.user.screeningNumber).toBe("+19139562000");
-		expect(body.provisioning.user.sipUsername).toBe("usersupport15892");
-		expect(body.provisioning.user.status).toBe("active");
-		expect(body.provisioning.user.coverageStatus).toBe("active");
-		expect(body.provisioning.steps.map((step) => step.name)).toContain("screening_number_reserved_from_inventory");
-		expect(body.provisioning.steps.map((step) => step.name)).toContain("sip_username_assigned");
-		expect(body.provisioning.steps.map((step) => step.name)).toContain("coverage_activated");
-	});
-
-
-	it("does not leave partial provisioning state when SIP inventory is unavailable", async () => {
-		await env.nomorescamcalls_db
-			.prepare(`
-				INSERT INTO screening_number_inventory (phone_number, status)
-				VALUES (?, 'available')
-				ON CONFLICT(phone_number) DO UPDATE SET
-					status = 'available',
-					assigned_user_id = NULL,
-					assigned_at = NULL
-			`)
-			.bind("+19139562001")
-			.run();
-
-		await env.nomorescamcalls_db
-			.prepare("DELETE FROM sip_credential_inventory")
-			.run();
-
-		const response = await SELF.fetch("http://example.com/provisioning/subscribers", {
-			method: "POST",
-			headers: {
-				"content-type": "application/json"
-			},
-			body: JSON.stringify({
-				firstName: "Failed Provisioning",
-				lastName: "Test",
-				email: "failed-provisioning@example.com",
-				phoneNumber: "+18165550101"
-			})
-		});
-
-		expect(response.status).toBe(409);
-
-		const body = await response.json<{
-			error: string;
-			reason: string;
-		}>();
-
-		expect(body.error).toBe("Provisioning failed");
-		expect(body.reason).toBe("No available SIP credentials");
-
-		const user = await env.nomorescamcalls_db
-			.prepare("SELECT id FROM users WHERE phone_number = ?")
-			.bind("+18165550101")
-			.first();
-
-		expect(user).toBeNull();
-
-		const screeningNumber = await env.nomorescamcalls_db
-			.prepare(`
-				SELECT status, assigned_user_id, assigned_at
-				FROM screening_number_inventory
-				WHERE phone_number = ?
-			`)
-			.bind("+19139562001")
-			.first<{
-				status: string;
-				assigned_user_id: number | null;
-				assigned_at: string | null;
-			}>();
-
-		expect(screeningNumber?.status).toBe("available");
-		expect(screeningNumber?.assigned_user_id).toBeNull();
-		expect(screeningNumber?.assigned_at).toBeNull();
-	});
 
 	it("creates and lists user routing records", async () => {
 		const createResponse = await SELF.fetch("http://example.com/users", {
@@ -1041,7 +901,7 @@ describe("NoMoreScamCalls Worker", () => {
 			}
 		);
 
-				expect(response.status).toBe(401);
+		expect(response.status).toBe(401);
 
 		const body = await response.json<{
 			error: string;

@@ -265,56 +265,6 @@ export default {
 			});
 		}
 
-		// Provision Subscriber Endpoint
-		if (request.method === "POST" && url.pathname === "/provisioning/subscribers") {
-			const body = await request.json() as {
-				firstName?: string;
-				lastName?: string;
-				email?: string;
-				phoneNumber?: string;
-			};
-
-			const firstName = body.firstName ?? "";
-			const lastName = body.lastName ?? "";
-			const email = body.email ?? "";
-			const phoneNumber = body.phoneNumber ?? "";
-
-			if (!firstName || !lastName || !email || !phoneNumber) {
-				return Response.json({
-					error: "firstName, lastName, email, and phoneNumber are required"
-				}, {
-					status: 400
-				});
-			}
-
-			try {
-				const provisioning = await provisionSubscriber(
-					env.nomorescamcalls_db,
-					{
-						firstName,
-						lastName,
-						email,
-						phoneNumber
-					}
-				);
-
-				return Response.json({
-					provisioning
-				});
-			} catch (error) {
-				const message = error instanceof Error
-					? error.message
-					: "Provisioning failed";
-
-				return Response.json({
-					error: "Provisioning failed",
-					reason: message
-				}, {
-					status: 409
-				});
-			}
-		}
-
 		// Create or Update User Endpoint
 		if (request.method === "POST" && url.pathname === "/users") {
 			const body = await request.json() as {

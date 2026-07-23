@@ -193,10 +193,9 @@ export async function updateUserProvisioningAssignment(
 			UPDATE users
 			SET screening_number = ?,
 				sip_username = ?,
-				status = 'active',
-				coverage_status = 'active'
+				coverage_status = 'pending'
 			WHERE id = ?
-				AND status = 'provisioning'
+				AND status = 'active'
 		`)
 		.bind(screeningNumber, sipUsername, userId)
 		.run();
@@ -208,9 +207,11 @@ export async function updateUserProvisioningAssignment(
 		|| user.screeningNumber !== screeningNumber
 		|| user.sipUsername !== sipUsername
 		|| user.status !== "active"
-		|| user.coverageStatus !== "active"
+		|| user.coverageStatus !== "pending"
 	) {
-		throw new Error("Failed to finalize provisioned user");
+		throw new Error(
+			"Failed to assign subscriber provisioning resources"
+		);
 	}
 
 	return user;
