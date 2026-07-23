@@ -911,12 +911,44 @@ export default {
 				);
 			}
 
+			let provisioning;
+
+			try {
+				provisioning =
+					await provisionSubscriber(
+						env.nomorescamcalls_db,
+						session.user.id
+					);
+			} catch (error) {
+				return portalJson(
+					{
+						error:
+							error instanceof Error
+								? error.message
+								: "Subscriber provisioning failed"
+					},
+					409
+				);
+			}
+
 			return portalJson({
 				accepted: true,
 				agreement:
 					acceptance.agreement,
 				acceptedAt:
-					acceptance.acceptedAt
+					acceptance.acceptedAt,
+				provisioning: {
+					status:
+						provisioning.provisioningStatus,
+					coverageStatus:
+						provisioning.coverageStatus,
+					screeningNumber:
+						provisioning.user.screeningNumber,
+					sipUsername:
+						provisioning.user.sipUsername,
+					steps:
+						provisioning.steps
+				}
 			});
 		}
 

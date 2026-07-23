@@ -97,6 +97,67 @@ describe('subscriber portal API', () => {
 
 		expect(meBody.user.agreementAccepted).toBe(false);
 
+		await env.nomorescamcalls_db
+			.prepare(
+				`
+					INSERT INTO screening_number_inventory (
+						phone_number,
+						status,
+						provider,
+						provider_number_id,
+						voice_application_id,
+						connection_id,
+						last_synced_at
+					)
+					VALUES (?, 'available', 'telnyx', ?, ?, ?, CURRENT_TIMESTAMP)
+					ON CONFLICT(phone_number) DO UPDATE SET
+						status = 'available',
+						assigned_user_id = NULL,
+						assigned_at = NULL,
+						provider = excluded.provider,
+						provider_number_id = excluded.provider_number_id,
+						voice_application_id = excluded.voice_application_id,
+						connection_id = excluded.connection_id,
+						last_synced_at = CURRENT_TIMESTAMP
+				`,
+			)
+			.bind(
+				'+15550002020',
+				'portal-number-id',
+				'portal-voice-application-id',
+				'portal-call-control-connection-id',
+			)
+			.run();
+
+		await env.nomorescamcalls_db
+			.prepare(
+				`
+					INSERT INTO sip_credential_inventory (
+						sip_username,
+						status,
+						provider,
+						provider_credential_id,
+						connection_id,
+						last_synced_at
+					)
+					VALUES (?, 'available', 'telnyx', ?, ?, CURRENT_TIMESTAMP)
+					ON CONFLICT(sip_username) DO UPDATE SET
+						status = 'available',
+						assigned_user_id = NULL,
+						assigned_at = NULL,
+						provider = excluded.provider,
+						provider_credential_id = excluded.provider_credential_id,
+						connection_id = excluded.connection_id,
+						last_synced_at = CURRENT_TIMESTAMP
+				`,
+			)
+			.bind(
+				'portal_integration_user',
+				'portal-credential-id',
+				'portal-credential-connection-id',
+			)
+			.run();
+
 		const agreementResponse = await SELF.fetch('http://example.com/portal/agreement/accept', {
 			method: 'POST',
 			headers: {
@@ -110,11 +171,54 @@ describe('subscriber portal API', () => {
 
 		expect(agreementResponse.status).toBe(200);
 
-		expect(await agreementResponse.json()).toMatchObject({
+		const agreementBody = await agreementResponse.json<{
+			accepted: boolean;
+			agreement: {
+				version: string;
+			};
+			provisioning: {
+				status: string;
+				coverageStatus: string;
+				screeningNumber: string | null;
+				sipUsername: string | null;
+			};
+		}>();
+
+		expect(agreementBody).toMatchObject({
 			accepted: true,
 			agreement: {
 				version: 'v1',
 			},
+			provisioning: {
+				status: 'active',
+				coverageStatus: 'pending',
+				screeningNumber: '+15550002020',
+				sipUsername: 'portal_integration_user',
+			},
+		});
+
+		const provisionedUser = await env.nomorescamcalls_db
+			.prepare(
+				`
+					SELECT
+						screening_number,
+						sip_username,
+						coverage_status
+					FROM users
+					WHERE id = ?
+				`,
+			)
+			.bind(registerBody.user.id)
+			.first<{
+				screening_number: string | null;
+				sip_username: string | null;
+				coverage_status: string;
+			}>();
+
+		expect(provisionedUser).toEqual({
+			screening_number: '+15550002020',
+			sip_username: 'portal_integration_user',
+			coverage_status: 'pending',
 		});
 
 		const logoutResponse = await SELF.fetch('http://example.com/portal/auth/logout', {
