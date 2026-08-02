@@ -154,54 +154,21 @@ The governing document is:
 
 ---
 
-## Block 4 — Routing
+## Block 4 — Evidence Delivery
+
+Block 4 begins after Block 3 has completed the live call and recording.
 
 Block 4 receives the completed Block 3 Evidence Box.
 
-Block 4 performs routing only.
+Block 4 delivers the complete Evidence Box to the Evidence Library.
 
-It does not:
+Block 4 does not inspect, change, separate, rename, interpret, sort, store, or index the evidence.
 
-- gather new evidence
-- interpret evidence
-- assign deductions
-- modify standing
-- perform IPQS
-- repeat caller-response evaluation
-
-Routing follows the final standing contained in the Evidence Box.
-
-### Successful Result
-
-Calls with an approved standing are connected to the subscriber through the active Telnyx call-control path.
-
-The call is released as quickly as practical once screening is complete.
-
-### Unsuccessful Result
-
-Calls at or below the approved failure threshold remain connected through the observation period.
-
-At approximately 55 seconds, the caller hears:
-
-> "We’re sorry, but the party you are trying to reach is unavailable at this time. Please try your call again later."
-
-The call is disconnected before the second billable minute begins.
-
-### Routing Record
-
-Block 4 adds the routing result to the Evidence Box, including:
-
-- final standing
-- routing action
-- routing timestamp
-- routing completion information
-- call completion information
-
-At the conclusion of the call, Block 4 sends the completed Evidence Box to the Evidence Library.
+The Evidence Library receives the completed Evidence Box and performs its own sorting, placement, storage, and indexing.
 
 The governing document is:
 
-`docs/evidence-engine/BLOCK_4_ROUTING_SOP.md`
+`docs/evidence-engine/BLOCK_4_EVIDENCE_LIBRARY_SOP.md`
 
 ---
 

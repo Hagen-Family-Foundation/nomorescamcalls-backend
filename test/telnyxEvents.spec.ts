@@ -1,27 +1,59 @@
-import { describe, it, expect } from "vitest";
+import {
+	describe,
+	expect,
+	it
+} from "vitest";
 import {
 	normalizeTelnyxEvent,
-	shouldHandleTelnyxChallengeResponse
+	shouldScreenTelnyxEvent
 } from "../src/services/telnyxEvents";
 
 describe("Telnyx event normalization", () => {
-	it("extracts challenge digits from gather-ended payloads", () => {
+	it("normalizes an inbound call event", () => {
 		const event = normalizeTelnyxEvent({
 			data: {
-				event_type: "call.gather.ended",
+				event_type: "call.initiated",
 				payload: {
-					call_control_id: "test-call-control-id",
-					call_session_id: "test-call-session-id",
-					from: "+18005551234",
-					to: "+18005550000",
-					digits: "5"
+					call_control_id:
+						"test-call-control-id",
+					call_session_id:
+						"test-call-session-id",
+					from: "+15550001001",
+					to: "+15550002001"
 				}
 			}
 		});
 
-		expect(event.eventType).toBe("call.gather.ended");
-		expect(event.callControlId).toBe("test-call-control-id");
-		expect(event.digits).toBe("5");
-		expect(shouldHandleTelnyxChallengeResponse(event)).toBe(true);
+		expect(event).toEqual({
+			eventType: "call.initiated",
+			callControlId:
+				"test-call-control-id",
+			callSessionId:
+				"test-call-session-id",
+			from: "+15550001001",
+			to: "+15550002001"
+		});
+
+		expect(
+			shouldScreenTelnyxEvent(event)
+		).toBe(true);
+	});
+
+	it("does not process unrelated Telnyx events as inbound calls", () => {
+		const event = normalizeTelnyxEvent({
+			data: {
+				event_type: "call.answered",
+				payload: {
+					call_control_id:
+						"test-call-control-id",
+					call_session_id:
+						"test-call-session-id"
+				}
+			}
+		});
+
+		expect(
+			shouldScreenTelnyxEvent(event)
+		).toBe(false);
 	});
 });

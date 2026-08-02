@@ -2,317 +2,301 @@
 
 ## Purpose
 
-Block 3 gathers and evaluates caller-response evidence, originates the approved caller-response deductions, calculates the caller’s standing, performs IPQS when required, and produces the completed Block 3 Evidence Box containing the final standing.
+Block 3 handles the live caller interaction.
 
-Block 3 processes only evidence produced during the current call.
+Block 3:
 
-Every caller receives the same two-prompt process.
+- starts and controls the recording
+- works with Telnyx, OpenAI, and IPQS
+- gathers and labels the evidence produced by each source
+- applies all approved deductions
+- calculates the final standing
+- connects or diverts the call
+- ends the recording
+- passes the completed evidence to Block 4
 
-Block 3 does not route the call.
+Block 3 processes only evidence from the current call.
 
 ---
 
 ## Trigger
 
-Block 3 begins when it receives the completed Block 2 Evidence Box.
-
-The completed Block 2 Evidence Box contains the universal starting standing of 100.
+Block 3 begins when it receives the completed Block 2 evidence.
 
 ---
 
-## Standard Operating Procedure
+## Recording
 
-1. Receive the completed Block 2 Evidence Box.
-2. Play Evidence Prompt 1.
-3. Record the caller’s response.
-4. Transcribe the recorded response.
-5. Submit the transcript to the Response Evaluator.
-6. Store the Prompt 1 evidence:
-   - audio recording reference
-   - transcript
-   - evaluator result
-   - deductions originated by Block 3
-7. Play Evidence Prompt 2.
-8. Record the caller’s response.
-9. Transcribe the recorded response.
-10. Submit the transcript to the Response Evaluator.
-11. Store the Prompt 2 evidence:
-    - audio recording reference
-    - transcript
-    - evaluator result
-    - deductions originated by Block 3
-12. Combine all deductions received in the completed Block 2 Evidence Box with all deductions originated by Block 3.
-13. Calculate the standing by subtracting the accumulated deductions from the starting standing of 100.
-14. Clamp the standing at a minimum of 0.
-15. Determine whether IPQS is required:
-    - standing 86–100: do not perform IPQS
-    - standing 76–85: perform IPQS
-    - standing 0–75: do not perform IPQS
-16. When IPQS is required:
-    - submit the approved current-call lookup
-    - preserve the IPQS findings
-    - originate any approved IPQS deduction
-    - add the IPQS deduction to the accumulated deductions
-    - recalculate the standing
-    - clamp the standing at a minimum of 0
-17. Record the final standing.
-18. Produce the completed Block 3 Evidence Box.
-19. Pass the completed Block 3 Evidence Box to Block 4.
+Recording begins immediately when Block 3 starts.
+
+The recording captures:
+
+- the first request
+- the caller’s response
+- background audio
+- periods with no caller speech
+- the second request when required
+- the caller’s second response when required
+- the unavailable message when the call is diverted
+
+Recording continues until the call leaves the control of NoMoreScamCalls.
+
+Recording ends:
+
+- when the call is connected to the subscriber
+- or after the unavailable message is played and the diverted call is disconnected
 
 ---
 
-## Response Evaluator Contract
+## First Request
 
-The Response Evaluator receives one transcript.
+Telnyx plays:
 
-### Input
+> "Please state your name and reason for calling."
 
-- transcript
+Telnyx captures the caller’s response.
 
-### Output
+OpenAI evaluates the response.
 
-- usable name: yes or no
-- usable reason: yes or no
+OpenAI returns:
 
-The Response Evaluator performs no deductions, scoring, standing calculation, routing, disposition, IPQS execution, or recommendations.
+- name accepted: yes or no
+- reason accepted: yes or no
+- the extracted name when present
+- the extracted reason when present
+- the response information produced by the approved OpenAI evaluation
 
-It returns only whether the transcript contains a usable name and a usable reason.
-
-The transcript remains part of the preserved evidence and does not need to be recreated or summarized by the evaluator.
-
----
-
-## Empty or Unusable Transcript
-
-When a transcript is empty or contains no usable response:
-
-- usable name is no
-- usable reason is no
-- the Response Evaluator does not need to be called when the absence of a transcript is already known
-
-The approved Block 3 deduction rules are then applied normally by Block 3.
+OpenAI does not apply deductions, calculate standing, or control the call.
 
 ---
 
-## Block 3 Deduction Responsibility
+## First Response Deductions
 
-The Response Evaluator identifies facts only.
+Block 3 applies:
 
-Block 3 owns all deductions resulting from caller-response facts.
+- name not accepted: 15 points
+- reason not accepted: 15 points
 
-Current approved caller-response deductions are:
-
-- unusable or missing name: 15 points
-- unusable or missing reason: 15 points
-
-The rules are applied independently to each evidence prompt.
-
-A prompt may therefore originate:
-
-- 0 points of deduction
-- 15 points of deduction
-- 30 points of deduction
-
-Because every caller receives two evidence prompts, caller-response deductions may total up to 60 points.
-
-Block 3 records every individual deduction.
+Each result is independent.
 
 ---
 
-## Standing Calculation
+## Complete First Response
 
-Block 3 receives the starting standing of 100 from the completed Block 2 Evidence Box.
+When the first response produces:
 
-Block 3 calculates the current standing using all accumulated deductions from the current call.
+- name accepted: yes
+- reason accepted: yes
 
-The standing calculation is:
+Block 3:
 
-> Starting standing of 100 minus all accumulated approved deductions.
+1. applies no caller-response deductions
+2. does not make the second request
+3. does not perform IPQS
+4. connects the call to the subscriber
+5. ends the recording when the call leaves NoMoreScamCalls control
+6. completes and labels the evidence
+7. passes the completed evidence to Block 4
 
-The standing shall never be less than 0.
+---
 
-Block 3 records:
+## Incomplete First Response
+
+When either part of the first response produces no:
+
+1. Block 3 applies the approved 15-point deduction.
+2. The first failed part places the standing at 85 and triggers IPQS.
+3. IPQS begins while the caller interaction continues.
+4. Recording continues.
+5. Block 3 waits for 10 continuous seconds with no detected caller speech.
+6. Background noise does not restart the 10-second period.
+7. Renewed caller speech restarts the 10-second period.
+8. After 10 continuous seconds with no detected caller speech, Telnyx plays the second request.
+
+---
+
+## Second Request
+
+Telnyx plays:
+
+> "Please speak slowly and clearly. State your name and reason for calling."
+
+Telnyx captures the caller’s second response.
+
+OpenAI evaluates the second response using the same approved requirements used for the first response.
+
+---
+
+## Second Response Recovery
+
+A successful second response restores the complete value of the matching first-response deduction.
+
+Examples:
+
+- first name result no, second name result yes: restore 15 points
+- first reason result no, second reason result yes: restore 15 points
+- both first results no, both second results yes: restore 30 points
+
+Any failed part not corrected by the second response remains deducted.
+
+No partial deductions or partial recovery are used.
+
+---
+
+## IPQS
+
+IPQS begins when the first response produces a no for either the name or reason.
+
+The complete IPQS response is preserved.
+
+Only these IPQS fields affect the live standing:
+
+- `valid`
+- `active`
+- `recent_abuse`
+- `spammer`
+
+Block 3 applies 5 points for each negative result:
+
+- `valid = false`: 5 points
+- `active = false`: 5 points
+- `recent_abuse = true`: 5 points
+- `spammer = true`: 5 points
+
+A positive result applies 0 points.
+
+A `null` result applies 0 points.
+
+An unavailable or failed IPQS request applies 0 points.
+
+Each approved IPQS field is scored independently.
+
+The maximum IPQS deduction is 20 points.
+
+---
+
+## Final Standing
+
+Block 3 calculates the final standing after:
+
+- Block 2 deductions
+- first-response deductions
+- second-response recovery
+- approved IPQS deductions
+
+The calculation is:
+
+> Starting standing of 100 minus all remaining approved deductions.
+
+The standing cannot be less than 0.
+
+---
+
+## Call Completion
+
+### Final Standing 76–100
+
+Block 3 connects the call to the subscriber.
+
+Recording ends when the call leaves NoMoreScamCalls control.
+
+### Final Standing 0–75
+
+Block 3 maintains control of the call while recording continues.
+
+At approximately the fifty-fifth second, Telnyx plays:
+
+> "We're sorry, but the party you are trying to reach is unavailable at this time. Please try your call again later. Goodbye."
+
+Block 3 disconnects the call before the second billing minute begins.
+
+Recording ends after the call is disconnected.
+
+---
+
+## Evidence
+
+Block 3 keeps the original source names.
+
+### Telnyx
+
+- call identifiers
+- calling number
+- called number
+- STIR/SHAKEN results received from Block 2
+- CNAM received from Block 2
+- carrier and line information received from Block 2
+- request timing
+- caller-speech timing
+- recording reference
+- call timing
+- Telnyx deductions received from Block 2
+
+### OpenAI
+
+- first response transcript
+- first response name result
+- first response reason result
+- extracted first response information
+- second response transcript when used
+- second response name result when used
+- second response reason result when used
+- extracted second response information when used
+- caller-response deductions
+- recovered caller-response deductions
+
+### IPQS
+
+- complete returned response
+- `valid`
+- `active`
+- `recent_abuse`
+- `spammer`
+- individual IPQS deductions
+
+### Standing
 
 - starting standing
-- accumulated deductions before IPQS
-- standing before IPQS
-- IPQS requirement
-- IPQS findings when applicable
-- IPQS deduction when applicable
-- accumulated deductions after IPQS
+- Block 2 deductions
+- caller-response deductions
+- recovered deductions
+- IPQS deductions
 - final standing
 
----
+### Call Result
 
-## IPQS Responsibility
-
-IPQS is conditional current-call evidence.
-
-Block 3 performs IPQS only when the standing after caller-response deductions is between 76 and 85 inclusive.
-
-### Standing 86–100
-
-- IPQS is not performed.
-- The standing becomes the final standing.
-
-### Standing 76–85
-
-- IPQS is performed.
-- The IPQS findings are preserved.
-- Any approved derogatory IPQS deduction is originated and applied.
-- The standing is recalculated.
-- The recalculated standing becomes the final standing.
-
-### Standing 0–75
-
-- IPQS is not performed.
-- The standing becomes the final standing.
-
-IPQS never uses prior-call history to alter the current call.
-
----
-
-## Evidence Stored
-
-Every call produces the same Block 3 evidence structure.
-
-### Evidence Prompt 1
-
-- audio recording reference
-- transcript
-- usable name result
-- usable reason result
-- deductions originated by Block 3
-
-### Evidence Prompt 2
-
-- audio recording reference
-- transcript
-- usable name result
-- usable reason result
-- deductions originated by Block 3
-
-### Standing Results
-
-- starting standing
-- deductions received from prior blocks
-- deductions originated by Block 3
-- accumulated deductions before IPQS
-- standing before IPQS
-- IPQS required: yes or no
-- IPQS findings when applicable
-- IPQS deduction when applicable
-- accumulated deductions after IPQS
-- final standing
-
-### Block 3 Results
-
-- completed Block 2 Evidence Box
-- Prompt 1 evidence
-- Prompt 2 evidence
-- individual deduction records
-- total caller-response deductions
-- IPQS evidence when applicable
-- final standing
-
----
-
-## Evidence Library
-
-The completed Block 3 evidence is preserved for the Evidence Library.
-
-The Evidence Library receives:
-
-- Prompt 1 audio
-- Prompt 1 transcript
-- Prompt 1 evaluation
-- Prompt 2 audio
-- Prompt 2 transcript
-- Prompt 2 evaluation
-- Block 3 deduction records
-- total caller-response deductions
-- standing before IPQS
-- IPQS trigger and findings when applicable
-- IPQS deduction when applicable
-- final standing
-
-Every call record must use the same evidence structure, regardless of the caller’s final standing or routing outcome.
+- connected or diverted
+- connection or disconnection timestamp
+- recording reference
+- recording completion
 
 ---
 
 ## Output
 
-The completed Block 3 Evidence Box contains:
+Block 3 passes the completed evidence to Block 4 only after:
 
-- the completed Block 2 Evidence Box
-- all caller-response evidence
-- all deductions accumulated during the current call
-- IPQS evidence when applicable
-- the final standing
-
-Block 3 passes the completed Block 3 Evidence Box directly to Block 4.
-
----
-
-## Boundaries
-
-Block 3 does not:
-
-- use prior calls to judge the current call
-- create caller reputation
-- make assumptions about caller intent
-- perform offline research
-- alter Evidence Library history
-- allow the Response Evaluator to control deductions
-- allow the Response Evaluator to control scoring
-- allow the Response Evaluator to control routing
-- execute Telnyx routing actions
-- connect the caller to the subscriber
-- retain or terminate the call based on routing rules
-
-Block 3 gathers caller-response evidence, originates approved deductions, calculates standing, performs conditional IPQS processing, records the final standing, and passes the completed Evidence Box to Block 4.
-
-Block 4 alone performs routing.
+- the call has been connected or diverted
+- the recording has ended
+- the final standing has been recorded
+- the evidence has been labeled by its original source
 
 ---
 
 ## Error Handling
 
-If Block 3 encounters an implementation error that prevents completion of its responsibility, the caller shall be played the standard system error message:
+When an implementation error prevents Block 3 from completing the call, Telnyx plays:
 
 > "We are sorry, but we are having technical difficulties at this time and cannot complete your call. Please try your call again later. Goodbye."
 
-Immediately following the message, the call shall be disconnected.
+The call is then disconnected.
 
-Implementation errors are operational events only.
-
-They are never considered caller evidence and shall not create deductions or alter any information already contained within the Evidence Box.
+Implementation errors do not create caller deductions.
 
 ---
 
 ## Change Control
 
-Prompt wording, voice, pause timing, transcription provider, Response Evaluator provider, IPQS provider, and model selection may change without altering this SOP, provided the approved process and responsibility boundaries remain unchanged.
+If implementation and this SOP differ, this SOP is authoritative.
 
-Any change to the two-prompt process, deduction rules, standing calculation, IPQS thresholds, evidence structure, or Block 3 responsibilities requires an approved SOP update before code is changed.
-
-If implementation and this SOP differ, this SOP is the authoritative source.
-
----
-
-## IPQS Implementation Prerequisite
-
-The architecture establishes that Block 3 performs IPQS only when the standing before IPQS is between 76 and 85 inclusive.
-
-Before IPQS code is implemented, the following must be expressly approved and documented:
-
-- the IPQS input contract
-- the IPQS findings structure
-- the objective findings that may originate deductions
-- the exact deduction value for each approved finding
-- timeout and provider-error handling
-- the evidence fields preserved in the completed Block 3 Evidence Box
-
-No implementation may invent these rules.
-
-Until those rules are approved, the IPQS portion of Block 3 remains architecturally defined but not implementation-ready.
+Changes to this flow require approval before code is changed.

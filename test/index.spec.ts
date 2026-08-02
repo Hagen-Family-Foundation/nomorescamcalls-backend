@@ -47,6 +47,7 @@ describe("NoMoreScamCalls Worker", () => {
 		const body = await response.json<{
 			received: boolean;
 			screened: boolean;
+			callerNumber: string;
 			telnyxEvent: {
 				eventType: string;
 				callControlId: string;
@@ -54,39 +55,45 @@ describe("NoMoreScamCalls Worker", () => {
 				from: string;
 				to: string;
 			};
-			plannedTelnyxAction: {
-				mode: string;
-				action: string;
+			answerRequest: {
+				method: string;
+				endpoint: string;
 			};
-			plannedTelnyxCommand: {
-				mode: string;
-				command: string;
-			};
-			simulatedTelnyxRequest: {
-				mode: string;
+			firstRequest: {
 				method: string;
 				endpoint: string;
 				body: {
-					destinationType?: string;
-					destination?: string | null;
-					routingReason?: string;
+					payload: string;
 				};
-			} | null;
-			telnyxExecution: {
-				mode: string;
+			};
+			answerExecution: {
+				executed: boolean;
+			};
+			firstRequestExecution: {
 				executed: boolean;
 			};
 		}>();
 
 		expect(body.received).toBe(true);
 		expect(body.screened).toBe(true);
+		expect(body.callerNumber).toBe("+18005551234");
 		expect(body.telnyxEvent.eventType).toBe("call.initiated");
 		expect(body.telnyxEvent.callControlId).toBe("test-call-control-id");
-		expect(body.plannedTelnyxAction.mode).toBe("simulated");
-		expect(body.plannedTelnyxCommand.mode).toBe("simulated");
-		expect(body.telnyxExecution.mode).toBe("disabled");
-		expect(body.telnyxExecution.executed).toBe(false);
+		expect(body.answerRequest.method).toBe("POST");
+		expect(body.answerRequest.endpoint).toBe(
+			"/calls/test-call-control-id/actions/answer"
+		);
+		expect(body.firstRequest.method).toBe("POST");
+		expect(body.firstRequest.endpoint).toBe(
+			"/calls/test-call-control-id/actions/speak"
+		);
+		expect(body.firstRequest.body.payload).toBe(
+			"Please state your name and reason for calling."
+		);
+		expect(body.answerExecution.executed).toBe(false);
+		expect(body.firstRequestExecution.executed).toBe(false);
 	});
+
 	it("adds and lists allow-list entries", async () => {
 		const addResponse = await SELF.fetch("http://example.com/allow-list/add", {
 			method: "POST",
@@ -478,15 +485,17 @@ describe("NoMoreScamCalls Worker", () => {
 			approvedDestination: {
 				destinationType: string;
 				destination: string | null;
+				screeningNumber: string | null;
 			};
-			simulatedTelnyxRequest: {
+			answerRequest: {
+				endpoint: string;
+			};
+			firstRequest: {
+				endpoint: string;
 				body: {
-					destinationType?: string;
-					sipUsername?: string | null;
-					simulatedDestination?: string | null;
-					liveApiReady?: boolean;
+					payload: string;
 				};
-			} | null;
+			};
 		}>();
 
 		expect(body.protectedUser).not.toBeNull();
@@ -495,57 +504,21 @@ describe("NoMoreScamCalls Worker", () => {
 		expect(body.protectedUser?.sipUsername).toBe("test_user_18005550101");
 		expect(body.protectedUser?.status).toBe("active");
 		expect(body.approvedDestination.destinationType).toBe("app");
-		expect(body.approvedDestination.destination).toBe("test_user_18005550101");
-		expect(body.simulatedTelnyxRequest?.metadata.destinationType).toBe("app");
-		expect(body.simulatedTelnyxRequest?.metadata.sipUsername).toBe("test_user_18005550101");
-		expect(body.simulatedTelnyxRequest?.body.to).toBe("sip:test_user_18005550101@sip.telnyx.com");
-		expect(body.simulatedTelnyxRequest?.metadata.liveApiReady).toBe(true);
-		expect(body.simulatedTelnyxRequest?.body.from).toBe("+18005550000");
-	});
-
-	it("handles a Telnyx challenge response webhook", async () => {
-		const response = await SELF.fetch("http://example.com/webhooks/telnyx", {
-			method: "POST",
-			headers: {
-				"content-type": "application/json"
-			},
-			body: JSON.stringify({
-				data: {
-					event_type: "call.gather.ended",
-					payload: {
-						call_control_id: "test-call-control-id",
-						call_session_id: "test-call-session-id",
-						from: "+18005551234",
-						to: "+18005550000",
-						digits: "5"
-					}
-				}
-			})
-		});
-
-		expect(response.status).toBe(200);
-
-		const body = await response.json<{
-			received: boolean;
-			challengeHandled: boolean;
-			plannedChallengeOutcome: {
-				outcome: string;
-				nextCommand: string;
-			};
-			plannedTelnyxCommand: {
-				command: string;
-			};
-			telnyxExecution: {
-				executed: boolean;
-			};
-		}>();
-
-		expect(body.received).toBe(true);
-		expect(body.challengeHandled).toBe(true);
-		expect(body.plannedChallengeOutcome.outcome).toBe("passed");
-		expect(body.plannedChallengeOutcome.nextCommand).toBe("transfer");
-		expect(body.plannedTelnyxCommand.command).toBe("transfer");
-		expect(body.telnyxExecution.executed).toBe(false);
+		expect(body.approvedDestination.destination).toBe(
+			"test_user_18005550101"
+		);
+		expect(body.approvedDestination.screeningNumber).toBe(
+			"+18005550000"
+		);
+		expect(body.answerRequest.endpoint).toBe(
+			"/calls/test-user-call-control-id/actions/answer"
+		);
+		expect(body.firstRequest.endpoint).toBe(
+			"/calls/test-user-call-control-id/actions/speak"
+		);
+		expect(body.firstRequest.body.payload).toBe(
+			"Please state your name and reason for calling."
+		);
 	});
 
 	it("returns recent Telnyx audit events", async () => {
