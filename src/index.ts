@@ -27,6 +27,13 @@ import {
 	getCurrentBetaAgreement,
 	hasAcceptedCurrentBetaAgreement
 } from "./services/betaAgreement";
+import {
+	addSearchToRecipeCatalog,
+	listRecipeCatalog,
+	listSearchHistory,
+	runRecipe,
+	searchEvidenceLibrary
+} from "./services/knowledgeEngine";
 
 
 const PORTAL_CORS_HEADERS = {
@@ -1462,6 +1469,165 @@ export default {
 				phoneNumber
 			});
 		}
+
+		// Knowledge Engine Search Endpoint
+		if (
+			request.method === "POST"
+			&& url.pathname === "/knowledge/search"
+		) {
+			const body = await request.json() as {
+				criteria?: Record<
+					string,
+					string
+					| number
+					| boolean
+					| null
+					| Array<string | number>
+				>;
+				sortField?: string;
+				sortDirection?: "ASC" | "DESC";
+				limit?: number;
+				offset?: number;
+			};
+
+			const result =
+				await searchEvidenceLibrary(
+					env.nomorescamcalls_db,
+					{
+						criteria:
+							body.criteria ?? {},
+						sortField:
+							body.sortField,
+						sortDirection:
+							body.sortDirection,
+						limit: body.limit,
+						offset: body.offset
+					}
+				);
+
+			return Response.json({
+				result
+			});
+		}
+
+		// Knowledge Engine Search History Endpoint
+		if (
+			request.method === "GET"
+			&& url.pathname ===
+				"/knowledge/search-history"
+		) {
+			const limit = Number(
+				url.searchParams.get("limit")
+					?? "100"
+			);
+
+			const history =
+				await listSearchHistory(
+					env.nomorescamcalls_db,
+					limit
+				);
+
+			return Response.json({
+				history
+			});
+		}
+
+		// Knowledge Engine Recipe Catalog Endpoint
+		if (
+			request.method === "GET"
+			&& url.pathname ===
+				"/knowledge/recipes"
+		) {
+			const limit = Number(
+				url.searchParams.get("limit")
+					?? "100"
+			);
+
+			const recipes =
+				await listRecipeCatalog(
+					env.nomorescamcalls_db,
+					limit
+				);
+
+			return Response.json({
+				recipes
+			});
+		}
+
+		// Add Search to Recipe Catalog Endpoint
+		if (
+			request.method === "POST"
+			&& url.pathname ===
+				"/knowledge/recipes"
+		) {
+			const body = await request.json() as {
+				searchHistoryId?: number;
+				title?: string;
+				purpose?: string;
+			};
+
+			if (
+				!body.searchHistoryId
+				|| !body.title?.trim()
+				|| !body.purpose?.trim()
+			) {
+				return Response.json(
+					{
+						error:
+							"searchHistoryId, title, and purpose are required"
+					},
+					{
+						status: 400
+					}
+				);
+			}
+
+			const recipe =
+				await addSearchToRecipeCatalog(
+					env.nomorescamcalls_db,
+					{
+						searchHistoryId:
+							body.searchHistoryId,
+						title: body.title,
+						purpose: body.purpose
+					}
+				);
+
+			return Response.json({
+				recipe
+			});
+		}
+
+		// Run Knowledge Engine Recipe Endpoint
+		if (
+			request.method === "POST"
+			&& /^\/knowledge\/recipes\/\d+\/run$/
+				.test(url.pathname)
+		) {
+			const recipeId = Number(
+				url.pathname.split("/")[3]
+			);
+
+			const body = await request.json() as {
+				limit?: number;
+				offset?: number;
+			};
+
+			const result =
+				await runRecipe(
+					env.nomorescamcalls_db,
+					recipeId,
+					{
+						limit: body.limit,
+						offset: body.offset
+					}
+				);
+
+			return Response.json({
+				result
+			});
+		}
+
 
 		// Telnyx Voice Application Diagnostic Endpoint
 		if (request.method === "GET" && url.pathname === "/telnyx/voice-application") {

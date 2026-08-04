@@ -1391,3 +1391,256 @@ describe("NoMoreScamCalls Worker", () => {
 	});
 
 });
+describe("Knowledge Engine API", () => {
+	beforeAll(async () => {
+		await ensureTestSchema();
+	});
+
+	it("searches Evidence Library records and retains the search", async () => {
+		await env.nomorescamcalls_db
+			.prepare(`
+				INSERT OR REPLACE INTO evidence_library_calls (
+					call_session_id,
+					call_control_id,
+					call_started_at,
+					final_standing,
+					final_disposition,
+					evidence_box,
+					caller_state,
+					call_day_of_week,
+					call_start_time,
+					subscriber_state
+				)
+				VALUES (
+					'api-knowledge-session',
+					'api-knowledge-control',
+					'2026-08-03T14:30:00.000Z',
+					70,
+					'diverted',
+					'{}',
+					'Florida',
+					'Monday',
+					'14:30:00',
+					'Missouri'
+				)
+			`)
+			.run();
+
+		const searchResponse = await SELF.fetch(
+			"http://example.com/knowledge/search",
+			{
+				method: "POST",
+				headers: {
+					"content-type":
+						"application/json"
+				},
+				body: JSON.stringify({
+					criteria: {
+						caller_state:
+							"Florida",
+						call_day_of_week:
+							"Monday",
+						final_disposition:
+							"diverted"
+					},
+					sortField:
+						"call_started_at",
+					sortDirection: "ASC"
+				})
+			}
+		);
+
+		expect(searchResponse.status).toBe(200);
+
+		const searchBody =
+			await searchResponse.json<{
+				result: {
+					searchHistoryId: number;
+					resultCount: number;
+					records: Array<{
+						call_session_id:
+							string;
+					}>;
+				};
+			}>();
+
+		expect(
+			searchBody.result.resultCount
+		).toBe(1);
+
+		expect(
+			searchBody.result.records[0]
+				.call_session_id
+		).toBe(
+			"api-knowledge-session"
+		);
+
+		const historyResponse =
+			await SELF.fetch(
+				"http://example.com/knowledge/search-history"
+			);
+
+		expect(historyResponse.status).toBe(200);
+
+		const historyBody =
+			await historyResponse.json<{
+				history: Array<{
+					id: number;
+					resultCount: number;
+				}>;
+			}>();
+
+		expect(
+			historyBody.history.some(
+				(record) =>
+					record.id ===
+						searchBody.result
+							.searchHistoryId
+					&& record.resultCount === 1
+			)
+		).toBe(true);
+	});
+
+	it("adds a selected search to the Recipe Catalog and reruns it", async () => {
+		await env.nomorescamcalls_db
+			.prepare(`
+				INSERT OR REPLACE INTO evidence_library_calls (
+					call_session_id,
+					call_control_id,
+					call_started_at,
+					final_standing,
+					final_disposition,
+					evidence_box,
+					caller_state,
+					call_day_of_week,
+					call_start_time,
+					subscriber_state
+				)
+				VALUES (
+					'api-recipe-session',
+					'api-recipe-control',
+					'2026-08-05T16:00:00.000Z',
+					72,
+					'diverted',
+					'{}',
+					'Florida',
+					'Wednesday',
+					'16:00:00',
+					'Missouri'
+				)
+			`)
+			.run();
+
+		const searchResponse = await SELF.fetch(
+			"http://example.com/knowledge/search",
+			{
+				method: "POST",
+				headers: {
+					"content-type":
+						"application/json"
+				},
+				body: JSON.stringify({
+					criteria: {
+						caller_state:
+							"Florida",
+						final_disposition:
+							"diverted"
+					}
+				})
+			}
+		);
+
+		expect(searchResponse.status).toBe(200);
+
+		const searchBody =
+			await searchResponse.json<{
+				result: {
+					searchHistoryId: number;
+				};
+			}>();
+
+		const saveResponse = await SELF.fetch(
+			"http://example.com/knowledge/recipes",
+			{
+				method: "POST",
+				headers: {
+					"content-type":
+						"application/json"
+				},
+				body: JSON.stringify({
+					searchHistoryId:
+						searchBody.result
+							.searchHistoryId,
+					title:
+						"Florida Diverted Calls",
+					purpose:
+						"Find diverted calls originating from Florida."
+				})
+			}
+		);
+
+		expect(saveResponse.status).toBe(200);
+
+		const saveBody =
+			await saveResponse.json<{
+				recipe: {
+					id: number;
+					title: string;
+				};
+			}>();
+
+		expect(saveBody.recipe.title).toBe(
+			"Florida Diverted Calls"
+		);
+
+		const catalogResponse =
+			await SELF.fetch(
+				"http://example.com/knowledge/recipes"
+			);
+
+		expect(catalogResponse.status).toBe(200);
+
+		const catalogBody =
+			await catalogResponse.json<{
+				recipes: Array<{
+					id: number;
+					title: string;
+				}>;
+			}>();
+
+		expect(
+			catalogBody.recipes.some(
+				(recipe) =>
+					recipe.id ===
+						saveBody.recipe.id
+					&& recipe.title ===
+						"Florida Diverted Calls"
+			)
+		).toBe(true);
+
+		const runResponse = await SELF.fetch(
+			`http://example.com/knowledge/recipes/${saveBody.recipe.id}/run`,
+			{
+				method: "POST",
+				headers: {
+					"content-type":
+						"application/json"
+				},
+				body: JSON.stringify({})
+			}
+		);
+
+		expect(runResponse.status).toBe(200);
+
+		const runBody =
+			await runResponse.json<{
+				result: {
+					resultCount: number;
+				};
+			}>();
+
+		expect(
+			runBody.result.resultCount
+		).toBeGreaterThan(0);
+	});
+});
