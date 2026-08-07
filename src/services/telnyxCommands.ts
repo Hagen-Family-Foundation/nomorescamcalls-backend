@@ -1,7 +1,15 @@
 import type { TelnyxCallEvent } from "./telnyxEvents";
 import type { TelnyxPlannedAction } from "./telnyxActions";
 
-export type TelnyxCommandType = "answer" | "transfer" | "gather" | "hangup" | "noop";
+export type TelnyxCommandType =
+	| "answer"
+	| "transfer"
+	| "gather"
+	| "speak"
+	| "record_start"
+	| "record_stop"
+	| "hangup"
+	| "noop";
 
 export interface TelnyxPlannedCommand {
 	mode: "simulated";

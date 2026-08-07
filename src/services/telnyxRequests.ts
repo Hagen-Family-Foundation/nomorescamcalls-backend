@@ -60,6 +60,71 @@ export function buildTelnyxRequest(
 		};
 	}
 
+	if (command.command === "record_start") {
+		return {
+			mode: "simulated",
+			method: "POST",
+			endpoint:
+				`/calls/${command.callControlId}/actions/record_start`,
+			body: {
+				format: "mp3",
+				channels: "single"
+			},
+			metadata: {
+				liveApiReady: true,
+				command: "record_start"
+			},
+			safetyNote:
+				"Recording begins under Block 3 control."
+		};
+	}
+
+	if (command.command === "record_stop") {
+		return {
+			mode: "simulated",
+			method: "POST",
+			endpoint:
+				`/calls/${command.callControlId}/actions/record_stop`,
+			body: {},
+			metadata: {
+				liveApiReady: true,
+				command: "record_stop"
+			},
+			safetyNote:
+				"Recording ends when the call leaves NoMoreScamCalls control."
+		};
+	}
+
+	if (command.command === "speak") {
+		if (!speechRequest) {
+			throw new Error(
+				"Speech request is required for Telnyx speak."
+			);
+		}
+
+		return {
+			mode: "simulated",
+			method: "POST",
+			endpoint:
+				`/calls/${command.callControlId}/actions/speak`,
+			body: {
+				payload: speechRequest.prompt,
+				language: "en-US",
+				voice: "female"
+			},
+			metadata: {
+				liveApiReady: true,
+				command: "speak",
+				speechPrompt:
+					speechRequest.prompt,
+				speechTimeoutSeconds:
+					speechRequest.timeoutSeconds
+			},
+			safetyNote:
+				"Telnyx plays Block 3 call-control speech."
+		};
+	}
+
 	if (command.command === "transfer") {
 		const telnyxAppDestination =
 			planTelnyxAppDestination(
