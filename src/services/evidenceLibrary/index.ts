@@ -1,6 +1,6 @@
 import type {
 	Block3EvidenceBox
-} from "../evidenceEngine";
+} from "../evidenceEngine/block3";
 
 export interface EvidenceLibrarySubscriber {
 	id: number | null;
