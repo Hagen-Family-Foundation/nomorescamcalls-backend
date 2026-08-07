@@ -88,7 +88,7 @@ describe("NoMoreScamCalls Worker", () => {
 			"/calls/test-call-control-id/actions/speak"
 		);
 		expect(body.firstRequest.body.payload).toBe(
-			"Please state your name and reason for calling."
+			"State your name and reason for calling please."
 		);
 		expect(body.answerExecution.executed).toBe(false);
 		expect(body.firstRequestExecution.executed).toBe(false);
@@ -517,7 +517,7 @@ describe("NoMoreScamCalls Worker", () => {
 			"/calls/test-user-call-control-id/actions/speak"
 		);
 		expect(body.firstRequest.body.payload).toBe(
-			"Please state your name and reason for calling."
+			"State your name and reason for calling please."
 		);
 	});
 

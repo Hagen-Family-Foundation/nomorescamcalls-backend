@@ -28,7 +28,7 @@ import type {
 } from "./telnyxExecutionPolicy";
 
 const FIRST_REQUEST =
-	"Please state your name and reason for calling.";
+	"State your name and reason for calling please.";
 
 const FIRST_REQUEST_TIMEOUT_SECONDS = 10;
 
