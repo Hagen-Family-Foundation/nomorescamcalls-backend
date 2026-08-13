@@ -79,6 +79,8 @@ describe("Evidence Engine Call Flow", () => {
 					vi.fn(),
 				playUnavailableAndDisconnect:
 					vi.fn(),
+				playTechnicalDifficultiesAndDisconnect:
+					vi.fn(),
 				stopRecording:
 					vi.fn()
 			};

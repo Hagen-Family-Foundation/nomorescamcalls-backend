@@ -6,6 +6,8 @@ export interface CallerResponseInput {
 export interface CallerResponseEvaluation {
 	nameAccepted: boolean;
 	reasonAccepted: boolean;
+	extractedName: string | null;
+	extractedReason: string | null;
 }
 
 export interface CallerResponseEvaluator {
@@ -28,7 +30,9 @@ export async function evaluateCallerResponse(
 			transcript,
 			language,
 			nameAccepted: false,
-			reasonAccepted: false
+			reasonAccepted: false,
+			extractedName: null,
+			extractedReason: null
 		};
 	}
 
@@ -41,6 +45,8 @@ export async function evaluateCallerResponse(
 		transcript,
 		language,
 		nameAccepted: evaluation.nameAccepted,
-		reasonAccepted: evaluation.reasonAccepted
+		reasonAccepted: evaluation.reasonAccepted,
+		extractedName: evaluation.extractedName ?? null,
+		extractedReason: evaluation.extractedReason ?? null
 	};
 }

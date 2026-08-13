@@ -28,6 +28,22 @@
 			"database_id": "8af912a0-f133-4731-8cc2-7d1962423dca"
 		}
 	],
+	"durable_objects": {
+		"bindings": [
+			{
+				"name": "BLOCK3_LIVE_SESSIONS",
+				"class_name": "Block3LiveSession"
+			}
+		]
+	},
+	"migrations": [
+		{
+			"tag": "v1",
+			"new_classes": [
+				"Block3LiveSession"
+			]
+		}
+	],
 	/**
 	 * Smart Placement
 	 * https://developers.cloudflare.com/workers/configuration/smart-placement/#smart-placement

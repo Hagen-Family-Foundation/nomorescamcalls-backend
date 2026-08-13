@@ -6,6 +6,7 @@ export type TelnyxCommandType =
 	| "transfer"
 	| "gather"
 	| "speak"
+	| "transcription_start"
 	| "record_start"
 	| "record_stop"
 	| "hangup"

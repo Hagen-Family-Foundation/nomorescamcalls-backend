@@ -47,6 +47,8 @@ function createCallController():
 		connectSubscriber: vi.fn(),
 		playUnavailableAndDisconnect:
 			vi.fn(),
+		playTechnicalDifficultiesAndDisconnect:
+			vi.fn(),
 		stopRecording: vi.fn()
 	};
 }
@@ -65,6 +67,36 @@ function createCleanIpqsLookup():
 }
 
 describe("Evidence Engine Block 3", () => {
+	it("plays the approved technical-difficulties message when OpenAI evaluation fails", async () => {
+		const evaluator: CallerResponseEvaluator = {
+			evaluate: vi.fn().mockRejectedValue(
+				new Error("OpenAI unavailable")
+			)
+		};
+		const callController =
+			createCallController();
+
+		await expect(completeBlock3({
+			block2EvidenceBox:
+				createBlock2EvidenceBox(),
+			prompt1: {
+				audioRecordingReference: null,
+				transcript: "This is Maria.",
+				language: "en"
+			},
+			evaluator,
+			callController
+		})).rejects.toThrow("OpenAI unavailable");
+
+		expect(
+			callController
+				.playTechnicalDifficultiesAndDisconnect
+		).toHaveBeenCalledOnce();
+		expect(
+			callController.stopRecording
+		).toHaveBeenCalledOnce();
+	});
+
 	it("releases immediately after a complete first response", async () => {
 		const evaluator:
 			CallerResponseEvaluator = {

@@ -24,6 +24,9 @@ import type {
 const UNAVAILABLE_MESSAGE =
 	"We're sorry, but the party you are trying to reach is unavailable at this time. Please try your call again later. Goodbye.";
 
+const TECHNICAL_DIFFICULTIES_MESSAGE =
+	"We are sorry, but we are having technical difficulties at this time and cannot complete your call. Please try your call again later. Goodbye.";
+
 export interface TelnyxBlock3CallControllerInput {
 	callControlId: string;
 	callSessionId: string;
@@ -146,6 +149,30 @@ export function createTelnyxBlock3CallController(
 					input,
 					"hangup",
 					"Block 3 disconnects the diverted call."
+				)
+			);
+		},
+
+		async playTechnicalDifficultiesAndDisconnect():
+			Promise<void> {
+			await run(
+				command(
+					input,
+					"speak",
+					"Block 3 reports an operational failure."
+				),
+				{
+					prompt:
+						TECHNICAL_DIFFICULTIES_MESSAGE,
+					timeoutSeconds: 10
+				}
+			);
+
+			await run(
+				command(
+					input,
+					"hangup",
+					"Block 3 disconnects after an operational failure."
 				)
 			);
 		},

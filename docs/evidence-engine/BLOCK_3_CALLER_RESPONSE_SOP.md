@@ -108,10 +108,11 @@ When either part of the first response produces no:
 2. The first failed part places the standing at 85 and triggers IPQS.
 3. IPQS begins while the caller interaction continues.
 4. Recording continues.
-5. Block 3 waits for 10 continuous seconds with no detected caller speech.
-6. Background noise does not restart the 10-second period.
-7. Renewed caller speech restarts the 10-second period.
-8. After 10 continuous seconds with no detected caller speech, Telnyx plays the second request.
+5. Block 3 waits for 10 continuous seconds without new recognized caller speech.
+6. Each new final Telnyx transcription segment counts as recognized caller speech and restarts the 10-second period.
+7. Interim transcription does not close the response and does not restart the 10-second period.
+8. Background noise that does not produce recognized caller speech does not restart the 10-second period.
+9. After 10 continuous seconds without a new final Telnyx transcription segment, Block 3 closes the first response and, when the response is incomplete, Telnyx plays the second request.
 
 ---
 

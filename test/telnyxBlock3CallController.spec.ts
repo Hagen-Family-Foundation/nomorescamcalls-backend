@@ -85,11 +85,14 @@ describe(
 					.playUnavailableAndDisconnect();
 
 				await controller
+					.playTechnicalDifficultiesAndDisconnect();
+
+				await controller
 					.stopRecording();
 
 				expect(
 					execute
-				).toHaveBeenCalledTimes(5);
+				).toHaveBeenCalledTimes(7);
 
 				const endpoints =
 					execute.mock.calls.map(
@@ -100,6 +103,8 @@ describe(
 				expect(endpoints).toEqual([
 					"/calls/controller-call-control/actions/record_start",
 					"/calls/controller-call-control/actions/transfer",
+					"/calls/controller-call-control/actions/speak",
+					"/calls/controller-call-control/actions/hangup",
 					"/calls/controller-call-control/actions/speak",
 					"/calls/controller-call-control/actions/hangup",
 					"/calls/controller-call-control/actions/record_stop"
@@ -113,6 +118,18 @@ describe(
 				).toEqual({
 					payload:
 						"We're sorry, but the party you are trying to reach is unavailable at this time. Please try your call again later. Goodbye.",
+					language: "en-US",
+					voice: "female"
+				});
+
+				const technicalDifficultiesRequest =
+					execute.mock.calls[4][0];
+
+				expect(
+					technicalDifficultiesRequest?.body
+				).toEqual({
+					payload:
+						"We are sorry, but we are having technical difficulties at this time and cannot complete your call. Please try your call again later. Goodbye.",
 					language: "en-US",
 					voice: "female"
 				});

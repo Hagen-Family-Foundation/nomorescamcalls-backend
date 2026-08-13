@@ -31,12 +31,54 @@ describe("Telnyx event normalization", () => {
 			callSessionId:
 				"test-call-session-id",
 			from: "+15550001001",
-			to: "+15550002001"
+			to: "+15550002001",
+			transcription: null
 		});
 
 		expect(
 			shouldScreenTelnyxEvent(event)
 		).toBe(true);
+	});
+
+	it("normalizes a native transcription event", () => {
+		const event = normalizeTelnyxEvent({
+			data: {
+				event_type:
+					"call.transcription",
+				payload: {
+					call_control_id:
+						"transcription-control-id",
+					call_session_id:
+						"transcription-session-id",
+					transcription_data: {
+						confidence: 0.977219,
+						is_final: true,
+						transcript:
+							"Kelly calling about the inspection."
+					}
+				}
+			}
+		});
+
+		expect(event).toEqual({
+			eventType: "call.transcription",
+			callControlId:
+				"transcription-control-id",
+			callSessionId:
+				"transcription-session-id",
+			from: "",
+			to: "",
+			transcription: {
+				confidence: 0.977219,
+				isFinal: true,
+				transcript:
+					"Kelly calling about the inspection."
+			}
+		});
+
+		expect(
+			shouldScreenTelnyxEvent(event)
+		).toBe(false);
 	});
 
 	it("does not process unrelated Telnyx events as inbound calls", () => {

@@ -79,6 +79,24 @@ export function buildTelnyxRequest(
 		};
 	}
 
+	if (command.command === "transcription_start") {
+		return {
+			mode: "simulated",
+			method: "POST",
+			endpoint:
+				`/calls/${command.callControlId}/actions/transcription_start`,
+			body: {
+				language: "en"
+			},
+			metadata: {
+				liveApiReady: true,
+				command: "transcription_start"
+			},
+			safetyNote:
+				"Native Telnyx transcription supplies caller-response evidence to Block 3."
+		};
+	}
+
 	if (command.command === "record_stop") {
 		return {
 			mode: "simulated",

@@ -102,6 +102,33 @@ describe("Telnyx request builder", () => {
 		expect(request?.body).toEqual({});
 	});
 
+	it("builds a native transcription start request", () => {
+		const request =
+			buildTelnyxRequest(
+				command(
+					"transcription_start"
+				),
+				null
+			);
+
+		expect(request?.method).toBe(
+			"POST"
+		);
+
+		expect(request?.endpoint).toBe(
+			"/calls/test-call-control-id/actions/transcription_start"
+		);
+
+		expect(request?.body).toEqual({
+			language: "en"
+		});
+
+		expect(request?.metadata).toMatchObject({
+			liveApiReady: true,
+			command: "transcription_start"
+		});
+	});
+
 	it("builds the approved first speech request", () => {
 		const request =
 			buildTelnyxRequest(

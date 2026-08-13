@@ -1,0 +1,640 @@
+import type {
+	Block3PromptEvidence,
+	IpqsLookupResult
+} from "./evidenceEngine/block3";
+import type {
+	Block2EvidenceBox
+} from "./evidenceEngine/block2";
+import type {
+	CallerResponseEvaluation
+} from "./evidenceEngine/responseExtraction";
+import {
+	evaluateCallerResponse
+} from "./evidenceEngine/responseExtraction";
+import type {
+	EvidenceLibraryCallInformation,
+	EvidenceLibrarySubscriber
+} from "./evidenceLibrary";
+import type {
+	ApprovedCallDestination
+} from "./routing";
+import {
+	createOpenAICallerResponseEvaluator
+} from "./openaiCallerResponseEvaluator";
+import {
+	createIpqsLookup
+} from "./ipqsLookup";
+import {
+	createTelnyxBlock3CallController
+} from "./telnyxBlock3CallController";
+import {
+	getTelnyxExecutionPolicy
+} from "./telnyxExecutionPolicy";
+import {
+	buildTelnyxRequest
+} from "./telnyxRequests";
+import {
+	executeTelnyxRequest
+} from "./telnyxExecutor";
+import type {
+	TelnyxPlannedCommand
+} from "./telnyxCommands";
+import {
+	completeEvidenceEngineCall
+} from "./evidenceEngine/callFlow";
+
+const CALLER_SILENCE_MILLISECONDS = 10_000;
+const SESSION_STORAGE_KEY = "block3-live-session";
+
+export type Block3LiveSessionStage =
+	| "awaiting_prompt1"
+	| "collecting_prompt1"
+	| "prompt1_closed"
+	| "awaiting_prompt2"
+	| "collecting_prompt2"
+	| "prompt2_closed"
+	| "ready_to_complete";
+
+export interface Block3LiveSessionState {
+	callSessionId: string;
+	callControlId: string;
+	stage: Block3LiveSessionStage;
+	prompt1Segments: string[];
+	prompt2Segments: string[];
+	secondPromptIssued: boolean;
+	lastRecognizedSpeechAt: string | null;
+	block2EvidenceBox: Block2EvidenceBox;
+	callInformation: EvidenceLibraryCallInformation;
+	subscriber: EvidenceLibrarySubscriber;
+	approvedDestination: ApprovedCallDestination;
+	prompt1Evaluation: CallerResponseEvaluation | null;
+	prompt2Evaluation: CallerResponseEvaluation | null;
+	ipqsResult: IpqsLookupResult | null;
+}
+
+interface InitializeRequest {
+	callSessionId: string;
+	callControlId: string;
+	block2EvidenceBox: Block2EvidenceBox;
+	callInformation: EvidenceLibraryCallInformation;
+	subscriber: EvidenceLibrarySubscriber;
+	approvedDestination: ApprovedCallDestination;
+}
+
+interface TranscriptionRequest
+	extends InitializeRequest {
+	transcript: string;
+	isFinal: boolean;
+}
+
+interface PromptEvaluationRequest
+	extends InitializeRequest {
+	nameAccepted: boolean;
+	reasonAccepted: boolean;
+}
+
+interface Block3LiveSessionEnv {
+	nomorescamcalls_db: D1Database;
+	TELNYX_LIVE_EXECUTION?: string;
+	TELNYX_API_KEY?: string;
+	TELNYX_API_BASE_URL?: string;
+	OPENAI_API_KEY?: string;
+	OPENAI_CALLER_RESPONSE_MODEL?: string;
+	OPENAI_API_BASE_URL?: string;
+	IPQS_API_KEY?: string;
+	IPQS_API_BASE_URL?: string;
+}
+
+const SECOND_REQUEST =
+	"Please speak slowly and clearly. State your name and reason for calling.";
+
+function promptEvidence(
+	segments: string[]
+): Block3PromptEvidence {
+	return {
+		audioRecordingReference: null,
+		transcript: segments.join(" "),
+		language: null
+	};
+}
+
+export class Block3LiveSession {
+	constructor(
+		private readonly state:
+			DurableObjectState,
+		private readonly env?:
+			Block3LiveSessionEnv
+	) {}
+
+	private async read():
+		Promise<Block3LiveSessionState | null> {
+		return await this.state.storage.get<Block3LiveSessionState>(
+			SESSION_STORAGE_KEY
+		) ?? null;
+	}
+
+	private async write(
+		session: Block3LiveSessionState
+	): Promise<void> {
+		await this.state.storage.put(
+			SESSION_STORAGE_KEY,
+			session
+		);
+	}
+
+	private async requireSession():
+		Promise<Block3LiveSessionState> {
+		const session = await this.read();
+
+		if (!session) {
+			throw new Error(
+				"Block 3 live session has not been initialized."
+			);
+		}
+
+		return session;
+	}
+
+	private verifyCall(
+		session: Block3LiveSessionState,
+		request: InitializeRequest
+	): void {
+		if (
+			request.callSessionId !== session.callSessionId
+			|| request.callControlId !== session.callControlId
+		) {
+			throw new Error(
+				"Telnyx call identifiers do not match the Block 3 live session."
+			);
+		}
+	}
+
+	private async resetSilenceAlarm():
+		Promise<void> {
+		await this.state.storage.setAlarm(
+			Date.now() +
+				CALLER_SILENCE_MILLISECONDS
+		);
+	}
+
+	private callController(
+		session: Block3LiveSessionState
+	) {
+		if (!this.env) {
+			throw new Error(
+				"Block 3 live-session environment is unavailable."
+			);
+		}
+
+		return createTelnyxBlock3CallController({
+			callControlId: session.callControlId,
+			callSessionId: session.callSessionId,
+			approvedDestination:
+				session.approvedDestination,
+			executionPolicy:
+				getTelnyxExecutionPolicy(this.env),
+			telnyxApiConfig: {
+				apiKey: this.env.TELNYX_API_KEY,
+				baseUrl: this.env.TELNYX_API_BASE_URL
+			}
+		});
+	}
+
+	private async issueSecondRequest(
+		session: Block3LiveSessionState
+	): Promise<void> {
+		if (!this.env) {
+			return;
+		}
+
+		const command: TelnyxPlannedCommand = {
+			mode: "simulated",
+			command: "speak",
+			callControlId: session.callControlId,
+			callSessionId: session.callSessionId,
+			reason:
+				"Block 3 plays the approved second caller request.",
+			safetyNote:
+				"Caller request playback is guarded by TELNYX_LIVE_EXECUTION."
+		};
+		const request = buildTelnyxRequest(
+			command,
+			{
+				prompt: SECOND_REQUEST,
+				timeoutSeconds: 10
+			},
+			session.approvedDestination
+		);
+		const result = await executeTelnyxRequest(
+			request,
+			getTelnyxExecutionPolicy(this.env),
+			{
+				apiKey: this.env.TELNYX_API_KEY,
+				baseUrl: this.env.TELNYX_API_BASE_URL
+			}
+		);
+
+		if (result.mode !== "live" || !result.executed) {
+			throw new Error(
+				`Block 3 second request failed: ${result.reason}`
+			);
+		}
+	}
+
+	private async completeLiveCall(
+		session: Block3LiveSessionState
+	): Promise<void> {
+		if (!this.env || !session.prompt1Evaluation) {
+			return;
+		}
+
+		const evaluations = [
+			session.prompt1Evaluation,
+			...(session.prompt2Evaluation
+				? [session.prompt2Evaluation]
+				: [])
+		];
+		let evaluationIndex = 0;
+		const callController =
+			this.callController(session);
+
+		await completeEvidenceEngineCall({
+			db: this.env.nomorescamcalls_db,
+			block3Input: {
+				block2EvidenceBox:
+					session.block2EvidenceBox,
+				prompt1: promptEvidence(
+					session.prompt1Segments
+				),
+				...(session.prompt2Evaluation
+					? {
+						prompt2: promptEvidence(
+							session.prompt2Segments
+						)
+					}
+					: {}),
+				evaluator: {
+					async evaluate() {
+						const evaluation =
+							evaluations[evaluationIndex++];
+
+						if (!evaluation) {
+							throw new Error(
+								"Block 3 live evaluation evidence is missing."
+							);
+						}
+
+						return evaluation;
+					}
+				},
+				...(session.prompt2Evaluation
+					? {
+						ipqsLookup: {
+							async lookup() {
+								if (!session.ipqsResult) {
+									throw new Error(
+										"Block 3 live IPQS evidence is missing."
+									);
+								}
+
+								return session.ipqsResult;
+							}
+						}
+					}
+					: {}),
+				callController: {
+					...callController,
+					async startRecording() {}
+				}
+			},
+			callInformation: {
+				...session.callInformation,
+				callCompletedAt:
+					new Date().toISOString()
+			},
+			subscriber: session.subscriber
+		});
+
+		await this.state.storage.deleteAlarm();
+		await this.state.storage.deleteAll();
+	}
+
+	private async processClosedPrompt(
+		session: Block3LiveSessionState
+	): Promise<void> {
+		if (!this.env) {
+			return;
+		}
+
+		const evaluator =
+			createOpenAICallerResponseEvaluator({
+				apiKey: this.env.OPENAI_API_KEY ?? "",
+				model:
+					this.env.OPENAI_CALLER_RESPONSE_MODEL ?? "",
+				baseUrl: this.env.OPENAI_API_BASE_URL
+			});
+		const prompt1 = promptEvidence(
+			session.prompt1Segments
+		);
+
+		if (session.stage === "prompt1_closed") {
+			session.prompt1Evaluation =
+				await evaluateCallerResponse(
+					prompt1.transcript,
+					prompt1.language,
+					evaluator
+				);
+			const incomplete =
+				!session.prompt1Evaluation.nameAccepted
+				|| !session.prompt1Evaluation.reasonAccepted;
+
+			if (!incomplete) {
+				session.stage = "ready_to_complete";
+				await this.write(session);
+				await this.completeLiveCall(session);
+				return;
+			}
+
+			session.ipqsResult = await createIpqsLookup({
+				apiKey: this.env.IPQS_API_KEY,
+				baseUrl: this.env.IPQS_API_BASE_URL
+			}).lookup(session.block2EvidenceBox);
+			session.stage = "awaiting_prompt2";
+			session.callInformation.prompt2At =
+				new Date().toISOString();
+			await this.write(session);
+			await this.issueSecondRequest(session);
+			return;
+		}
+
+		if (session.stage === "prompt2_closed") {
+			const prompt2 = promptEvidence(
+				session.prompt2Segments
+			);
+			session.prompt2Evaluation =
+				await evaluateCallerResponse(
+					prompt2.transcript,
+					prompt2.language,
+					evaluator
+				);
+			session.stage = "ready_to_complete";
+			await this.write(session);
+			await this.completeLiveCall(session);
+		}
+	}
+
+	async fetch(request: Request): Promise<Response> {
+		const path = new URL(request.url).pathname;
+
+		try {
+			if (
+				request.method === "POST"
+				&& path === "/initialize"
+			) {
+				const input =
+					await request.json<InitializeRequest>();
+				const existing = await this.read();
+
+				if (existing) {
+					this.verifyCall(existing, input);
+					return Response.json(existing);
+				}
+
+				const session: Block3LiveSessionState = {
+					callSessionId: input.callSessionId,
+					callControlId: input.callControlId,
+					stage: "awaiting_prompt1",
+					prompt1Segments: [],
+					prompt2Segments: [],
+					secondPromptIssued: false,
+					lastRecognizedSpeechAt: null,
+					block2EvidenceBox:
+						input.block2EvidenceBox,
+					callInformation:
+						input.callInformation,
+					subscriber: input.subscriber,
+					approvedDestination:
+						input.approvedDestination,
+					prompt1Evaluation: null,
+					prompt2Evaluation: null,
+					ipqsResult: null
+				};
+
+				await this.write(session);
+				return Response.json(session);
+			}
+
+			if (
+				request.method === "POST"
+				&& path === "/prompt-started"
+			) {
+				const input =
+					await request.json<InitializeRequest>();
+				const session = await this.requireSession();
+				this.verifyCall(session, input);
+
+				if (session.stage === "awaiting_prompt1") {
+					session.stage = "collecting_prompt1";
+				} else if (session.stage === "awaiting_prompt2") {
+					session.stage = "collecting_prompt2";
+					session.secondPromptIssued = true;
+				} else {
+					return Response.json({
+						accepted: false,
+						session
+					});
+				}
+
+				await this.write(session);
+				await this.resetSilenceAlarm();
+				return Response.json({
+					accepted: true,
+					session
+				});
+			}
+
+			if (
+				request.method === "POST"
+				&& path === "/transcription"
+			) {
+				const input =
+					await request.json<TranscriptionRequest>();
+				const session = await this.requireSession();
+				this.verifyCall(session, input);
+
+				if (!input.isFinal || input.transcript.trim() === "") {
+					return Response.json({
+						accepted: false,
+						session
+					});
+				}
+
+				if (session.stage === "collecting_prompt1") {
+					session.prompt1Segments.push(
+						input.transcript.trim()
+					);
+				} else if (session.stage === "collecting_prompt2") {
+					session.prompt2Segments.push(
+						input.transcript.trim()
+					);
+				} else {
+					return Response.json({
+						accepted: false,
+						session
+					});
+				}
+
+				session.lastRecognizedSpeechAt =
+					new Date().toISOString();
+				await this.write(session);
+				await this.resetSilenceAlarm();
+
+				return Response.json({
+					accepted: true,
+					session
+				});
+			}
+
+			if (
+				request.method === "POST"
+				&& path === "/prompt1-evaluation"
+			) {
+				const evaluation =
+					await request.json<PromptEvaluationRequest>();
+				const session = await this.requireSession();
+				this.verifyCall(session, evaluation);
+
+				if (session.stage !== "prompt1_closed") {
+					throw new Error(
+						"Prompt 1 must be closed before evaluation is applied."
+					);
+				}
+
+				const secondPromptRequired =
+					!evaluation.nameAccepted
+					|| !evaluation.reasonAccepted;
+				session.stage = secondPromptRequired
+					? "awaiting_prompt2"
+					: "ready_to_complete";
+				await this.write(session);
+
+				return Response.json({
+					secondPromptRequired,
+					prompt1: promptEvidence(
+						session.prompt1Segments
+					),
+					session
+				});
+			}
+
+			if (
+				request.method === "POST"
+				&& path === "/prompt2-evaluation"
+			) {
+				const evaluation =
+					await request.json<PromptEvaluationRequest>();
+				const session = await this.requireSession();
+				this.verifyCall(session, evaluation);
+
+				if (session.stage !== "prompt2_closed") {
+					throw new Error(
+						"Prompt 2 must be closed before evaluation is applied."
+					);
+				}
+
+				session.stage = "ready_to_complete";
+				await this.write(session);
+
+				return Response.json({
+					prompt2: promptEvidence(
+						session.prompt2Segments
+					),
+					evaluation,
+					session
+				});
+			}
+
+			if (request.method === "GET" && path === "/state") {
+				const session = await this.read();
+				return Response.json({
+					session,
+					prompt1: session
+						? promptEvidence(session.prompt1Segments)
+						: null,
+					prompt2: session
+						? promptEvidence(session.prompt2Segments)
+						: null
+				});
+			}
+
+			if (
+				request.method === "POST"
+				&& path === "/complete"
+			) {
+				const input =
+					await request.json<InitializeRequest>();
+				const session = await this.requireSession();
+				this.verifyCall(session, input);
+
+				if (session.stage !== "ready_to_complete") {
+					throw new Error(
+						"Block 3 live session is not ready to complete."
+					);
+				}
+
+				await this.state.storage.deleteAlarm();
+				await this.state.storage.deleteAll();
+				return Response.json({ completed: true });
+			}
+
+			return new Response("Not Found", { status: 404 });
+		} catch (error) {
+			return Response.json({
+				error:
+					error instanceof Error
+						? error.message
+						: "Unknown Block 3 live-session error."
+			}, { status: 409 });
+		}
+	}
+
+	async alarm(): Promise<void> {
+		const session = await this.requireSession();
+
+		if (session.stage === "collecting_prompt1") {
+			session.stage = "prompt1_closed";
+		} else if (session.stage === "collecting_prompt2") {
+			session.stage = "prompt2_closed";
+		} else {
+			return;
+		}
+
+		await this.write(session);
+
+		try {
+			await this.processClosedPrompt(session);
+		} catch (error) {
+			console.error(
+				"Block 3 live-session processing failed:",
+				error
+			);
+
+			if (this.env) {
+				const controller =
+					this.callController(session);
+
+				try {
+					await controller
+						.playTechnicalDifficultiesAndDisconnect();
+				} finally {
+					try {
+						await controller.stopRecording();
+					} finally {
+						await this.state.storage.deleteAlarm();
+						await this.state.storage.deleteAll();
+					}
+				}
+			}
+		}
+	}
+}

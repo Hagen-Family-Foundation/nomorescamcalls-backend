@@ -35,6 +35,10 @@ import {
 	searchEvidenceLibrary
 } from "./services/knowledgeEngine";
 
+export {
+	Block3LiveSession
+} from "./services/block3LiveSession";
+
 
 const PORTAL_CORS_HEADERS = {
 	"Access-Control-Allow-Origin": "*",
@@ -1704,7 +1708,8 @@ export default {
 				{
 					apiKey: env.TELNYX_API_KEY,
 					baseUrl: env.TELNYX_API_BASE_URL
-				}
+				},
+				env.BLOCK3_LIVE_SESSIONS
 			);
 		}
 

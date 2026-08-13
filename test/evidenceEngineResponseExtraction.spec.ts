@@ -7,9 +7,11 @@ import {
 describe("Evidence Engine caller response evaluator", () => {
 	it("returns only caller-response facts", async () => {
 		const evaluator: CallerResponseEvaluator = {
-			evaluate: vi.fn().mockResolvedValue({
+				evaluate: vi.fn().mockResolvedValue({
 				nameAccepted: true,
-				reasonAccepted: false
+				reasonAccepted: false,
+				extractedName: "Maria",
+				extractedReason: null
 			})
 		};
 
@@ -23,7 +25,9 @@ describe("Evidence Engine caller response evaluator", () => {
 			transcript: "This is Maria calling.",
 			language: "en",
 			nameAccepted: true,
-			reasonAccepted: false
+			reasonAccepted: false,
+			extractedName: "Maria",
+			extractedReason: null
 		});
 
 		expect(result).not.toHaveProperty("deduction");
@@ -44,7 +48,9 @@ describe("Evidence Engine caller response evaluator", () => {
 			transcript: "   ",
 			language: null,
 			nameAccepted: false,
-			reasonAccepted: false
+			reasonAccepted: false,
+			extractedName: null,
+			extractedReason: null
 		});
 
 		expect(evaluator.evaluate).not.toHaveBeenCalled();

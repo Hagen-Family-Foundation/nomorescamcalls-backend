@@ -57,6 +57,7 @@ export interface Block3CallController {
 	startRecording(): Promise<void>;
 	connectSubscriber(): Promise<void>;
 	playUnavailableAndDisconnect(): Promise<void>;
+	playTechnicalDifficultiesAndDisconnect(): Promise<void>;
 	stopRecording(): Promise<void>;
 }
 
@@ -401,6 +402,10 @@ export async function completeBlock3(
 			callResult,
 			recordingCompleted
 		};
+	} catch (error) {
+		await input.callController
+			.playTechnicalDifficultiesAndDisconnect();
+		throw error;
 	} finally {
 		if (!recordingCompleted) {
 			await input.callController
