@@ -6,6 +6,7 @@ export interface TelnyxCallEvent {
 	to: string;
 	direction: string;
 	flowDestination: string;
+	clientState: string | null;
 	transcription: TelnyxTranscriptionData | null;
 }
 
@@ -28,6 +29,7 @@ export function normalizeTelnyxEvent(
 				to?: string;
 				direction?: string;
 				flow_destination?: string;
+				client_state?: string;
 				transcription_data?: {
 					transcript?: string;
 					is_final?: boolean;
@@ -63,6 +65,9 @@ export function normalizeTelnyxEvent(
 			data.data?.payload
 				?.flow_destination ??
 			"",
+		clientState:
+			data.data?.payload?.client_state ??
+			null,
 		transcription:
 			data.data?.payload
 				?.transcription_data

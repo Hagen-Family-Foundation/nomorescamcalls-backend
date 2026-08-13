@@ -205,11 +205,15 @@ Recording ends when the call leaves NoMoreScamCalls control.
 
 Block 3 maintains control of the call while recording continues.
 
-At approximately the fifty-fifth second, Telnyx plays:
+At approximately 48 seconds from call start, Telnyx begins playing:
 
 > "We're sorry, but the party you are trying to reach is unavailable at this time. Please try your call again later. Goodbye."
 
-Block 3 disconnects the call before the second billing minute begins.
+Block 3 correlates that specific playback using Telnyx `client_state`.
+
+Successful acceptance of the Telnyx speak command does not complete the call. Block 3 waits for the correlated unavailable-message `call.speak.ended` event, then disconnects the call.
+
+An absolute termination guard disconnects the call before the second billing minute begins if the correlated playback-completion event is not received in time.
 
 Recording ends after the call is disconnected.
 

@@ -199,6 +199,59 @@ describe("Telnyx webhook native transcription path", () => {
 		).toBe("/prompt-started");
 	});
 
+	it("routes only the correlated unavailable-message completion to finalization", async () => {
+		const sessions = liveSessions();
+		const response = await handleTelnyxWebhook(
+			{
+				data: {
+					event_type: "call.speak.ended",
+					payload: {
+						call_control_id: "live-control-id",
+						call_session_id: "live-session-id",
+						client_state:
+							"YmxvY2szX3VuYXZhaWxhYmxlX21lc3NhZ2U="
+					}
+				}
+			},
+			database(),
+			disabledPolicy,
+			{},
+			sessions.namespace
+		);
+
+		const result = await response.json() as any;
+		expect(result.reason).toBe(
+			"block3_unavailable_playback_processed"
+		);
+		expect(
+			new URL(sessions.fetch.mock.calls[0][0].url).pathname
+		).toBe("/unavailable-speak-ended");
+	});
+
+	it("does not mistake another client_state for unavailable-message completion", async () => {
+		const sessions = liveSessions();
+		await handleTelnyxWebhook(
+			{
+				data: {
+					event_type: "call.speak.ended",
+					payload: {
+						call_control_id: "live-control-id",
+						call_session_id: "live-session-id",
+						client_state: "technical-message"
+					}
+				}
+			},
+			database(),
+			disabledPolicy,
+			{},
+			sessions.namespace
+		);
+
+		expect(
+			new URL(sessions.fetch.mock.calls[0][0].url).pathname
+		).toBe("/prompt-started");
+	});
+
 	it("leaves unrelated events on the existing no-op path", async () => {
 		const response =
 			await handleTelnyxWebhook(

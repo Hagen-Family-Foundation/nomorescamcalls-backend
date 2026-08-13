@@ -177,6 +177,31 @@ describe("Telnyx request builder", () => {
 		);
 	});
 
+	it("adds client_state only when a speech playback requires correlation", () => {
+		const correlated = buildTelnyxRequest(
+			command("speak"),
+			{
+				prompt: "Correlated message",
+				timeoutSeconds: 10,
+				clientState: "playback-marker"
+			}
+		);
+		const ordinary = buildTelnyxRequest(
+			command("speak"),
+			{
+				prompt: "Ordinary message",
+				timeoutSeconds: 10
+			}
+		);
+
+		expect(correlated?.body.client_state).toBe(
+			"playback-marker"
+		);
+		expect(ordinary?.body).not.toHaveProperty(
+			"client_state"
+		);
+	});
+
 	it("returns null for noop", () => {
 		const request =
 			buildTelnyxRequest(

@@ -35,21 +35,31 @@ export interface EvidenceEngineCallFlowResult {
 		EvidenceLibraryReceipt | null;
 }
 
-export async function completeEvidenceEngineCall(
-	input: EvidenceEngineCallFlowInput
-): Promise<EvidenceEngineCallFlowResult> {
-	const block3EvidenceBox =
-		await completeBlock3(
-			input.block3Input
-		);
+export interface CompletedEvidenceEngineCallInput {
+	db: D1Database;
+	block3EvidenceBox: Block3EvidenceBox;
+	callInformation: EvidenceLibraryCallInformation;
+	subscriber: EvidenceLibrarySubscriber;
+	now?: () => string;
+}
 
+export interface CompletedEvidenceEngineCallResult {
+	block4DeliveryRecord: Block4DeliveryRecord;
+	evidenceLibraryReceipt:
+		EvidenceLibraryReceipt | null;
+}
+
+export async function deliverCompletedEvidenceEngineCall(
+	input: CompletedEvidenceEngineCallInput
+): Promise<CompletedEvidenceEngineCallResult> {
 	let evidenceLibraryReceipt:
 		EvidenceLibraryReceipt | null =
 		null;
 
 	const block4DeliveryRecord =
 		await completeBlock4({
-			block3EvidenceBox,
+			block3EvidenceBox:
+				input.block3EvidenceBox,
 			evidenceLibrary: {
 				async deliverEvidenceBox(
 					evidenceBox
@@ -72,8 +82,29 @@ export async function completeEvidenceEngineCall(
 		});
 
 	return {
-		block3EvidenceBox,
 		block4DeliveryRecord,
 		evidenceLibraryReceipt
+	};
+}
+
+export async function completeEvidenceEngineCall(
+	input: EvidenceEngineCallFlowInput
+): Promise<EvidenceEngineCallFlowResult> {
+	const block3EvidenceBox =
+		await completeBlock3(
+			input.block3Input
+		);
+	const delivery =
+		await deliverCompletedEvidenceEngineCall({
+			db: input.db,
+			block3EvidenceBox,
+			callInformation: input.callInformation,
+			subscriber: input.subscriber,
+			now: input.now
+		});
+
+	return {
+		block3EvidenceBox,
+		...delivery
 	};
 }

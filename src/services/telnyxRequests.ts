@@ -13,6 +13,7 @@ export type TelnyxHttpMethod = "POST";
 export interface TelnyxSpeechRequest {
 	prompt: string;
 	timeoutSeconds: number;
+	clientState?: string;
 }
 
 export interface TelnyxRequestMetadata {
@@ -128,7 +129,13 @@ export function buildTelnyxRequest(
 			body: {
 				payload: speechRequest.prompt,
 				language: "en-US",
-				voice: "female"
+				voice: "female",
+				...(speechRequest.clientState
+					? {
+						client_state:
+							speechRequest.clientState
+					}
+					: {})
 			},
 			metadata: {
 				liveApiReady: true,

@@ -88,6 +88,20 @@ export async function openBlock3ResponseWindow(
 	);
 }
 
+export async function completeBlock3UnavailablePlayback(
+	namespace: Block3LiveSessionNamespace,
+	event: TelnyxCallEvent
+): Promise<unknown> {
+	return postToSession(
+		namespace,
+		event,
+		"/unavailable-speak-ended",
+		{
+			clientState: event.clientState
+		}
+	);
+}
+
 export async function deliverBlock3Transcription(
 	namespace: Block3LiveSessionNamespace,
 	event: TelnyxCallEvent

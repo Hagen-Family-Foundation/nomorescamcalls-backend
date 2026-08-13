@@ -38,6 +38,7 @@ describe("Telnyx event normalization", () => {
 			direction: "incoming",
 			flowDestination:
 				"telnyx_number_cc_app",
+			clientState: null,
 			transcription: null
 		});
 
@@ -123,6 +124,7 @@ describe("Telnyx event normalization", () => {
 			to: "",
 			direction: "",
 			flowDestination: "",
+			clientState: null,
 			transcription: {
 				confidence: 0.977219,
 				isFinal: true,
@@ -134,6 +136,21 @@ describe("Telnyx event normalization", () => {
 		expect(
 			shouldScreenTelnyxEvent(event)
 		).toBe(false);
+	});
+
+	it("normalizes Telnyx client_state used to correlate speech playback", () => {
+		const event = normalizeTelnyxEvent({
+			data: {
+				event_type: "call.speak.ended",
+				payload: {
+					call_control_id: "control-id",
+					call_session_id: "session-id",
+					client_state: "playback-marker"
+				}
+			}
+		});
+
+		expect(event.clientState).toBe("playback-marker");
 	});
 
 	it("does not process unrelated Telnyx events as inbound calls", () => {

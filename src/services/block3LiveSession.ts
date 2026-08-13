@@ -1,4 +1,5 @@
 import type {
+	Block3EvidenceBox,
 	Block3PromptEvidence,
 	IpqsLookupResult
 } from "./evidenceEngine/block3";
@@ -40,11 +41,20 @@ import type {
 	TelnyxPlannedCommand
 } from "./telnyxCommands";
 import {
-	completeEvidenceEngineCall
+	deliverCompletedEvidenceEngineCall
 } from "./evidenceEngine/callFlow";
+import {
+	completeBlock3
+} from "./evidenceEngine/block3";
 
 const CALLER_SILENCE_MILLISECONDS = 10_000;
+const UNAVAILABLE_MESSAGE_START_MILLISECONDS = 48_000;
+const ABSOLUTE_TERMINATION_MILLISECONDS = 59_000;
 const SESSION_STORAGE_KEY = "block3-live-session";
+export const UNAVAILABLE_MESSAGE_CLIENT_STATE =
+	"YmxvY2szX3VuYXZhaWxhYmxlX21lc3NhZ2U=";
+const UNAVAILABLE_MESSAGE =
+	"We're sorry, but the party you are trying to reach is unavailable at this time. Please try your call again later. Goodbye.";
 
 export type Block3LiveSessionStage =
 	| "awaiting_prompt1"
@@ -53,7 +63,9 @@ export type Block3LiveSessionStage =
 	| "awaiting_prompt2"
 	| "collecting_prompt2"
 	| "prompt2_closed"
-	| "ready_to_complete";
+	| "ready_to_complete"
+	| "awaiting_unavailable_message"
+	| "playing_unavailable_message";
 
 export interface Block3LiveSessionState {
 	callSessionId: string;
@@ -70,6 +82,12 @@ export interface Block3LiveSessionState {
 	prompt1Evaluation: CallerResponseEvaluation | null;
 	prompt2Evaluation: CallerResponseEvaluation | null;
 	ipqsResult: IpqsLookupResult | null;
+	pendingBlock3EvidenceBox: Block3EvidenceBox | null;
+}
+
+interface UnavailableSpeakEndedRequest
+	extends InitializeRequest {
+	clientState: string | null;
 }
 
 interface InitializeRequest {
@@ -241,6 +259,149 @@ export class Block3LiveSession {
 		}
 	}
 
+	private plannedCommand(
+		session: Block3LiveSessionState,
+		command: TelnyxPlannedCommand["command"],
+		reason: string
+	): TelnyxPlannedCommand {
+		return {
+			mode: "simulated",
+			command,
+			callControlId: session.callControlId,
+			callSessionId: session.callSessionId,
+			reason,
+			safetyNote:
+				"Execution is controlled by the approved Telnyx live-execution policy."
+		};
+	}
+
+	private async executeCommand(
+		session: Block3LiveSessionState,
+		command: TelnyxPlannedCommand,
+		speech: {
+			prompt: string;
+			timeoutSeconds: number;
+			clientState?: string;
+		} | null = null
+	): Promise<void> {
+		if (!this.env) {
+			throw new Error(
+				"Block 3 live-session environment is unavailable."
+			);
+		}
+
+		const result = await executeTelnyxRequest(
+			buildTelnyxRequest(
+				command,
+				speech,
+				session.approvedDestination
+			),
+			getTelnyxExecutionPolicy(this.env),
+			{
+				apiKey: this.env.TELNYX_API_KEY,
+				baseUrl: this.env.TELNYX_API_BASE_URL
+			}
+		);
+
+		if (result.mode !== "live" || !result.executed) {
+			throw new Error(
+				`${command.command} failed: ${result.reason}`
+			);
+		}
+	}
+
+	private callStartMilliseconds(
+		session: Block3LiveSessionState
+	): number {
+		const startedAt = Date.parse(
+			session.callInformation.callStartedAt
+		);
+
+		if (!Number.isFinite(startedAt)) {
+			throw new Error(
+				"Block 3 live session is missing a valid call start time."
+			);
+		}
+
+		return startedAt;
+	}
+
+	private async scheduleUnavailableMessage(
+		session: Block3LiveSessionState
+	): Promise<void> {
+		session.stage = "awaiting_unavailable_message";
+		await this.write(session);
+		await this.state.storage.setAlarm(Math.max(
+			Date.now(),
+			this.callStartMilliseconds(session) +
+				UNAVAILABLE_MESSAGE_START_MILLISECONDS
+		));
+	}
+
+	private async issueUnavailableMessage(
+		session: Block3LiveSessionState
+	): Promise<void> {
+		session.stage = "playing_unavailable_message";
+		session.callInformation.diversionAt =
+			new Date().toISOString();
+		await this.write(session);
+
+		await this.executeCommand(
+			session,
+			this.plannedCommand(
+				session,
+				"speak",
+				"Block 3 plays the unavailable message."
+			),
+			{
+				prompt: UNAVAILABLE_MESSAGE,
+				timeoutSeconds: 10,
+				clientState:
+					UNAVAILABLE_MESSAGE_CLIENT_STATE
+			}
+		);
+
+		await this.state.storage.setAlarm(
+			this.callStartMilliseconds(session) +
+				ABSOLUTE_TERMINATION_MILLISECONDS
+		);
+	}
+
+	private async finalizeFailedCall(
+		session: Block3LiveSessionState
+	): Promise<void> {
+		if (!this.env || !session.pendingBlock3EvidenceBox) {
+			throw new Error(
+				"Block 3 failed-call evidence is unavailable."
+			);
+		}
+
+		await this.executeCommand(
+			session,
+			this.plannedCommand(
+				session,
+				"hangup",
+				"Block 3 disconnects the diverted call after unavailable-message playback."
+			)
+		);
+		await this.callController(session).stopRecording();
+
+		const callInformation = {
+			...session.callInformation,
+			callCompletedAt: new Date().toISOString()
+		};
+		await deliverCompletedEvidenceEngineCall({
+			db: this.env.nomorescamcalls_db,
+			block3EvidenceBox:
+				session.pendingBlock3EvidenceBox,
+			callInformation,
+			subscriber: session.subscriber
+		});
+
+		await this.state.storage.deleteAlarm();
+		await this.state.storage.deleteAll();
+	}
+
 	private async completeLiveCall(
 		session: Block3LiveSessionState
 	): Promise<void> {
@@ -258,9 +419,8 @@ export class Block3LiveSession {
 		const callController =
 			this.callController(session);
 
-		await completeEvidenceEngineCall({
-			db: this.env.nomorescamcalls_db,
-			block3Input: {
+		let diversionDeferred = false;
+		const block3EvidenceBox = await completeBlock3({
 				block2EvidenceBox:
 					session.block2EvidenceBox,
 				prompt1: promptEvidence(
@@ -304,9 +464,28 @@ export class Block3LiveSession {
 					: {}),
 				callController: {
 					...callController,
-					async startRecording() {}
+					async startRecording() {},
+					async playUnavailableAndDisconnect() {
+						diversionDeferred = true;
+					},
+					async stopRecording() {
+						if (!diversionDeferred) {
+							await callController.stopRecording();
+						}
+					}
 				}
-			},
+			});
+
+		if (block3EvidenceBox.callResult === "diverted") {
+			session.pendingBlock3EvidenceBox =
+				block3EvidenceBox;
+			await this.scheduleUnavailableMessage(session);
+			return;
+		}
+
+		await deliverCompletedEvidenceEngineCall({
+			db: this.env.nomorescamcalls_db,
+			block3EvidenceBox,
 			callInformation: {
 				...session.callInformation,
 				callCompletedAt:
@@ -417,7 +596,8 @@ export class Block3LiveSession {
 						input.approvedDestination,
 					prompt1Evaluation: null,
 					prompt2Evaluation: null,
-					ipqsResult: null
+					ipqsResult: null,
+					pendingBlock3EvidenceBox: null
 				};
 
 				await this.write(session);
@@ -569,6 +749,33 @@ export class Block3LiveSession {
 
 			if (
 				request.method === "POST"
+				&& path === "/unavailable-speak-ended"
+			) {
+				const input =
+					await request.json<UnavailableSpeakEndedRequest>();
+				const session = await this.requireSession();
+				this.verifyCall(session, input);
+
+				if (
+					session.stage !== "playing_unavailable_message"
+					|| input.clientState !==
+						UNAVAILABLE_MESSAGE_CLIENT_STATE
+				) {
+					return Response.json({
+						accepted: false,
+						session
+					});
+				}
+
+				await this.finalizeFailedCall(session);
+				return Response.json({
+					accepted: true,
+					completed: true
+				});
+			}
+
+			if (
+				request.method === "POST"
 				&& path === "/complete"
 			) {
 				const input =
@@ -600,6 +807,24 @@ export class Block3LiveSession {
 
 	async alarm(): Promise<void> {
 		const session = await this.requireSession();
+
+		if (session.stage === "awaiting_unavailable_message") {
+			try {
+				await this.issueUnavailableMessage(session);
+			} catch (error) {
+				console.error(
+					"Block 3 unavailable-message playback failed:",
+					error
+				);
+				await this.finalizeFailedCall(session);
+			}
+			return;
+		}
+
+		if (session.stage === "playing_unavailable_message") {
+			await this.finalizeFailedCall(session);
+			return;
+		}
 
 		if (session.stage === "collecting_prompt1") {
 			session.stage = "prompt1_closed";

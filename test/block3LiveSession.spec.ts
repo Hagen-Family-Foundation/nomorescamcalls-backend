@@ -6,7 +6,8 @@ import {
 	vi
 } from "vitest";
 import {
-	Block3LiveSession
+	Block3LiveSession,
+	UNAVAILABLE_MESSAGE_CLIENT_STATE
 } from "../src/services/block3LiveSession";
 import type {
 	Block3CallController,
@@ -560,6 +561,148 @@ describe("Block 3 live-session Durable Object", () => {
 			)
 		);
 		vi.unstubAllGlobals();
+	});
+
+	it("waits until 48 seconds, plays the correlated unavailable message, and hangs up only after its completion", async () => {
+		vi.useFakeTimers();
+		vi.setSystemTime("2026-08-13T12:00:00.000Z");
+		const providerFetch = vi.fn(async (
+			input: RequestInfo | URL
+		) => {
+			const url = String(input);
+
+			if (url.endsWith("/responses")) {
+				return openAiResponse({
+					nameAccepted: false,
+					reasonAccepted: false,
+					extractedName: null,
+					extractedReason: null
+				});
+			}
+
+			if (url.includes("ipqualityscore")) {
+				return Response.json({
+					valid: false,
+					active: false,
+					recent_abuse: true,
+					spammer: true
+				});
+			}
+
+			return Response.json({ data: { result: "ok" } });
+		});
+		vi.stubGlobal("fetch", providerFetch);
+		const { session, storage, db } = productionSession();
+
+		await session.fetch(request("/initialize", {
+			...call,
+			...liveContext()
+		}));
+		await session.fetch(request("/prompt-started", call));
+		await session.fetch(request("/transcription", {
+			...call,
+			transcript: "I will not say",
+			isFinal: true
+		}));
+		await session.alarm();
+		await session.fetch(request("/prompt-started", call));
+		await session.fetch(request("/transcription", {
+			...call,
+			transcript: "Still no answer",
+			isFinal: true
+		}));
+		await session.alarm();
+
+		let state = await json(await session.fetch(
+			request("/state", undefined, "GET")
+		));
+		expect(state.session.stage).toBe(
+			"awaiting_unavailable_message"
+		);
+		expect(storage.alarm).toBe(
+			Date.parse("2026-08-13T12:00:48.000Z")
+		);
+		let urls = providerFetch.mock.calls.map(
+			([input]) => String(input)
+		);
+		expect(urls.some((url) =>
+			url.includes("/actions/transfer")
+		)).toBe(false);
+		expect(urls.some((url) =>
+			url.includes("/actions/hangup")
+		)).toBe(false);
+
+		vi.setSystemTime("2026-08-13T12:00:48.000Z");
+		await session.alarm();
+		state = await json(await session.fetch(
+			request("/state", undefined, "GET")
+		));
+		expect(state.session.stage).toBe(
+			"playing_unavailable_message"
+		);
+		expect(storage.alarm).toBe(
+			Date.parse("2026-08-13T12:00:59.000Z")
+		);
+		const speakRequests = providerFetch.mock.calls
+			.filter(([input]) =>
+				String(input).includes("/actions/speak")
+			)
+			.map(([, init]) => JSON.parse(String(init?.body)));
+		expect(speakRequests.at(-1)).toEqual({
+			payload:
+				"We're sorry, but the party you are trying to reach is unavailable at this time. Please try your call again later. Goodbye.",
+			language: "en-US",
+			voice: "female",
+			client_state: UNAVAILABLE_MESSAGE_CLIENT_STATE
+		});
+		urls = providerFetch.mock.calls.map(
+			([input]) => String(input)
+		);
+		expect(urls.some((url) =>
+			url.includes("/actions/hangup")
+		)).toBe(false);
+
+		const ignored = await json(await session.fetch(request(
+			"/unavailable-speak-ended",
+			{
+				...call,
+				clientState: "technical-message"
+			}
+		)));
+		expect(ignored.accepted).toBe(false);
+		expect(providerFetch.mock.calls.map(
+			([input]) => String(input)
+		).some((url) => url.includes("/actions/hangup"))).toBe(false);
+
+		const playingState = structuredClone(state.session);
+		const completed = await json(await session.fetch(request(
+			"/unavailable-speak-ended",
+			{
+				...call,
+				clientState: UNAVAILABLE_MESSAGE_CLIENT_STATE
+			}
+		)));
+		expect(completed).toMatchObject({
+			accepted: true,
+			completed: true
+		});
+		expect(storage.values.size).toBe(0);
+		expect(storage.alarm).toBeNull();
+		expect(db.prepare).toHaveBeenCalledWith(
+			expect.stringContaining(
+				"INSERT INTO evidence_library_calls"
+			)
+		);
+
+		const guard = productionSession();
+		await guard.storage.put(
+			"block3-live-session",
+			playingState
+		);
+		vi.setSystemTime("2026-08-13T12:00:59.000Z");
+		await guard.session.alarm();
+		expect(guard.storage.values.size).toBe(0);
+		expect(guard.storage.alarm).toBeNull();
 	});
 
 	it("uses technical-difficulties call control when live OpenAI evaluation fails", async () => {

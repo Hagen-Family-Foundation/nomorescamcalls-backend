@@ -8,6 +8,7 @@ import {
 	extractTelnyxBlock3Transcript
 } from "./telnyxTranscription";
 import {
+	completeBlock3UnavailablePlayback,
 	deliverBlock3Transcription,
 	initializeBlock3LiveSession,
 	openBlock3ResponseWindow
@@ -15,6 +16,9 @@ import {
 import type {
 	Block3LiveSessionNamespace
 } from "./block3LiveSessionClient";
+import {
+	UNAVAILABLE_MESSAGE_CLIENT_STATE
+} from "./block3LiveSession";
 import {
 	recordTelnyxWebhookEvent
 } from "./telnyxAudit";
@@ -130,8 +134,15 @@ export async function handleTelnyxWebhook(
 			}, { status: 400 });
 		}
 
-		const liveSession =
-			await openBlock3ResponseWindow(
+		const unavailablePlayback =
+			telnyxEvent.clientState ===
+				UNAVAILABLE_MESSAGE_CLIENT_STATE;
+		const liveSession = unavailablePlayback
+			? await completeBlock3UnavailablePlayback(
+				block3LiveSessions,
+				telnyxEvent
+			)
+			: await openBlock3ResponseWindow(
 				block3LiveSessions,
 				telnyxEvent
 			);
@@ -146,8 +157,9 @@ export async function handleTelnyxWebhook(
 		return Response.json({
 			received: true,
 			screened: false,
-			reason:
-				"block3_response_window_opened",
+			reason: unavailablePlayback
+				? "block3_unavailable_playback_processed"
+				: "block3_response_window_opened",
 			telnyxEvent,
 			liveSession
 		});
