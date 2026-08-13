@@ -9,7 +9,7 @@ import {
 } from "../src/services/telnyxEvents";
 
 describe("Telnyx event normalization", () => {
-	it("normalizes an inbound call event", () => {
+	it("screens the original inbound Telnyx number call", () => {
 		const event = normalizeTelnyxEvent({
 			data: {
 				event_type: "call.initiated",
@@ -19,7 +19,10 @@ describe("Telnyx event normalization", () => {
 					call_session_id:
 						"test-call-session-id",
 					from: "+15550001001",
-					to: "+15550002001"
+					to: "+15550002001",
+					direction: "incoming",
+					flow_destination:
+						"telnyx_number_cc_app"
 				}
 			}
 		});
@@ -32,12 +35,62 @@ describe("Telnyx event normalization", () => {
 				"test-call-session-id",
 			from: "+15550001001",
 			to: "+15550002001",
+			direction: "incoming",
+			flowDestination:
+				"telnyx_number_cc_app",
 			transcription: null
 		});
 
 		expect(
 			shouldScreenTelnyxEvent(event)
 		).toBe(true);
+	});
+
+	it("does not screen an outbound transfer leg", () => {
+		const event = normalizeTelnyxEvent({
+			data: {
+				event_type: "call.initiated",
+				payload: {
+					call_control_id:
+						"transfer-control-id",
+					call_session_id:
+						"test-call-session-id",
+					direction: "outgoing",
+					flow_destination:
+						"telnyx_sip_uri_cred_connection",
+					from: "+19139562493",
+					to:
+						"sip:usersupport15892@sip.telnyx.com"
+				}
+			}
+		});
+
+		expect(
+			shouldScreenTelnyxEvent(event)
+		).toBe(false);
+	});
+
+	it("does not screen a SIP credential delivery leg", () => {
+		const event = normalizeTelnyxEvent({
+			data: {
+				event_type: "call.initiated",
+				payload: {
+					call_control_id:
+						"sip-control-id",
+					call_session_id:
+						"test-call-session-id",
+					direction: "incoming",
+					flow_destination:
+						"telnyx_sip_uri_cred_connection",
+					from: "+19139562493",
+					to: "usersupport15892"
+				}
+			}
+		});
+
+		expect(
+			shouldScreenTelnyxEvent(event)
+		).toBe(false);
 	});
 
 	it("normalizes a native transcription event", () => {
@@ -68,6 +121,8 @@ describe("Telnyx event normalization", () => {
 				"transcription-session-id",
 			from: "",
 			to: "",
+			direction: "",
+			flowDestination: "",
 			transcription: {
 				confidence: 0.977219,
 				isFinal: true,

@@ -4,6 +4,8 @@ export interface TelnyxCallEvent {
 	callSessionId: string;
 	from: string;
 	to: string;
+	direction: string;
+	flowDestination: string;
 	transcription: TelnyxTranscriptionData | null;
 }
 
@@ -24,6 +26,8 @@ export function normalizeTelnyxEvent(
 				call_session_id?: string;
 				from?: string;
 				to?: string;
+				direction?: string;
+				flow_destination?: string;
 				transcription_data?: {
 					transcript?: string;
 					is_final?: boolean;
@@ -51,6 +55,14 @@ export function normalizeTelnyxEvent(
 		to:
 			data.data?.payload?.to ??
 			"",
+		direction:
+			data.data?.payload
+				?.direction ??
+			"",
+		flowDestination:
+			data.data?.payload
+				?.flow_destination ??
+			"",
 		transcription:
 			data.data?.payload
 				?.transcription_data
@@ -71,8 +83,19 @@ export function normalizeTelnyxEvent(
 export function shouldScreenTelnyxEvent(
 	event: TelnyxCallEvent
 ): boolean {
-	return event.eventType ===
-		"call.initiated";
+	if (event.eventType !== "call.initiated") {
+		return false;
+	}
+
+	if (
+		event.direction === "outgoing"
+		|| event.flowDestination ===
+			"telnyx_sip_uri_cred_connection"
+	) {
+		return false;
+	}
+
+	return true;
 }
 
 export function isTelnyxTranscriptionEvent(
