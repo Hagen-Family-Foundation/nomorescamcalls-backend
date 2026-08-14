@@ -138,11 +138,11 @@ Block 3 preserves the caller-response evidence, deductions, transcripts, recordi
 
 ### IPQS
 
-IPQS is used only when the standing after caller-response deductions is between 76 and 85 inclusive.
+IPQS is used only when the standing after caller-response deductions is between 70 and 85 inclusive.
 
 - standing 86–100: no IPQS lookup
-- standing 76–85: perform IPQS lookup
-- standing 75 or below: no IPQS lookup
+- standing 70–85: perform IPQS lookup
+- standing 69 or below: no IPQS lookup
 
 A derogatory IPQS result may apply the approved deduction.
 

@@ -169,6 +169,39 @@ describe("Telnyx webhook native transcription path", () => {
 		).toBe("/transcription");
 	});
 
+	it("returns success when a completed Block 3 session ignores a late transcript", async () => {
+		const fetch = vi.fn(async () => Response.json({
+			accepted: false,
+			completed: true
+		}));
+		const response = await handleTelnyxWebhook(
+			{
+				data: {
+					event_type: "call.transcription",
+					payload: {
+						call_control_id: "live-control-id",
+						call_session_id: "live-session-id",
+						transcription_data: {
+							is_final: true,
+							transcript: "late final segment"
+						}
+					}
+				}
+			},
+			database(),
+			disabledPolicy,
+			{},
+			{ getByName: vi.fn(() => ({ fetch })) }
+		);
+
+		expect(response.status).toBe(200);
+		const result = await response.json() as any;
+		expect(result.liveSession).toEqual({
+			accepted: false,
+			completed: true
+		});
+	});
+
 	it("opens the response window after Telnyx finishes speaking", async () => {
 		const sessions = liveSessions();
 		const response = await handleTelnyxWebhook(

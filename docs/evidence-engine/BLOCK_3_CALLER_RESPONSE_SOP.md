@@ -146,7 +146,7 @@ No partial deductions or partial recovery are used.
 
 ## IPQS
 
-IPQS begins when the first response produces a no for either the name or reason.
+IPQS begins when the standing after the first response is between 70 and 85 inclusive.
 
 The complete IPQS response is preserved.
 

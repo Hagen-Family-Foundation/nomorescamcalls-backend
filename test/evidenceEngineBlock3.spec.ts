@@ -238,6 +238,42 @@ describe("Evidence Engine Block 3", () => {
 		);
 	});
 
+	it("performs IPQS at the inclusive 70-point lower boundary", async () => {
+		const evaluator: CallerResponseEvaluator = {
+			evaluate: vi.fn()
+				.mockResolvedValueOnce({
+					nameAccepted: false,
+					reasonAccepted: false
+				})
+				.mockResolvedValueOnce({
+					nameAccepted: true,
+					reasonAccepted: false
+				})
+		};
+		const ipqsLookup = createCleanIpqsLookup();
+		const result = await completeBlock3({
+			block2EvidenceBox: createBlock2EvidenceBox(),
+			prompt1: {
+				audioRecordingReference: null,
+				transcript: "No usable response",
+				language: "en"
+			},
+			prompt2: {
+				audioRecordingReference: null,
+				transcript: "Maria Lopez",
+				language: "en"
+			},
+			evaluator,
+			ipqsLookup,
+			callController: createCallController()
+		});
+
+		expect(result.standingAfterFirstResponse).toBe(70);
+		expect(result.ipqsPerformed).toBe(true);
+		expect(ipqsLookup.lookup).toHaveBeenCalledOnce();
+		expect(result.finalStanding).toBe(85);
+	});
+
 	it("applies five points for each approved negative IPQS field", async () => {
 		const evaluator:
 			CallerResponseEvaluator = {

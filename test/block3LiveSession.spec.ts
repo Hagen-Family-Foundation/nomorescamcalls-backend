@@ -262,6 +262,42 @@ describe("Block 3 live-session Durable Object", () => {
 		);
 	});
 
+	it("accepts a final Prompt 2 transcript that races the response-window alarm", async () => {
+		const { session } = createSession();
+		await session.fetch(request("/initialize", call));
+		await session.fetch(request("/prompt-started", call));
+		await session.alarm();
+		await session.fetch(request("/prompt1-evaluation", {
+			...call,
+			nameAccepted: false,
+			reasonAccepted: false
+		}));
+		await session.fetch(request("/prompt-started", call));
+		await session.fetch(request("/transcription", {
+			...call,
+			transcript: "Maria Lopez",
+			isFinal: true
+		}));
+
+		await session.alarm();
+		const boundaryTranscript = await json(
+			await session.fetch(request("/transcription", {
+				...call,
+				transcript: "calling about the inspection",
+				isFinal: true
+			}))
+		);
+
+		expect(boundaryTranscript.accepted).toBe(true);
+		expect(boundaryTranscript.session.stage).toBe(
+			"collecting_prompt2"
+		);
+		expect(boundaryTranscript.session.prompt2Segments).toEqual([
+			"Maria Lopez",
+			"calling about the inspection"
+		]);
+	});
+
 	it("keeps Prompt 2 separate and opens it only after injected evaluation requires it", async () => {
 		const { session } = createSession();
 		const evaluator: CallerResponseEvaluator = {
@@ -414,12 +450,44 @@ describe("Block 3 live-session Durable Object", () => {
 		));
 		expect(completed.status).toBe(200);
 		expect(storage.alarm).toBeNull();
-		expect(storage.values.size).toBe(0);
+		expect(storage.values.size).toBe(1);
 
 		const state = await json(
 			await session.fetch(request("/state", undefined, "GET"))
 		);
 		expect(state.session).toBeNull();
+	});
+
+	it("acknowledges only matching late transcription after completion", async () => {
+		const { session } = createSession();
+		await session.fetch(request("/initialize", call));
+		await session.fetch(request("/prompt-started", call));
+		await session.alarm();
+		await session.fetch(request("/prompt1-evaluation", {
+			...call,
+			nameAccepted: true,
+			reasonAccepted: true
+		}));
+		await session.fetch(request("/complete", call));
+
+		const late = await session.fetch(request("/transcription", {
+			...call,
+			transcript: "late final segment",
+			isFinal: true
+		}));
+		expect(late.status).toBe(200);
+		expect(await json(late)).toEqual({
+			accepted: false,
+			completed: true
+		});
+
+		const unrelated = await session.fetch(request("/transcription", {
+			callSessionId: "different-session",
+			callControlId: "different-control",
+			transcript: "not a completed call",
+			isFinal: true
+		}));
+		expect(unrelated.status).toBe(409);
 	});
 
 	it("evaluates a complete Prompt 1, skips IPQS and Prompt 2, hands off evidence, and clears state", async () => {
@@ -466,7 +534,7 @@ describe("Block 3 live-session Durable Object", () => {
 		expect(urls.some((url) =>
 			url.includes("/actions/transfer")
 		)).toBe(true);
-		expect(storage.values.size).toBe(0);
+		expect(storage.values.size).toBe(1);
 		expect(db.prepare).toHaveBeenCalledWith(
 			expect.stringContaining(
 				"INSERT INTO evidence_library_calls"
@@ -554,7 +622,7 @@ describe("Block 3 live-session Durable Object", () => {
 		expect(urls.some((url) =>
 			url.includes("/actions/speak")
 		)).toBe(true);
-		expect(storage.values.size).toBe(0);
+		expect(storage.values.size).toBe(1);
 		expect(db.prepare).toHaveBeenCalledWith(
 			expect.stringContaining(
 				"INSERT INTO evidence_library_calls"
@@ -686,7 +754,7 @@ describe("Block 3 live-session Durable Object", () => {
 			accepted: true,
 			completed: true
 		});
-		expect(storage.values.size).toBe(0);
+		expect(storage.values.size).toBe(1);
 		expect(storage.alarm).toBeNull();
 		expect(db.prepare).toHaveBeenCalledWith(
 			expect.stringContaining(
@@ -701,7 +769,7 @@ describe("Block 3 live-session Durable Object", () => {
 		);
 		vi.setSystemTime("2026-08-13T12:00:59.000Z");
 		await guard.session.alarm();
-		expect(guard.storage.values.size).toBe(0);
+		expect(guard.storage.values.size).toBe(1);
 		expect(guard.storage.alarm).toBeNull();
 	});
 

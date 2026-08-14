@@ -9,11 +9,14 @@ import type {
 	CallerResponseEvaluator,
 	CallerResponseResult
 } from "./responseExtraction";
+import {
+	isIpqsEligibleStanding,
+	RELEASE_THRESHOLD
+} from "./types";
 
 const FAILED_NAME_DEDUCTION = 15;
 const FAILED_REASON_DEDUCTION = 15;
 const IPQS_FIELD_DEDUCTION = 5;
-const RELEASE_THRESHOLD = 76;
 
 export interface Block3PromptEvidence {
 	audioRecordingReference: string | null;
@@ -144,6 +147,19 @@ function createCallerResponseDeductions(
 	return deductions;
 }
 
+export function isIpqsEligibleAfterFirstResponse(
+	block2EvidenceBox: Block2EvidenceBox,
+	evaluation: CallerResponseResult
+): boolean {
+	return isIpqsEligibleStanding(calculateStanding(
+		block2EvidenceBox.startingStanding,
+		[
+			...block2EvidenceBox.deductions,
+			...createCallerResponseDeductions(evaluation)
+		]
+	));
+}
+
 function recoverCallerResponseDeductions(
 	initialDeductions: Block3Deduction[],
 	secondEvaluation: CallerResponseResult
@@ -267,6 +283,11 @@ export async function completeBlock3(
 					...initialCallerResponseDeductions
 				]
 			);
+		const ipqsEligible =
+			isIpqsEligibleAfterFirstResponse(
+				input.block2EvidenceBox,
+				prompt1Evaluation
+			);
 
 		if (
 			prompt1Evaluation.nameAccepted &&
@@ -317,16 +338,17 @@ export async function completeBlock3(
 			);
 		}
 
-		if (!input.ipqsLookup) {
+		if (ipqsEligible && !input.ipqsLookup) {
 			throw new Error(
 				"IPQS lookup is required after an incomplete first response."
 			);
 		}
 
-		const ipqsPromise =
-			input.ipqsLookup.lookup(
+		const ipqsPromise = ipqsEligible
+			? input.ipqsLookup!.lookup(
 				input.block2EvidenceBox
-			);
+			)
+			: null;
 
 		const prompt2Evaluation =
 			await evaluateCallerResponse(
@@ -346,11 +368,13 @@ export async function completeBlock3(
 				prompt2Evaluation
 			);
 
-		const ipqsResult =
-			await ipqsPromise;
+		const ipqsResult = ipqsPromise
+			? await ipqsPromise
+			: null;
 
-		const ipqsDeductions =
-			createIpqsDeductions(ipqsResult);
+		const ipqsDeductions = ipqsResult
+			? createIpqsDeductions(ipqsResult)
+			: [];
 
 		const allDeductions = [
 			...block2Deductions,
@@ -393,7 +417,7 @@ export async function completeBlock3(
 				recovery.recovered,
 			block3Deductions:
 				recovery.remaining,
-			ipqsPerformed: true,
+			ipqsPerformed: ipqsEligible,
 			ipqsResult,
 			ipqsDeductions,
 			allDeductions,

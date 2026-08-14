@@ -44,13 +44,15 @@ import {
 	deliverCompletedEvidenceEngineCall
 } from "./evidenceEngine/callFlow";
 import {
-	completeBlock3
+	completeBlock3,
+	isIpqsEligibleAfterFirstResponse
 } from "./evidenceEngine/block3";
 
 const CALLER_SILENCE_MILLISECONDS = 10_000;
 const UNAVAILABLE_MESSAGE_START_MILLISECONDS = 48_000;
 const ABSOLUTE_TERMINATION_MILLISECONDS = 59_000;
 const SESSION_STORAGE_KEY = "block3-live-session";
+const COMPLETED_STORAGE_KEY = "block3-live-session-completed";
 export const UNAVAILABLE_MESSAGE_CLIENT_STATE =
 	"YmxvY2szX3VuYXZhaWxhYmxlX21lc3NhZ2U=";
 const UNAVAILABLE_MESSAGE =
@@ -97,6 +99,11 @@ interface InitializeRequest {
 	callInformation: EvidenceLibraryCallInformation;
 	subscriber: EvidenceLibrarySubscriber;
 	approvedDestination: ApprovedCallDestination;
+}
+
+interface CompletedSession {
+	callSessionId: string;
+	callControlId: string;
 }
 
 interface TranscriptionRequest
@@ -157,6 +164,26 @@ export class Block3LiveSession {
 		await this.state.storage.put(
 			SESSION_STORAGE_KEY,
 			session
+		);
+	}
+
+	private async readCompleted():
+		Promise<CompletedSession | null> {
+		return await this.state.storage.get<CompletedSession>(
+			COMPLETED_STORAGE_KEY
+		) ?? null;
+	}
+
+	private async markCompleted(
+		session: Block3LiveSessionState
+	): Promise<void> {
+		await this.state.storage.deleteAll();
+		await this.state.storage.put(
+			COMPLETED_STORAGE_KEY,
+			{
+				callSessionId: session.callSessionId,
+				callControlId: session.callControlId
+			} satisfies CompletedSession
 		);
 	}
 
@@ -399,7 +426,7 @@ export class Block3LiveSession {
 		});
 
 		await this.state.storage.deleteAlarm();
-		await this.state.storage.deleteAll();
+		await this.markCompleted(session);
 	}
 
 	private async completeLiveCall(
@@ -447,17 +474,11 @@ export class Block3LiveSession {
 						return evaluation;
 					}
 				},
-				...(session.prompt2Evaluation
+				...(session.ipqsResult
 					? {
 						ipqsLookup: {
 							async lookup() {
-								if (!session.ipqsResult) {
-									throw new Error(
-										"Block 3 live IPQS evidence is missing."
-									);
-								}
-
-								return session.ipqsResult;
+								return session.ipqsResult!;
 							}
 						}
 					}
@@ -495,7 +516,7 @@ export class Block3LiveSession {
 		});
 
 		await this.state.storage.deleteAlarm();
-		await this.state.storage.deleteAll();
+		await this.markCompleted(session);
 	}
 
 	private async processClosedPrompt(
@@ -517,32 +538,63 @@ export class Block3LiveSession {
 		);
 
 		if (session.stage === "prompt1_closed") {
-			session.prompt1Evaluation =
+			const evaluation =
 				await evaluateCallerResponse(
 					prompt1.transcript,
 					prompt1.language,
 					evaluator
 				);
-			const incomplete =
-				!session.prompt1Evaluation.nameAccepted
-				|| !session.prompt1Evaluation.reasonAccepted;
+			let current = await this.read();
 
-			if (!incomplete) {
-				session.stage = "ready_to_complete";
-				await this.write(session);
-				await this.completeLiveCall(session);
+			if (
+				!current
+				|| current.stage !== "prompt1_closed"
+				|| current.prompt1Segments.join(" ") !==
+					prompt1.transcript
+			) {
 				return;
 			}
 
-			session.ipqsResult = await createIpqsLookup({
-				apiKey: this.env.IPQS_API_KEY,
-				baseUrl: this.env.IPQS_API_BASE_URL
-			}).lookup(session.block2EvidenceBox);
-			session.stage = "awaiting_prompt2";
-			session.callInformation.prompt2At =
+			current.prompt1Evaluation = evaluation;
+			const incomplete =
+				!evaluation.nameAccepted
+				|| !evaluation.reasonAccepted;
+
+			if (!incomplete) {
+				current.stage = "ready_to_complete";
+				await this.write(current);
+				await this.completeLiveCall(current);
+				return;
+			}
+
+			const ipqsResult =
+				isIpqsEligibleAfterFirstResponse(
+					current.block2EvidenceBox,
+					evaluation
+				)
+					? await createIpqsLookup({
+						apiKey: this.env.IPQS_API_KEY,
+						baseUrl: this.env.IPQS_API_BASE_URL
+					}).lookup(current.block2EvidenceBox)
+					: null;
+			current = await this.read();
+
+			if (
+				!current
+				|| current.stage !== "prompt1_closed"
+				|| current.prompt1Segments.join(" ") !==
+					prompt1.transcript
+			) {
+				return;
+			}
+
+			current.prompt1Evaluation = evaluation;
+			current.ipqsResult = ipqsResult;
+			current.stage = "awaiting_prompt2";
+			current.callInformation.prompt2At =
 				new Date().toISOString();
-			await this.write(session);
-			await this.issueSecondRequest(session);
+			await this.write(current);
+			await this.issueSecondRequest(current);
 			return;
 		}
 
@@ -550,15 +602,27 @@ export class Block3LiveSession {
 			const prompt2 = promptEvidence(
 				session.prompt2Segments
 			);
-			session.prompt2Evaluation =
+			const evaluation =
 				await evaluateCallerResponse(
 					prompt2.transcript,
 					prompt2.language,
 					evaluator
 				);
-			session.stage = "ready_to_complete";
-			await this.write(session);
-			await this.completeLiveCall(session);
+			const current = await this.read();
+
+			if (
+				!current
+				|| current.stage !== "prompt2_closed"
+				|| current.prompt2Segments.join(" ") !==
+					prompt2.transcript
+			) {
+				return;
+			}
+
+			current.prompt2Evaluation = evaluation;
+			current.stage = "ready_to_complete";
+			await this.write(current);
+			await this.completeLiveCall(current);
 		}
 	}
 
@@ -639,7 +703,26 @@ export class Block3LiveSession {
 			) {
 				const input =
 					await request.json<TranscriptionRequest>();
-				const session = await this.requireSession();
+				const session = await this.read();
+
+				if (!session) {
+					const completed = await this.readCompleted();
+
+					if (
+						completed
+						&& completed.callSessionId === input.callSessionId
+						&& completed.callControlId === input.callControlId
+					) {
+						return Response.json({
+							accepted: false,
+							completed: true
+						});
+					}
+
+					throw new Error(
+						"Block 3 live session has not been initialized."
+					);
+				}
 				this.verifyCall(session, input);
 
 				if (!input.isFinal || input.transcript.trim() === "") {
@@ -649,11 +732,19 @@ export class Block3LiveSession {
 					});
 				}
 
-				if (session.stage === "collecting_prompt1") {
+				if (
+					session.stage === "collecting_prompt1"
+					|| session.stage === "prompt1_closed"
+				) {
+					session.stage = "collecting_prompt1";
 					session.prompt1Segments.push(
 						input.transcript.trim()
 					);
-				} else if (session.stage === "collecting_prompt2") {
+				} else if (
+					session.stage === "collecting_prompt2"
+					|| session.stage === "prompt2_closed"
+				) {
+					session.stage = "collecting_prompt2";
 					session.prompt2Segments.push(
 						input.transcript.trim()
 					);
@@ -790,7 +881,7 @@ export class Block3LiveSession {
 				}
 
 				await this.state.storage.deleteAlarm();
-				await this.state.storage.deleteAll();
+				await this.markCompleted(session);
 				return Response.json({ completed: true });
 			}
 
