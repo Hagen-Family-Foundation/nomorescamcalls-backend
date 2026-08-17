@@ -1,9 +1,4 @@
-import {
-	describe,
-	expect,
-	it,
-	vi
-} from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import {
 	completeBlock1,
 	completeBlock2,
@@ -22,14 +17,12 @@ function createBlock2EvidenceBox(
 		points: number;
 	}> = []
 ) {
-	const block1EvidenceBox = completeBlock1({
-		callInformation: {},
-		callRecord: {},
-		billingTimer: {}
-	});
-
 	return completeBlock2({
-		block1EvidenceBox,
+		block1EvidenceBox: completeBlock1({
+			callInformation: {},
+			callRecord: {},
+			billingTimer: {}
+		}),
 		screeningInformation: {
 			callingNumberInformation: {},
 			stirShakenInformation: {},
@@ -40,29 +33,119 @@ function createBlock2EvidenceBox(
 	});
 }
 
-function createCallController():
-	Block3CallController {
+function createCallController(): Block3CallController {
 	return {
 		startRecording: vi.fn(),
 		connectSubscriber: vi.fn(),
-		playUnavailableAndDisconnect:
-			vi.fn(),
-		playTechnicalDifficultiesAndDisconnect:
-			vi.fn(),
+		playUnavailableAndDisconnect: vi.fn(),
+		playTechnicalDifficultiesAndDisconnect: vi.fn(),
 		stopRecording: vi.fn()
 	};
 }
 
-function createCleanIpqsLookup():
-	IpqsLookup {
+function cleanIpqsResult() {
 	return {
-		lookup: vi.fn().mockResolvedValue({
-			response: {},
-			valid: true,
-			active: true,
-			recent_abuse: false,
-			spammer: false
-		})
+		response: {},
+		valid: true,
+		active: true,
+		recent_abuse: false,
+		spammer: false
+	};
+}
+
+function createCleanIpqsLookup(): IpqsLookup {
+	return {
+		lookup: vi.fn().mockResolvedValue(cleanIpqsResult())
+	};
+}
+
+function evaluatorFor(
+	prompt1: readonly [boolean, boolean],
+	prompt2?: readonly [boolean, boolean]
+): CallerResponseEvaluator {
+	const evaluate = vi.fn().mockResolvedValueOnce({
+		nameAccepted: prompt1[0],
+		reasonAccepted: prompt1[1]
+	});
+
+	if (prompt2) {
+		evaluate.mockResolvedValueOnce({
+			nameAccepted: prompt2[0],
+			reasonAccepted: prompt2[1]
+		});
+	}
+
+	return { evaluate };
+}
+
+const livePrompt2Cases = [
+	{
+		label: "P1 name fail; P2 complete",
+		prompt1: [false, true], prompt2: [true, true],
+		standing: 100, activePoints: [], crossed: false
+	},
+	{
+		label: "name fails both prompts",
+		prompt1: [false, true], prompt2: [false, true],
+		standing: 82, activePoints: [8, 10], crossed: false
+	},
+	{
+		label: "P1 name fail and P2 reason fail",
+		prompt1: [false, true], prompt2: [true, false],
+		standing: 80, activePoints: [15, 5], crossed: true
+	},
+	{
+		label: "P1 name fail and P2 both fail",
+		prompt1: [false, true], prompt2: [false, false],
+		standing: 67, activePoints: [8, 10, 15], crossed: false
+	},
+	{
+		label: "P1 reason fail; P2 complete",
+		prompt1: [true, false], prompt2: [true, true],
+		standing: 100, activePoints: [], crossed: false
+	},
+	{
+		label: "P1 reason fail and P2 name fail",
+		prompt1: [true, false], prompt2: [false, true],
+		standing: 85, activePoints: [10, 5], crossed: true
+	},
+	{
+		label: "reason fails both prompts",
+		prompt1: [true, false], prompt2: [true, false],
+		standing: 73, activePoints: [12, 15], crossed: false
+	},
+	{
+		label: "P1 reason fail and P2 both fail",
+		prompt1: [true, false], prompt2: [false, false],
+		standing: 63, activePoints: [12, 10, 15], crossed: false
+	},
+	{
+		label: "P1 both fail; P2 complete",
+		prompt1: [false, false], prompt2: [true, true],
+		standing: 100, activePoints: [], crossed: false
+	},
+	{
+		label: "P1 both fail; P2 name fail",
+		prompt1: [false, false], prompt2: [false, true],
+		standing: 82, activePoints: [8, 10], crossed: false
+	},
+	{
+		label: "P1 both fail; P2 reason fail",
+		prompt1: [false, false], prompt2: [true, false],
+		standing: 73, activePoints: [12, 15], crossed: false
+	},
+	{
+		label: "both fields fail both prompts",
+		prompt1: [false, false], prompt2: [false, false],
+		standing: 55, activePoints: [8, 12, 10, 15], crossed: false
+	}
+] as const;
+
+function promptEvidence(label: string) {
+	return {
+		audioRecordingReference: null,
+		transcript: label,
+		language: "en"
 	};
 }
 
@@ -73,382 +156,209 @@ describe("Evidence Engine Block 3", () => {
 				new Error("OpenAI unavailable")
 			)
 		};
-		const callController =
-			createCallController();
+		const callController = createCallController();
 
 		await expect(completeBlock3({
-			block2EvidenceBox:
-				createBlock2EvidenceBox(),
-			prompt1: {
-				audioRecordingReference: null,
-				transcript: "This is Maria.",
-				language: "en"
-			},
+			block2EvidenceBox: createBlock2EvidenceBox(),
+			prompt1: promptEvidence("This is Maria."),
 			evaluator,
 			callController
 		})).rejects.toThrow("OpenAI unavailable");
 
 		expect(
-			callController
-				.playTechnicalDifficultiesAndDisconnect
+			callController.playTechnicalDifficultiesAndDisconnect
 		).toHaveBeenCalledOnce();
-		expect(
-			callController.stopRecording
-		).toHaveBeenCalledOnce();
+		expect(callController.stopRecording).toHaveBeenCalledOnce();
 	});
 
-	it("releases immediately after a complete first response", async () => {
-		const evaluator:
-			CallerResponseEvaluator = {
-				evaluate: vi.fn().mockResolvedValue({
-					nameAccepted: true,
-					reasonAccepted: true
-				})
-			};
-
-		const callController =
-			createCallController();
-
-		const ipqsLookup =
-			createCleanIpqsLookup();
-
-		const result = await completeBlock3({
-			block2EvidenceBox:
-				createBlock2EvidenceBox(),
-			prompt1: {
-				audioRecordingReference:
-					"recording-1",
-				transcript:
-					"Maria Lopez calling about tomorrow's appointment.",
-				language: "en"
-			},
-			evaluator,
-			ipqsLookup,
-			callController
-		});
-
-		expect(
-			evaluator.evaluate
-		).toHaveBeenCalledOnce();
-
-		expect(
-			ipqsLookup.lookup
-		).not.toHaveBeenCalled();
-
-		expect(
-			callController.connectSubscriber
-		).toHaveBeenCalledOnce();
-
-		expect(
-			callController
-				.playUnavailableAndDisconnect
-		).not.toHaveBeenCalled();
-
-		expect(result.prompt2).toBeNull();
-		expect(result.ipqsPerformed).toBe(false);
-		expect(result.finalStanding).toBe(100);
-		expect(result.callResult).toBe(
-			"connected"
-		);
-		expect(result.recordingCompleted).toBe(
-			true
-		);
-	});
-
-	it("starts IPQS after one failed first response and restores the full deduction after recovery", async () => {
-		const evaluator:
-			CallerResponseEvaluator = {
-				evaluate: vi
-					.fn()
-					.mockResolvedValueOnce({
-						nameAccepted: false,
-						reasonAccepted: true
-					})
-					.mockResolvedValueOnce({
-						nameAccepted: true,
-						reasonAccepted: true
-					})
-			};
-
-		const callController =
-			createCallController();
-
-		const ipqsLookup =
-			createCleanIpqsLookup();
-
-		const result = await completeBlock3({
-			block2EvidenceBox:
-				createBlock2EvidenceBox(),
-			prompt1: {
-				audioRecordingReference:
-					"recording-1",
-				transcript:
-					"Calling about tomorrow's appointment.",
-				language: "en"
-			},
-			prompt2: {
-				audioRecordingReference:
-					"recording-1",
-				transcript:
-					"Maria Lopez, calling about tomorrow's appointment.",
-				language: "en"
-			},
-			evaluator,
-			ipqsLookup,
-			callController
-		});
-
-		expect(
-			ipqsLookup.lookup
-		).toHaveBeenCalledOnce();
-
-		expect(
-			result.standingAfterFirstResponse
-		).toBe(85);
-
-		expect(
-			result.initialCallerResponseDeductions
-		).toEqual([
-			{
-				source: "OpenAI",
-				finding: "name",
-				reason:
-					"The caller did not provide an accepted name.",
-				points: 15
-			}
-		]);
-
-		expect(
-			result.recoveredCallerResponseDeductions
-		).toEqual([
-			{
-				source: "OpenAI",
-				finding: "name",
-				points: 15
-			}
-		]);
-
-		expect(result.block3Deductions).toEqual(
-			[]
-		);
-
-		expect(result.finalStanding).toBe(100);
-		expect(result.callResult).toBe(
-			"connected"
-		);
-	});
-
-	it("performs IPQS at the inclusive 70-point lower boundary", async () => {
-		const evaluator: CallerResponseEvaluator = {
-			evaluate: vi.fn()
-				.mockResolvedValueOnce({
-					nameAccepted: false,
-					reasonAccepted: false
-				})
-				.mockResolvedValueOnce({
-					nameAccepted: true,
-					reasonAccepted: false
-				})
-		};
+	it("releases a complete Prompt 1 at 100 without Prompt 2 or IPQS", async () => {
+		const evaluator = evaluatorFor([true, true]);
+		const callController = createCallController();
 		const ipqsLookup = createCleanIpqsLookup();
 		const result = await completeBlock3({
 			block2EvidenceBox: createBlock2EvidenceBox(),
-			prompt1: {
-				audioRecordingReference: null,
-				transcript: "No usable response",
-				language: "en"
-			},
-			prompt2: {
-				audioRecordingReference: null,
-				transcript: "Maria Lopez",
-				language: "en"
-			},
+			prompt1: promptEvidence(
+				"Maria Lopez calling about tomorrow's appointment."
+			),
+			evaluator,
+			ipqsLookup,
+			callController
+		});
+
+		expect(evaluator.evaluate).toHaveBeenCalledOnce();
+		expect(ipqsLookup.lookup).not.toHaveBeenCalled();
+		expect(result.prompt2).toBeNull();
+		expect(result.ipqsPerformed).toBe(false);
+		expect(result.finalStanding).toBe(100);
+		expect(result.callResult).toBe("connected");
+		expect(callController.connectSubscriber).toHaveBeenCalledOnce();
+		expect(
+			callController.playUnavailableAndDisconnect
+		).not.toHaveBeenCalled();
+		expect(result.recordingCompleted).toBe(true);
+	});
+
+	it.each(livePrompt2Cases)(
+		"produces the approved standing for $label",
+		async ({ prompt1, prompt2, standing, activePoints, crossed }) => {
+			const evaluator = evaluatorFor(prompt1, prompt2);
+			const ipqsLookup = createCleanIpqsLookup();
+			const result = await completeBlock3({
+				block2EvidenceBox: createBlock2EvidenceBox(),
+				prompt1: promptEvidence("Prompt 1 response"),
+				prompt2: promptEvidence("Prompt 2 response"),
+				evaluator,
+				ipqsLookup,
+				callController: createCallController()
+			});
+
+			expect(result.finalStanding).toBe(standing);
+			expect(result.block3Deductions.map(
+				(deduction) => deduction.points
+			)).toEqual(activePoints);
+			expect(result.block3Deductions.filter(
+				(deduction) =>
+					deduction.finding === "complete_response"
+			)).toHaveLength(crossed ? 1 : 0);
+			const ipqsExpected = standing >= 76 && standing <= 85;
+			expect(result.ipqsPerformed).toBe(ipqsExpected);
+			expect(ipqsLookup.lookup).toHaveBeenCalledTimes(
+				ipqsExpected ? 1 : 0
+			);
+		}
+	);
+
+	it("records redemption and skips IPQS when Prompt 2 resolves the response", async () => {
+		const evaluator = evaluatorFor([false, true], [true, true]);
+		const ipqsLookup = createCleanIpqsLookup();
+		const result = await completeBlock3({
+			block2EvidenceBox: createBlock2EvidenceBox(),
+			prompt1: promptEvidence("Calling about an appointment."),
+			prompt2: promptEvidence(
+				"Maria calling about an appointment."
+			),
 			evaluator,
 			ipqsLookup,
 			callController: createCallController()
 		});
 
-		expect(result.standingAfterFirstResponse).toBe(70);
+		expect(result.standingAfterFirstResponse).toBe(92);
+		expect(result.initialCallerResponseDeductions).toEqual([{
+			source: "OpenAI",
+			finding: "name",
+			reason: "The caller did not provide an accepted name.",
+			points: 8
+		}]);
+		expect(result.recoveredCallerResponseDeductions).toEqual([{
+			source: "OpenAI",
+			finding: "name",
+			points: 8
+		}]);
+		expect(result.block3Deductions).toEqual([]);
+		expect(ipqsLookup.lookup).not.toHaveBeenCalled();
+		expect(result.finalStanding).toBe(100);
+	});
+
+	it("performs IPQS at the inclusive 76-point lower boundary after Prompt 2", async () => {
+		const evaluator = evaluatorFor([false, true], [true, false]);
+		const ipqsLookup = createCleanIpqsLookup();
+		const result = await completeBlock3({
+			block2EvidenceBox: createBlock2EvidenceBox([{
+				finding: "block2-test",
+				reason: "Boundary test deduction.",
+				points: 4
+			}]),
+			prompt1: promptEvidence("Prompt 1 response"),
+			prompt2: promptEvidence("Prompt 2 response"),
+			evaluator,
+			ipqsLookup,
+			callController: createCallController()
+		});
+
+		expect(result.standingAfterFirstResponse).toBe(88);
 		expect(result.ipqsPerformed).toBe(true);
 		expect(ipqsLookup.lookup).toHaveBeenCalledOnce();
-		expect(result.finalStanding).toBe(85);
+		expect(result.finalStanding).toBe(76);
 	});
 
-	it("applies five points for each approved negative IPQS field", async () => {
-		const evaluator:
-			CallerResponseEvaluator = {
-				evaluate: vi
-					.fn()
-					.mockResolvedValueOnce({
-						nameAccepted: false,
-						reasonAccepted: true
-					})
-					.mockResolvedValueOnce({
-						nameAccepted: true,
-						reasonAccepted: true
-					})
-			};
+	it("invokes IPQS only after both prompt evaluations complete", async () => {
+		const evaluator = evaluatorFor([false, true], [false, true]);
+		const ipqsLookup: IpqsLookup = {
+			lookup: vi.fn(async () => {
+				expect(evaluator.evaluate).toHaveBeenCalledTimes(2);
+				return cleanIpqsResult();
+			})
+		};
 
+		await completeBlock3({
+			block2EvidenceBox: createBlock2EvidenceBox(),
+			prompt1: promptEvidence("Prompt 1 response"),
+			prompt2: promptEvidence("Prompt 2 response"),
+			evaluator,
+			ipqsLookup,
+			callController: createCallController()
+		});
+
+		expect(ipqsLookup.lookup).toHaveBeenCalledOnce();
+	});
+
+	it("applies only the approved IPQS field deductions", async () => {
+		const evaluator = evaluatorFor([false, true], [true, false]);
 		const ipqsLookup: IpqsLookup = {
 			lookup: vi.fn().mockResolvedValue({
-				response: {
-					source: "IPQS"
-				},
+				response: { fraud_score: 99 },
 				valid: false,
 				active: false,
 				recent_abuse: true,
 				spammer: true
 			})
 		};
-
 		const result = await completeBlock3({
-			block2EvidenceBox:
-				createBlock2EvidenceBox(),
-			prompt1: {
-				audioRecordingReference:
-					"recording-1",
-				transcript:
-					"Calling about an appointment.",
-				language: "en"
-			},
-			prompt2: {
-				audioRecordingReference:
-					"recording-1",
-				transcript:
-					"Maria Lopez, calling about an appointment.",
-				language: "en"
-			},
+			block2EvidenceBox: createBlock2EvidenceBox(),
+			prompt1: promptEvidence("Prompt 1 response"),
+			prompt2: promptEvidence("Prompt 2 response"),
 			evaluator,
 			ipqsLookup,
-			callController:
-				createCallController()
+			callController: createCallController()
 		});
 
-		expect(result.ipqsDeductions).toEqual([
-			{
-				source: "IPQS",
-				finding: "valid",
-				reason:
-					"IPQS returned valid = false.",
-				points: 5
-			},
-			{
-				source: "IPQS",
-				finding: "active",
-				reason:
-					"IPQS returned active = false.",
-				points: 5
-			},
-			{
-				source: "IPQS",
-				finding: "recent_abuse",
-				reason:
-					"IPQS returned recent_abuse = true.",
-				points: 5
-			},
-			{
-				source: "IPQS",
-				finding: "spammer",
-				reason:
-					"IPQS returned spammer = true.",
-				points: 5
-			}
-		]);
-
-		expect(result.finalStanding).toBe(80);
-		expect(result.callResult).toBe(
-			"connected"
-		);
+		expect(result.ipqsDeductions.map(
+			(deduction) => deduction.points
+		)).toEqual([5, 5, 5, 5]);
+		expect(result.finalStanding).toBe(60);
+		expect(result.callResult).toBe("diverted");
 	});
 
-	it("diverts when caller-response and IPQS deductions leave the final standing at 75 or below", async () => {
-		const evaluator:
-			CallerResponseEvaluator = {
-				evaluate: vi.fn().mockResolvedValue({
-					nameAccepted: false,
-					reasonAccepted: false
-				})
-			};
-
-		const callController =
-			createCallController();
-
-		const ipqsLookup: IpqsLookup = {
-			lookup: vi.fn().mockResolvedValue({
-				response: {},
-				valid: false,
-				active: false,
-				recent_abuse: true,
-				spammer: true
-			})
-		};
-
+	it("diverts at 75 or below without invoking IPQS", async () => {
+		const evaluator = evaluatorFor([false, false], [false, false]);
+		const callController = createCallController();
+		const ipqsLookup = createCleanIpqsLookup();
 		const result = await completeBlock3({
-			block2EvidenceBox:
-				createBlock2EvidenceBox(),
-			prompt1: {
-				audioRecordingReference:
-					"recording-1",
-				transcript: "",
-				language: null
-			},
-			prompt2: {
-				audioRecordingReference:
-					"recording-1",
-				transcript: "",
-				language: null
-			},
+			block2EvidenceBox: createBlock2EvidenceBox(),
+			prompt1: promptEvidence("Prompt 1 response"),
+			prompt2: promptEvidence("Prompt 2 response"),
 			evaluator,
 			ipqsLookup,
 			callController
 		});
 
-		expect(result.block3Deductions).toHaveLength(
-			2
-		);
-
-		expect(result.ipqsDeductions).toHaveLength(
-			4
-		);
-
-		expect(result.finalStanding).toBe(50);
-		expect(result.callResult).toBe(
-			"diverted"
-		);
-
+		expect(result.block3Deductions.map(
+			(deduction) => deduction.points
+		)).toEqual([8, 12, 10, 15]);
+		expect(ipqsLookup.lookup).not.toHaveBeenCalled();
+		expect(result.ipqsDeductions).toEqual([]);
+		expect(result.finalStanding).toBe(55);
+		expect(result.callResult).toBe("diverted");
 		expect(
-			callController
-				.playUnavailableAndDisconnect
+			callController.playUnavailableAndDisconnect
 		).toHaveBeenCalledOnce();
-
-		expect(
-			callController.connectSubscriber
-		).not.toHaveBeenCalled();
-
-		expect(
-			callController.stopRecording
-		).toHaveBeenCalledOnce();
-
-		expect(result.recordingCompleted).toBe(
-			true
-		);
+		expect(callController.connectSubscriber).not.toHaveBeenCalled();
+		expect(callController.stopRecording).toHaveBeenCalledOnce();
+		expect(result.recordingCompleted).toBe(true);
 	});
 
 	it("treats null IPQS fields as no deduction", async () => {
-		const evaluator:
-			CallerResponseEvaluator = {
-				evaluate: vi
-					.fn()
-					.mockResolvedValueOnce({
-						nameAccepted: true,
-						reasonAccepted: false
-					})
-					.mockResolvedValueOnce({
-						nameAccepted: true,
-						reasonAccepted: true
-					})
-			};
-
+		const evaluator = evaluatorFor([true, false], [false, true]);
 		const ipqsLookup: IpqsLookup = {
 			lookup: vi.fn().mockResolvedValue({
 				response: {},
@@ -458,34 +368,17 @@ describe("Evidence Engine Block 3", () => {
 				spammer: null
 			})
 		};
-
 		const result = await completeBlock3({
-			block2EvidenceBox:
-				createBlock2EvidenceBox(),
-			prompt1: {
-				audioRecordingReference:
-					"recording-1",
-				transcript:
-					"Maria Lopez.",
-				language: "en"
-			},
-			prompt2: {
-				audioRecordingReference:
-					"recording-1",
-				transcript:
-					"Maria Lopez, calling about the appointment.",
-				language: "en"
-			},
+			block2EvidenceBox: createBlock2EvidenceBox(),
+			prompt1: promptEvidence("Prompt 1 response"),
+			prompt2: promptEvidence("Prompt 2 response"),
 			evaluator,
 			ipqsLookup,
-			callController:
-				createCallController()
+			callController: createCallController()
 		});
 
 		expect(result.ipqsDeductions).toEqual([]);
-		expect(result.finalStanding).toBe(100);
-		expect(result.callResult).toBe(
-			"connected"
-		);
+		expect(result.finalStanding).toBe(85);
+		expect(result.callResult).toBe("connected");
 	});
 });

@@ -414,7 +414,7 @@ describe("Block 3 live-session Durable Object", () => {
 			"Maria Lopez calling about the inspection"
 		);
 		expect(result.callResult).toBe("connected");
-		expect(ipqsLookup.lookup).toHaveBeenCalledOnce();
+		expect(ipqsLookup.lookup).not.toHaveBeenCalled();
 
 		await session.fetch(request("/prompt2-evaluation", {
 			...call,
@@ -543,7 +543,7 @@ describe("Block 3 live-session Durable Object", () => {
 		vi.unstubAllGlobals();
 	});
 
-	it("runs IPQS after incomplete Prompt 1, keeps Prompt 2 separate, completes, and clears state", async () => {
+	it("waits until Prompt 2 scoring before requesting eligible IPQS evidence", async () => {
 		let evaluation = 0;
 		const providerFetch = vi.fn(async (
 			input: RequestInfo | URL
@@ -560,9 +560,9 @@ describe("Block 3 live-session Durable Object", () => {
 						extractedReason: "an appointment"
 					}
 					: {
-						nameAccepted: true,
+						nameAccepted: false,
 						reasonAccepted: true,
-						extractedName: "Maria",
+						extractedName: null,
 						extractedReason: "an appointment"
 					});
 			}
@@ -595,12 +595,12 @@ describe("Block 3 live-session Durable Object", () => {
 			request("/state", undefined, "GET")
 		));
 		expect(state.session.stage).toBe("awaiting_prompt2");
-		expect(state.session.ipqsResult).toMatchObject({
-			valid: null,
-			active: null,
-			recent_abuse: null,
-			spammer: null
-		});
+		expect(state.session.ipqsResult).toBeNull();
+		expect(providerFetch.mock.calls.map(
+			([input]) => String(input)
+		).filter((url) =>
+			url.includes("ipqualityscore")
+		)).toHaveLength(0);
 
 		await session.fetch(request("/prompt-started", call));
 		await session.fetch(request("/transcription", {

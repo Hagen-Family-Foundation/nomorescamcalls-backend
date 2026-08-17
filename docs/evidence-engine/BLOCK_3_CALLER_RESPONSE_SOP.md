@@ -74,8 +74,8 @@ OpenAI does not apply deductions, calculate standing, or control the call.
 
 Block 3 applies:
 
-- name not accepted: 15 points
-- reason not accepted: 15 points
+- name not accepted: 8 points
+- reason not accepted: 12 points
 
 Each result is independent.
 
@@ -104,15 +104,14 @@ Block 3:
 
 When either part of the first response produces no:
 
-1. Block 3 applies the approved 15-point deduction.
-2. The first failed part places the standing at 85 and triggers IPQS.
-3. IPQS begins while the caller interaction continues.
-4. Recording continues.
-5. Block 3 waits for 10 continuous seconds without new recognized caller speech.
-6. Each new final Telnyx transcription segment counts as recognized caller speech and restarts the 10-second period.
-7. Interim transcription does not close the response and does not restart the 10-second period.
-8. Background noise that does not produce recognized caller speech does not restart the 10-second period.
-9. After 10 continuous seconds without a new final Telnyx transcription segment, Block 3 closes the first response and, when the response is incomplete, Telnyx plays the second request.
+1. Block 3 applies the approved 8-point name deduction and/or 12-point reason deduction.
+2. Recording continues.
+3. Block 3 waits for 10 continuous seconds without new recognized caller speech.
+4. Each new final Telnyx transcription segment counts as recognized caller speech and restarts the 10-second period.
+5. Interim transcription does not close the response and does not restart the 10-second period.
+6. Background noise that does not produce recognized caller speech does not restart the 10-second period.
+7. After 10 continuous seconds without a new final Telnyx transcription segment, Block 3 closes the first response and Telnyx plays the second request.
+8. Prompt 1 incompleteness does not trigger IPQS.
 
 ---
 
@@ -128,25 +127,42 @@ OpenAI evaluates the second response using the same approved requirements used f
 
 ---
 
-## Second Response Recovery
+## Second Response Scoring
 
-A successful second response restores the complete value of the matching first-response deduction.
+Block 3 applies the Prompt 2 results independently for name and reason.
 
-Examples:
+- name not accepted in Prompt 2: 10 points
+- reason not accepted in Prompt 2: 15 points
 
-- first name result no, second name result yes: restore 15 points
-- first reason result no, second reason result yes: restore 15 points
-- both first results no, both second results yes: restore 30 points
+For each field:
 
-Any failed part not corrected by the second response remains deducted.
+- Prompt 1 fail followed by Prompt 2 pass redeems the corresponding Prompt 1 deduction.
+- Prompt 1 fail followed by Prompt 2 fail retains the Prompt 1 deduction and originates the Prompt 2 deduction.
+- Prompt 1 pass followed by Prompt 2 fail originates the Prompt 2 deduction.
+- Prompt 1 pass followed by Prompt 2 pass leaves no deduction for that field.
 
 No partial deductions or partial recovery are used.
+
+## Complete-Response Deficiency
+
+Block 3 applies exactly one additional 5-point complete-response-deficiency deduction only for either complementary crossed-response pattern:
+
+- Prompt 1 name fail/reason pass followed by Prompt 2 name pass/reason fail
+- Prompt 1 name pass/reason fail followed by Prompt 2 name fail/reason pass
+
+This is neither a name deduction nor a reason deduction. It records that neither response contained both requested pieces of information together. It does not apply to any other response pattern.
 
 ---
 
 ## IPQS
 
-IPQS begins when the standing after the first response is between 70 and 85 inclusive.
+IPQS is considered only after Prompt 2 evaluation, Prompt 1 redemption, Prompt 2 deductions, and any approved complete-response-deficiency deduction.
+
+- standing 86–100: no IPQS request
+- standing 76–85: request the approved IPQS evidence
+- standing 75 or below: no IPQS request
+
+An incomplete Prompt 1 does not itself trigger IPQS.
 
 The complete IPQS response is preserved.
 
@@ -174,6 +190,8 @@ Each approved IPQS field is scored independently.
 
 The maximum IPQS deduction is 20 points.
 
+IPQS does not determine disposition and does not supply a score to NoMoreScamCalls. Block 3 uses only the approved evidence fragments above, applies the NoMoreScamCalls-defined deductions, calculates the final standing, and uses the existing 76-point NoMoreScamCalls release threshold.
+
 ---
 
 ## Final Standing
@@ -183,6 +201,8 @@ Block 3 calculates the final standing after:
 - Block 2 deductions
 - first-response deductions
 - second-response recovery
+- second-response deductions
+- the complete-response-deficiency deduction when applicable
 - approved IPQS deductions
 
 The calculation is:

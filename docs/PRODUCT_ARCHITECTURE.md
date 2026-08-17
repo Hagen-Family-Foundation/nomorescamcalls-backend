@@ -124,11 +124,13 @@ The initial request is:
 
 Block 3 captures, records, transcribes, and evaluates the caller's response.
 
-The live scoring rules are objective:
+The live scoring rules evaluate the value and completeness of the information supplied during each response:
 
-- missing or unusable name: 15-point deduction
-- missing or unusable reason for calling: 15-point deduction
-- empty or unusable response containing neither: 30-point deduction
+- Prompt 1 missing or unusable name: 8-point deduction
+- Prompt 1 missing or unusable reason: 12-point deduction
+- Prompt 2 missing or unusable name: 10-point deduction
+- Prompt 2 missing or unusable reason: 15-point deduction
+- approved complementary crossed responses: one 5-point complete-response-deficiency deduction
 
 When the first response is insufficient, Block 3 may perform the approved second-prompt process.
 
@@ -138,13 +140,13 @@ Block 3 preserves the caller-response evidence, deductions, transcripts, recordi
 
 ### IPQS
 
-IPQS is used only when the standing after caller-response deductions is between 70 and 85 inclusive.
+IPQS is used only after Prompt 2 when the standing after all caller-response deductions and recoveries is between 76 and 85 inclusive.
 
 - standing 86–100: no IPQS lookup
-- standing 70–85: perform IPQS lookup
-- standing 69 or below: no IPQS lookup
+- standing 76–85: request the approved IPQS evidence
+- standing 75 or below: no IPQS lookup
 
-A derogatory IPQS result may apply the approved deduction.
+IPQS does not supply a score or disposition to NoMoreScamCalls. Only the approved evidence fields may contribute the existing NoMoreScamCalls-defined deductions. NoMoreScamCalls calculates the final standing and applies its existing routing threshold.
 
 Block 3 completes its responsibility and passes the completed Block 3 Evidence Box to Block 4.
 

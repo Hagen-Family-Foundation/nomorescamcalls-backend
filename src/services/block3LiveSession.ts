@@ -44,8 +44,7 @@ import {
 	deliverCompletedEvidenceEngineCall
 } from "./evidenceEngine/callFlow";
 import {
-	completeBlock3,
-	isIpqsEligibleAfterFirstResponse
+	completeBlock3
 } from "./evidenceEngine/block3";
 
 const CALLER_SILENCE_MILLISECONDS = 10_000;
@@ -435,6 +434,7 @@ export class Block3LiveSession {
 		if (!this.env || !session.prompt1Evaluation) {
 			return;
 		}
+		const env = this.env;
 
 		const evaluations = [
 			session.prompt1Evaluation,
@@ -474,11 +474,17 @@ export class Block3LiveSession {
 						return evaluation;
 					}
 				},
-				...(session.ipqsResult
+				...(session.prompt2Evaluation
 					? {
 						ipqsLookup: {
-							async lookup() {
-								return session.ipqsResult!;
+							async lookup(block2EvidenceBox) {
+								const result =
+									await createIpqsLookup({
+										apiKey: env.IPQS_API_KEY,
+										baseUrl: env.IPQS_API_BASE_URL
+									}).lookup(block2EvidenceBox);
+								session.ipqsResult = result;
+								return result;
 							}
 						}
 					}
@@ -567,29 +573,7 @@ export class Block3LiveSession {
 				return;
 			}
 
-			const ipqsResult =
-				isIpqsEligibleAfterFirstResponse(
-					current.block2EvidenceBox,
-					evaluation
-				)
-					? await createIpqsLookup({
-						apiKey: this.env.IPQS_API_KEY,
-						baseUrl: this.env.IPQS_API_BASE_URL
-					}).lookup(current.block2EvidenceBox)
-					: null;
-			current = await this.read();
-
-			if (
-				!current
-				|| current.stage !== "prompt1_closed"
-				|| current.prompt1Segments.join(" ") !==
-					prompt1.transcript
-			) {
-				return;
-			}
-
-			current.prompt1Evaluation = evaluation;
-			current.ipqsResult = ipqsResult;
+			current.ipqsResult = null;
 			current.stage = "awaiting_prompt2";
 			current.callInformation.prompt2At =
 				new Date().toISOString();

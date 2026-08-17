@@ -14,8 +14,11 @@ import {
 	RELEASE_THRESHOLD
 } from "./types";
 
-const FAILED_NAME_DEDUCTION = 15;
-const FAILED_REASON_DEDUCTION = 15;
+const PROMPT1_NAME_DEDUCTION = 8;
+const PROMPT1_REASON_DEDUCTION = 12;
+const PROMPT2_NAME_DEDUCTION = 10;
+const PROMPT2_REASON_DEDUCTION = 15;
+const COMPLETE_RESPONSE_DEFICIENCY_DEDUCTION = 5;
 const IPQS_FIELD_DEDUCTION = 5;
 
 export interface Block3PromptEvidence {
@@ -119,7 +122,7 @@ function calculateStanding(
 	);
 }
 
-function createCallerResponseDeductions(
+function createPrompt1Deductions(
 	evaluation: CallerResponseResult
 ): Block3Deduction[] {
 	const deductions: Block3Deduction[] = [];
@@ -130,7 +133,7 @@ function createCallerResponseDeductions(
 			finding: "name",
 			reason:
 				"The caller did not provide an accepted name.",
-			points: FAILED_NAME_DEDUCTION
+			points: PROMPT1_NAME_DEDUCTION
 		});
 	}
 
@@ -140,24 +143,11 @@ function createCallerResponseDeductions(
 			finding: "reason",
 			reason:
 				"The caller did not provide an accepted reason for calling.",
-			points: FAILED_REASON_DEDUCTION
+			points: PROMPT1_REASON_DEDUCTION
 		});
 	}
 
 	return deductions;
-}
-
-export function isIpqsEligibleAfterFirstResponse(
-	block2EvidenceBox: Block2EvidenceBox,
-	evaluation: CallerResponseResult
-): boolean {
-	return isIpqsEligibleStanding(calculateStanding(
-		block2EvidenceBox.startingStanding,
-		[
-			...block2EvidenceBox.deductions,
-			...createCallerResponseDeductions(evaluation)
-		]
-	));
 }
 
 function recoverCallerResponseDeductions(
@@ -196,6 +186,61 @@ function recoverCallerResponseDeductions(
 		remaining,
 		recovered
 	};
+}
+
+function createPrompt2Deductions(
+	evaluation: CallerResponseResult
+): Block3Deduction[] {
+	const deductions: Block3Deduction[] = [];
+
+	if (!evaluation.nameAccepted) {
+		deductions.push({
+			source: "OpenAI",
+			finding: "prompt2_name",
+			reason:
+				"The caller did not provide an accepted name in Prompt 2.",
+			points: PROMPT2_NAME_DEDUCTION
+		});
+	}
+
+	if (!evaluation.reasonAccepted) {
+		deductions.push({
+			source: "OpenAI",
+			finding: "prompt2_reason",
+			reason:
+				"The caller did not provide an accepted reason for calling in Prompt 2.",
+			points: PROMPT2_REASON_DEDUCTION
+		});
+	}
+
+	return deductions;
+}
+
+function createCrossedResponseDeduction(
+	prompt1: CallerResponseResult,
+	prompt2: CallerResponseResult
+): Block3Deduction[] {
+	const patternA =
+		!prompt1.nameAccepted
+		&& prompt1.reasonAccepted
+		&& prompt2.nameAccepted
+		&& !prompt2.reasonAccepted;
+	const patternB =
+		prompt1.nameAccepted
+		&& !prompt1.reasonAccepted
+		&& !prompt2.nameAccepted
+		&& prompt2.reasonAccepted;
+
+	return patternA || patternB
+		? [{
+			source: "OpenAI",
+			finding: "complete_response",
+			reason:
+				"Neither caller response contained both an accepted name and an accepted reason for calling.",
+			points:
+				COMPLETE_RESPONSE_DEFICIENCY_DEDUCTION
+		}]
+		: [];
 }
 
 function createIpqsDeductions(
@@ -270,7 +315,7 @@ export async function completeBlock3(
 			input.block2EvidenceBox.deductions;
 
 		const initialCallerResponseDeductions =
-			createCallerResponseDeductions(
+			createPrompt1Deductions(
 				prompt1Evaluation
 			);
 
@@ -283,12 +328,6 @@ export async function completeBlock3(
 					...initialCallerResponseDeductions
 				]
 			);
-		const ipqsEligible =
-			isIpqsEligibleAfterFirstResponse(
-				input.block2EvidenceBox,
-				prompt1Evaluation
-			);
-
 		if (
 			prompt1Evaluation.nameAccepted &&
 			prompt1Evaluation.reasonAccepted
@@ -338,18 +377,6 @@ export async function completeBlock3(
 			);
 		}
 
-		if (ipqsEligible && !input.ipqsLookup) {
-			throw new Error(
-				"IPQS lookup is required after an incomplete first response."
-			);
-		}
-
-		const ipqsPromise = ipqsEligible
-			? input.ipqsLookup!.lookup(
-				input.block2EvidenceBox
-			)
-			: null;
-
 		const prompt2Evaluation =
 			await evaluateCallerResponse(
 				input.prompt2.transcript,
@@ -367,9 +394,44 @@ export async function completeBlock3(
 				initialCallerResponseDeductions,
 				prompt2Evaluation
 			);
+		const prompt2Deductions =
+			createPrompt2Deductions(
+				prompt2Evaluation
+			);
+		const crossedResponseDeductions =
+			createCrossedResponseDeduction(
+				prompt1Evaluation,
+				prompt2Evaluation
+			);
+		const block3Deductions = [
+			...recovery.remaining,
+			...prompt2Deductions,
+			...crossedResponseDeductions
+		];
+		const standingAfterPrompt2 =
+			calculateStanding(
+				input.block2EvidenceBox
+					.startingStanding,
+				[
+					...block2Deductions,
+					...block3Deductions
+				]
+			);
+		const ipqsEligible =
+			isIpqsEligibleStanding(
+				standingAfterPrompt2
+			);
 
-		const ipqsResult = ipqsPromise
-			? await ipqsPromise
+		if (ipqsEligible && !input.ipqsLookup) {
+			throw new Error(
+				"IPQS lookup is required when the standing after Prompt 2 is between 76 and 85."
+			);
+		}
+
+		const ipqsResult = ipqsEligible
+			? await input.ipqsLookup!.lookup(
+				input.block2EvidenceBox
+			)
 			: null;
 
 		const ipqsDeductions = ipqsResult
@@ -378,7 +440,7 @@ export async function completeBlock3(
 
 		const allDeductions = [
 			...block2Deductions,
-			...recovery.remaining,
+			...block3Deductions,
 			...ipqsDeductions
 		];
 
@@ -415,8 +477,7 @@ export async function completeBlock3(
 			initialCallerResponseDeductions,
 			recoveredCallerResponseDeductions:
 				recovery.recovered,
-			block3Deductions:
-				recovery.remaining,
+			block3Deductions,
 			ipqsPerformed: ipqsEligible,
 			ipqsResult,
 			ipqsDeductions,
