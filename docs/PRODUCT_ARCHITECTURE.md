@@ -136,6 +136,10 @@ When the first response is insufficient, Block 3 may perform the approved second
 
 No more than two requests are made.
 
+Each caller-response window closes after five continuous seconds without a new accepted final Telnyx transcription segment. Each accepted final segment restarts that five-second silence interval.
+
+For a failed call, Block 3 targets unavailable-message playback for approximately 48 seconds after call start. A failure determined at or after that target begins playback immediately, including after second 59. The complete caller message takes precedence over avoiding another billed minute. Normal correlated playback completion finalizes the call immediately; if that completion is missing, a single 20-second safety timer measured from Telnyx speak acceptance finalizes it.
+
 Block 3 preserves the caller-response evidence, deductions, transcripts, recording references, and evaluation results inside the Evidence Box.
 
 ### IPQS
@@ -349,7 +353,7 @@ Obsolete architectures, duplicate processing paths, abandoned stage models, and 
 - Each block performs one defined responsibility.
 - Evidence moves forward through completed Evidence Boxes.
 - Approved calls are connected promptly.
-- Unsuccessful calls complete the observation path and disconnect before the second billable minute.
+- Unsuccessful calls complete the observation path, including the complete unavailable message, and then disconnect promptly.
 - Block 4 sends the completed Evidence Box to the Evidence Library.
 - Telnyx recordings are associated with the archived call after they become available.
 - Historical evidence supports research and engineering, not live-call control.

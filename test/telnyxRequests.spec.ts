@@ -136,7 +136,7 @@ describe("Telnyx request builder", () => {
 				{
 					prompt:
 						"State your name and reason for calling please.",
-					timeoutSeconds: 10
+					timeoutSeconds: 5
 				}
 			);
 
@@ -163,7 +163,10 @@ describe("Telnyx request builder", () => {
 		expect(
 			request?.metadata
 				.speechTimeoutSeconds
-		).toBe(10);
+			).toBe(5);
+		expect(request?.body).not.toHaveProperty(
+			"timeout_seconds"
+		);
 	});
 
 	it("requires speech information for a caller request", () => {

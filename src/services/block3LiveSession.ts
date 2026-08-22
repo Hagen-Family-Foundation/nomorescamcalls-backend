@@ -47,9 +47,11 @@ import {
 	completeBlock3
 } from "./evidenceEngine/block3";
 
-const CALLER_SILENCE_MILLISECONDS = 10_000;
+const CALLER_SILENCE_SECONDS = 5;
+const CALLER_SILENCE_MILLISECONDS =
+	CALLER_SILENCE_SECONDS * 1_000;
 const UNAVAILABLE_MESSAGE_START_MILLISECONDS = 48_000;
-const ABSOLUTE_TERMINATION_MILLISECONDS = 59_000;
+const UNAVAILABLE_COMPLETION_SAFETY_MILLISECONDS = 20_000;
 const SESSION_STORAGE_KEY = "block3-live-session";
 const COMPLETED_STORAGE_KEY = "block3-live-session-completed";
 export const UNAVAILABLE_MESSAGE_CLIENT_STATE =
@@ -66,7 +68,8 @@ export type Block3LiveSessionStage =
 	| "prompt2_closed"
 	| "ready_to_complete"
 	| "awaiting_unavailable_message"
-	| "playing_unavailable_message";
+	| "playing_unavailable_message"
+	| "finalizing_failed_call";
 
 export interface Block3LiveSessionState {
 	callSessionId: string;
@@ -265,7 +268,8 @@ export class Block3LiveSession {
 			command,
 			{
 				prompt: SECOND_REQUEST,
-				timeoutSeconds: 10
+				timeoutSeconds:
+					CALLER_SILENCE_SECONDS
 			},
 			session.approvedDestination
 		);
@@ -387,45 +391,76 @@ export class Block3LiveSession {
 			}
 		);
 
-		await this.state.storage.setAlarm(
-			this.callStartMilliseconds(session) +
-				ABSOLUTE_TERMINATION_MILLISECONDS
-		);
+		const acceptedAt = Date.now();
+		const current = await this.read();
+
+		if (
+			current
+			&& current.callSessionId === session.callSessionId
+			&& current.callControlId === session.callControlId
+			&& current.stage === "playing_unavailable_message"
+		) {
+			await this.state.storage.setAlarm(
+				acceptedAt +
+					UNAVAILABLE_COMPLETION_SAFETY_MILLISECONDS
+			);
+		}
 	}
 
 	private async finalizeFailedCall(
 		session: Block3LiveSessionState
-	): Promise<void> {
+	): Promise<boolean> {
 		if (!this.env || !session.pendingBlock3EvidenceBox) {
 			throw new Error(
 				"Block 3 failed-call evidence is unavailable."
 			);
 		}
 
+		const current = await this.read();
+
+		if (
+			!current
+			|| current.callSessionId !== session.callSessionId
+			|| current.callControlId !== session.callControlId
+			|| !current.pendingBlock3EvidenceBox
+			|| (
+				current.stage !== "playing_unavailable_message"
+				&& current.stage !== "awaiting_unavailable_message"
+			)
+		) {
+			return false;
+		}
+		const pendingBlock3EvidenceBox =
+			current.pendingBlock3EvidenceBox;
+
+		current.stage = "finalizing_failed_call";
+		await this.write(current);
+
 		await this.executeCommand(
-			session,
+			current,
 			this.plannedCommand(
-				session,
+				current,
 				"hangup",
 				"Block 3 disconnects the diverted call after unavailable-message playback."
 			)
 		);
-		await this.callController(session).stopRecording();
+		await this.callController(current).stopRecording();
 
 		const callInformation = {
-			...session.callInformation,
+			...current.callInformation,
 			callCompletedAt: new Date().toISOString()
 		};
 		await deliverCompletedEvidenceEngineCall({
 			db: this.env.nomorescamcalls_db,
 			block3EvidenceBox:
-				session.pendingBlock3EvidenceBox,
+				pendingBlock3EvidenceBox,
 			callInformation,
-			subscriber: session.subscriber
+			subscriber: current.subscriber
 		});
 
 		await this.state.storage.deleteAlarm();
-		await this.markCompleted(session);
+		await this.markCompleted(current);
+		return true;
 	}
 
 	private async completeLiveCall(
@@ -828,7 +863,28 @@ export class Block3LiveSession {
 			) {
 				const input =
 					await request.json<UnavailableSpeakEndedRequest>();
-				const session = await this.requireSession();
+				const session = await this.read();
+
+				if (!session) {
+					const completed = await this.readCompleted();
+
+					if (
+						completed
+						&& completed.callSessionId === input.callSessionId
+						&& completed.callControlId === input.callControlId
+						&& input.clientState ===
+							UNAVAILABLE_MESSAGE_CLIENT_STATE
+					) {
+						return Response.json({
+							accepted: false,
+							completed: true
+						});
+					}
+
+					throw new Error(
+						"Block 3 live session has not been initialized."
+					);
+				}
 				this.verifyCall(session, input);
 
 				if (
@@ -842,10 +898,14 @@ export class Block3LiveSession {
 					});
 				}
 
-				await this.finalizeFailedCall(session);
+				const finalized =
+					await this.finalizeFailedCall(session);
 				return Response.json({
-					accepted: true,
-					completed: true
+					accepted: finalized,
+					completed: finalized,
+					...(!finalized
+						? { finalizing: true }
+						: {})
 				});
 			}
 
@@ -881,7 +941,11 @@ export class Block3LiveSession {
 	}
 
 	async alarm(): Promise<void> {
-		const session = await this.requireSession();
+		const session = await this.read();
+
+		if (!session) {
+			return;
+		}
 
 		if (session.stage === "awaiting_unavailable_message") {
 			try {
@@ -898,6 +962,10 @@ export class Block3LiveSession {
 
 		if (session.stage === "playing_unavailable_message") {
 			await this.finalizeFailedCall(session);
+			return;
+		}
+
+		if (session.stage === "finalizing_failed_call") {
 			return;
 		}
 

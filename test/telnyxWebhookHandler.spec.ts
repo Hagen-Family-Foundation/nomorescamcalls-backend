@@ -87,6 +87,13 @@ describe("Telnyx webhook native transcription path", () => {
 		expect(result.firstRequest.body.payload).toBe(
 			"State your name and reason for calling please."
 		);
+		expect(
+			result.firstRequest.metadata
+				.speechTimeoutSeconds
+		).toBe(5);
+		expect(result.firstRequest.body).not.toHaveProperty(
+			"timeout_seconds"
+		);
 		expect(sessions.getByName).toHaveBeenCalledWith(
 			"live-session-id"
 		);

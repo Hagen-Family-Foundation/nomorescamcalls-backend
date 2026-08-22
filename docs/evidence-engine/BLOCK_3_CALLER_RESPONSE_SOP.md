@@ -106,11 +106,11 @@ When either part of the first response produces no:
 
 1. Block 3 applies the approved 8-point name deduction and/or 12-point reason deduction.
 2. Recording continues.
-3. Block 3 waits for 10 continuous seconds without new recognized caller speech.
-4. Each new final Telnyx transcription segment counts as recognized caller speech and restarts the 10-second period.
-5. Interim transcription does not close the response and does not restart the 10-second period.
-6. Background noise that does not produce recognized caller speech does not restart the 10-second period.
-7. After 10 continuous seconds without a new final Telnyx transcription segment, Block 3 closes the first response and Telnyx plays the second request.
+3. Block 3 waits for 5 continuous seconds without new recognized caller speech.
+4. Each new final Telnyx transcription segment counts as recognized caller speech and restarts the 5-second period.
+5. Interim transcription does not close the response and does not restart the 5-second period.
+6. Background noise that does not produce recognized caller speech does not restart the 5-second period.
+7. After 5 continuous seconds without a new final Telnyx transcription segment, Block 3 closes the first response and Telnyx plays the second request.
 8. Prompt 1 incompleteness does not trigger IPQS.
 
 ---
@@ -122,6 +122,8 @@ Telnyx plays:
 > "Please speak slowly and clearly. State your name and reason for calling."
 
 Telnyx captures the caller’s second response.
+
+The second response uses the same 5-second caller-silence interval. Each accepted final Telnyx transcription segment restarts the interval, and Block 3 closes the second response after 5 continuous seconds without another accepted final segment.
 
 OpenAI evaluates the second response using the same approved requirements used for the first response.
 
@@ -225,15 +227,21 @@ Recording ends when the call leaves NoMoreScamCalls control.
 
 Block 3 maintains control of the call while recording continues.
 
-At approximately 48 seconds from call start, Telnyx begins playing:
+The preferred unavailable-message start target is approximately 48 seconds from call start.
+
+When failed disposition is available before that target, Block 3 holds the call until the target and then begins playing:
 
 > "We're sorry, but the party you are trying to reach is unavailable at this time. Please try your call again later. Goodbye."
 
+When failed disposition becomes available at or after the target, Block 3 begins the same playback immediately. This includes disposition reached after second 59.
+
 Block 3 correlates that specific playback using Telnyx `client_state`.
 
-Successful acceptance of the Telnyx speak command does not complete the call. Block 3 waits for the correlated unavailable-message `call.speak.ended` event, then disconnects the call.
+Successful acceptance of the Telnyx speak command does not complete the call. Block 3 allows the complete unavailable message to play and waits for the correlated unavailable-message `call.speak.ended` event, then finalizes and disconnects the call immediately.
 
-An absolute termination guard disconnects the call before the second billing minute begins if the correlated playback-completion event is not received in time.
+Second 59 is not a hard playback cutoff. Complete unavailable-message playback takes precedence over avoiding another billed minute.
+
+After Telnyx successfully accepts the unavailable-message speak request, Block 3 starts one 20-second playback-completion safety timer. If the valid correlated completion has not arrived when that timer expires, Block 3 finalizes and disconnects the failed call through the same one-shot path. A normal, duplicate, or late completion cannot cause duplicate finalization.
 
 Recording ends after the call is disconnected.
 

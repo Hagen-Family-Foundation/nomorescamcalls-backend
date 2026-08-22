@@ -23,6 +23,7 @@ import {
 class TestStorage {
 	values = new Map<string, unknown>();
 	alarm: number | null = null;
+	alarmHistory: number[] = [];
 
 	async get<T>(key: string): Promise<T | undefined> {
 		return this.values.get(key) as T | undefined;
@@ -40,6 +41,7 @@ class TestStorage {
 		this.alarm = value instanceof Date
 			? value.getTime()
 			: value;
+		this.alarmHistory.push(this.alarm);
 	}
 
 	async deleteAlarm(): Promise<void> {
@@ -190,6 +192,31 @@ function openAiResponse(
 	});
 }
 
+function failedCallProviderFetch(
+	onEvaluation?: (evaluationNumber: number) => void
+) {
+	let evaluationNumber = 0;
+
+	return vi.fn(async (
+		input: RequestInfo | URL
+	) => {
+		const url = String(input);
+
+		if (url.endsWith("/responses")) {
+			evaluationNumber += 1;
+			onEvaluation?.(evaluationNumber);
+			return openAiResponse({
+				nameAccepted: false,
+				reasonAccepted: false,
+				extractedName: null,
+				extractedReason: null
+			});
+		}
+
+		return Response.json({ data: { result: "ok" } });
+	});
+}
+
 describe("Block 3 live-session Durable Object", () => {
 	afterEach(() => {
 		vi.useRealTimers();
@@ -219,13 +246,13 @@ describe("Block 3 live-session Durable Object", () => {
 		expect(state.session.prompt1Segments).toEqual([]);
 	});
 
-	it("accumulates final Prompt 1 segments and resets the exact ten-second alarm", async () => {
+	it("closes Prompt 1 after five seconds of silence and resets that interval for each accepted final segment", async () => {
 		vi.useFakeTimers();
 		vi.setSystemTime("2026-08-13T12:00:00.000Z");
 		const { session, storage } = createSession();
 		await session.fetch(request("/initialize", call));
 		await session.fetch(request("/prompt-started", call));
-		expect(storage.alarm).toBe(Date.now() + 10_000);
+		expect(storage.alarm).toBe(Date.now() + 5_000);
 
 		vi.advanceTimersByTime(4_000);
 		await session.fetch(request("/transcription", {
@@ -233,7 +260,7 @@ describe("Block 3 live-session Durable Object", () => {
 			transcript: "Maria Lopez",
 			isFinal: true
 		}));
-		expect(storage.alarm).toBe(Date.now() + 10_000);
+		expect(storage.alarm).toBe(Date.now() + 5_000);
 
 		vi.advanceTimersByTime(3_000);
 		const alarmBeforeInterim = storage.alarm;
@@ -250,10 +277,17 @@ describe("Block 3 live-session Durable Object", () => {
 			transcript: "tomorrow's appointment",
 			isFinal: true
 		}));
-		expect(storage.alarm).toBe(Date.now() + 10_000);
+		expect(storage.alarm).toBe(Date.now() + 5_000);
 
+		vi.advanceTimersByTime(4_999);
+		let state = await json(
+			await session.fetch(request("/state", undefined, "GET"))
+		);
+		expect(state.session.stage).toBe("collecting_prompt1");
+
+		vi.advanceTimersByTime(1);
 		await session.alarm();
-		const state = await json(
+		state = await json(
 			await session.fetch(request("/state", undefined, "GET"))
 		);
 		expect(state.session.stage).toBe("prompt1_closed");
@@ -263,9 +297,12 @@ describe("Block 3 live-session Durable Object", () => {
 	});
 
 	it("accepts a final Prompt 2 transcript that races the response-window alarm", async () => {
-		const { session } = createSession();
+		vi.useFakeTimers();
+		vi.setSystemTime("2026-08-13T12:00:00.000Z");
+		const { session, storage } = createSession();
 		await session.fetch(request("/initialize", call));
 		await session.fetch(request("/prompt-started", call));
+		expect(storage.alarm).toBe(Date.now() + 5_000);
 		await session.alarm();
 		await session.fetch(request("/prompt1-evaluation", {
 			...call,
@@ -273,11 +310,13 @@ describe("Block 3 live-session Durable Object", () => {
 			reasonAccepted: false
 		}));
 		await session.fetch(request("/prompt-started", call));
+		expect(storage.alarm).toBe(Date.now() + 5_000);
 		await session.fetch(request("/transcription", {
 			...call,
 			transcript: "Maria Lopez",
 			isFinal: true
 		}));
+		expect(storage.alarm).toBe(Date.now() + 5_000);
 
 		await session.alarm();
 		const boundaryTranscript = await json(
@@ -296,6 +335,7 @@ describe("Block 3 live-session Durable Object", () => {
 			"Maria Lopez",
 			"calling about the inspection"
 		]);
+		expect(storage.alarm).toBe(Date.now() + 5_000);
 	});
 
 	it("keeps Prompt 2 separate and opens it only after injected evaluation requires it", async () => {
@@ -634,31 +674,7 @@ describe("Block 3 live-session Durable Object", () => {
 	it("waits until 48 seconds, plays the correlated unavailable message, and hangs up only after its completion", async () => {
 		vi.useFakeTimers();
 		vi.setSystemTime("2026-08-13T12:00:00.000Z");
-		const providerFetch = vi.fn(async (
-			input: RequestInfo | URL
-		) => {
-			const url = String(input);
-
-			if (url.endsWith("/responses")) {
-				return openAiResponse({
-					nameAccepted: false,
-					reasonAccepted: false,
-					extractedName: null,
-					extractedReason: null
-				});
-			}
-
-			if (url.includes("ipqualityscore")) {
-				return Response.json({
-					valid: false,
-					active: false,
-					recent_abuse: true,
-					spammer: true
-				});
-			}
-
-			return Response.json({ data: { result: "ok" } });
-		});
+		const providerFetch = failedCallProviderFetch();
 		vi.stubGlobal("fetch", providerFetch);
 		const { session, storage, db } = productionSession();
 
@@ -701,6 +717,8 @@ describe("Block 3 live-session Durable Object", () => {
 		)).toBe(false);
 
 		vi.setSystemTime("2026-08-13T12:00:48.000Z");
+		const alarmCountBeforePlayback =
+			storage.alarmHistory.length;
 		await session.alarm();
 		state = await json(await session.fetch(
 			request("/state", undefined, "GET")
@@ -709,8 +727,13 @@ describe("Block 3 live-session Durable Object", () => {
 			"playing_unavailable_message"
 		);
 		expect(storage.alarm).toBe(
-			Date.parse("2026-08-13T12:00:59.000Z")
+			Date.parse("2026-08-13T12:01:08.000Z")
 		);
+		expect(storage.alarmHistory.slice(
+			alarmCountBeforePlayback
+		)).toEqual([
+			Date.parse("2026-08-13T12:01:08.000Z")
+		]);
 		const speakRequests = providerFetch.mock.calls
 			.filter(([input]) =>
 				String(input).includes("/actions/speak")
@@ -741,6 +764,16 @@ describe("Block 3 live-session Durable Object", () => {
 		expect(providerFetch.mock.calls.map(
 			([input]) => String(input)
 		).some((url) => url.includes("/actions/hangup"))).toBe(false);
+		vi.setSystemTime("2026-08-13T12:00:59.000Z");
+		state = await json(await session.fetch(
+			request("/state", undefined, "GET")
+		));
+		expect(state.session.stage).toBe(
+			"playing_unavailable_message"
+		);
+		expect(providerFetch.mock.calls.map(
+			([input]) => String(input)
+		).some((url) => url.includes("/actions/hangup"))).toBe(false);
 
 		const playingState = structuredClone(state.session);
 		const completed = await json(await session.fetch(request(
@@ -761,16 +794,292 @@ describe("Block 3 live-session Durable Object", () => {
 				"INSERT INTO evidence_library_calls"
 			)
 		);
+		const lateCompletion = await json(await session.fetch(request(
+			"/unavailable-speak-ended",
+			{
+				...call,
+				clientState: UNAVAILABLE_MESSAGE_CLIENT_STATE
+			}
+		)));
+		expect(lateCompletion).toEqual({
+			accepted: false,
+			completed: true
+		});
+		await expect(session.alarm()).resolves.toBeUndefined();
 
-		const guard = productionSession();
-		await guard.storage.put(
+		const fallback = productionSession();
+		await fallback.storage.put(
 			"block3-live-session",
 			playingState
 		);
-		vi.setSystemTime("2026-08-13T12:00:59.000Z");
-		await guard.session.alarm();
-		expect(guard.storage.values.size).toBe(1);
-		expect(guard.storage.alarm).toBeNull();
+		providerFetch.mockClear();
+		vi.setSystemTime("2026-08-13T12:01:08.000Z");
+		await fallback.session.alarm();
+		const completionAfterFallback = await json(
+			await fallback.session.fetch(request(
+				"/unavailable-speak-ended",
+				{
+					...call,
+					clientState:
+						UNAVAILABLE_MESSAGE_CLIENT_STATE
+				}
+			))
+		);
+		expect(completionAfterFallback).toEqual({
+			accepted: false,
+			completed: true
+		});
+		await expect(fallback.session.alarm()).resolves.toBeUndefined();
+		expect(fallback.storage.values.size).toBe(1);
+		expect(fallback.storage.alarm).toBeNull();
+		const fallbackUrls = providerFetch.mock.calls.map(
+			([input]) => String(input)
+		);
+		expect(fallbackUrls.filter((url) =>
+			url.includes("/actions/hangup")
+		)).toHaveLength(1);
+		expect(fallbackUrls.filter((url) =>
+			url.includes("/actions/record_stop")
+		)).toHaveLength(1);
+		expect(fallback.db.prepare).toHaveBeenCalledOnce();
+	});
+
+	it("starts failed-call playback immediately after the 48-second target and arms one 20-second completion fallback", async () => {
+		vi.useFakeTimers();
+		vi.setSystemTime("2026-08-13T12:00:00.000Z");
+		const providerFetch = failedCallProviderFetch(
+			(evaluationNumber) => {
+				if (evaluationNumber === 2) {
+					vi.setSystemTime(
+						"2026-08-13T12:00:50.000Z"
+					);
+				}
+			}
+		);
+		vi.stubGlobal("fetch", providerFetch);
+		const { session, storage } = productionSession();
+
+		await session.fetch(request("/initialize", {
+			...call,
+			...liveContext()
+		}));
+		await session.fetch(request("/prompt-started", call));
+		await session.fetch(request("/transcription", {
+			...call,
+			transcript: "I will not say",
+			isFinal: true
+		}));
+		vi.advanceTimersByTime(5_000);
+		await session.alarm();
+		await session.fetch(request("/prompt-started", call));
+		await session.fetch(request("/transcription", {
+			...call,
+			transcript: "Still no answer",
+			isFinal: true
+		}));
+		vi.advanceTimersByTime(5_000);
+		await session.alarm();
+
+		expect(storage.alarm).toBe(
+			Date.parse("2026-08-13T12:00:50.000Z")
+		);
+		const alarmCountBeforePlayback =
+			storage.alarmHistory.length;
+		await session.alarm();
+		expect(storage.alarm).toBe(
+			Date.parse("2026-08-13T12:01:10.000Z")
+		);
+		expect(storage.alarmHistory.slice(
+			alarmCountBeforePlayback
+		)).toEqual([
+			Date.parse("2026-08-13T12:01:10.000Z")
+		]);
+		const unavailableSpeak = providerFetch.mock.calls
+			.map(([, init]) => init?.body
+				? JSON.parse(String(init.body))
+				: null)
+			.find((body) => body?.client_state ===
+				UNAVAILABLE_MESSAGE_CLIENT_STATE);
+		expect(unavailableSpeak).toBeDefined();
+	});
+
+	it("starts the single completion fallback only after Telnyx accepts unavailable playback", async () => {
+		vi.useFakeTimers();
+		vi.setSystemTime("2026-08-13T12:00:00.000Z");
+		let acceptUnavailableSpeak!: (response: Response) => void;
+		const unavailableSpeakAcceptance = new Promise<Response>(
+			(resolve) => {
+				acceptUnavailableSpeak = resolve;
+			}
+		);
+		let markUnavailableSpeakStarted!: () => void;
+		const unavailableSpeakStarted = new Promise<void>(
+			(resolve) => {
+				markUnavailableSpeakStarted = resolve;
+			}
+		);
+		const providerFetch = vi.fn(async (
+			input: RequestInfo | URL,
+			init?: RequestInit
+		) => {
+			const url = String(input);
+
+			if (url.endsWith("/responses")) {
+				return openAiResponse({
+					nameAccepted: false,
+					reasonAccepted: false,
+					extractedName: null,
+					extractedReason: null
+				});
+			}
+
+			const body = init?.body
+				? JSON.parse(String(init.body))
+				: null;
+
+			if (
+				url.includes("/actions/speak")
+				&& body?.client_state ===
+					UNAVAILABLE_MESSAGE_CLIENT_STATE
+			) {
+				markUnavailableSpeakStarted();
+				return unavailableSpeakAcceptance;
+			}
+
+			return Response.json({ data: { result: "ok" } });
+		});
+		vi.stubGlobal("fetch", providerFetch);
+		const { session, storage } = productionSession();
+
+		await session.fetch(request("/initialize", {
+			...call,
+			...liveContext()
+		}));
+		await session.fetch(request("/prompt-started", call));
+		await session.fetch(request("/transcription", {
+			...call,
+			transcript: "I will not say",
+			isFinal: true
+		}));
+		await session.alarm();
+		await session.fetch(request("/prompt-started", call));
+		await session.fetch(request("/transcription", {
+			...call,
+			transcript: "Still no answer",
+			isFinal: true
+		}));
+		await session.alarm();
+
+		vi.setSystemTime("2026-08-13T12:00:48.000Z");
+		const alarmCountBeforePlayback =
+			storage.alarmHistory.length;
+		const playback = session.alarm();
+		await unavailableSpeakStarted;
+		expect(storage.alarmHistory.slice(
+			alarmCountBeforePlayback
+		)).toEqual([]);
+
+		vi.setSystemTime("2026-08-13T12:00:49.000Z");
+		acceptUnavailableSpeak(
+			Response.json({ data: { result: "ok" } })
+		);
+		await playback;
+		expect(storage.alarmHistory.slice(
+			alarmCountBeforePlayback
+		)).toEqual([
+			Date.parse("2026-08-13T12:01:09.000Z")
+		]);
+	});
+
+	it("plays the unavailable message after second 59 and finalizes normally on correlated completion", async () => {
+		vi.useFakeTimers();
+		vi.setSystemTime("2026-08-13T12:00:00.000Z");
+		const providerFetch = failedCallProviderFetch(
+			(evaluationNumber) => {
+				if (evaluationNumber === 2) {
+					vi.setSystemTime(
+						"2026-08-13T12:01:01.000Z"
+					);
+				}
+			}
+		);
+		vi.stubGlobal("fetch", providerFetch);
+		const { session, storage, db } = productionSession();
+
+		await session.fetch(request("/initialize", {
+			...call,
+			...liveContext()
+		}));
+		await session.fetch(request("/prompt-started", call));
+		await session.fetch(request("/transcription", {
+			...call,
+			transcript: "I will not say",
+			isFinal: true
+		}));
+		await session.alarm();
+		await session.fetch(request("/prompt-started", call));
+		await session.fetch(request("/transcription", {
+			...call,
+			transcript: "Still no answer",
+			isFinal: true
+		}));
+		await session.alarm();
+		const alarmCountBeforePlayback =
+			storage.alarmHistory.length;
+		await session.alarm();
+		let state = await json(await session.fetch(
+			request("/state", undefined, "GET")
+		));
+		expect(state.session.stage).toBe(
+			"playing_unavailable_message"
+		);
+		expect(storage.alarm).toBe(
+			Date.parse("2026-08-13T12:01:21.000Z")
+		);
+		expect(storage.alarmHistory.slice(
+			alarmCountBeforePlayback
+		)).toEqual([
+			Date.parse("2026-08-13T12:01:21.000Z")
+		]);
+		const unavailableSpeak = providerFetch.mock.calls
+			.map(([, init]) => init?.body
+				? JSON.parse(String(init.body))
+				: null)
+			.find((body) => body?.client_state ===
+				UNAVAILABLE_MESSAGE_CLIENT_STATE);
+		expect(unavailableSpeak).toBeDefined();
+		expect(providerFetch.mock.calls.map(
+			([input]) => String(input)
+		).some((url) => url.includes("/actions/hangup"))).toBe(false);
+
+		const completed = await json(await session.fetch(request(
+			"/unavailable-speak-ended",
+			{
+				...call,
+				clientState: UNAVAILABLE_MESSAGE_CLIENT_STATE
+			}
+		)));
+		expect(completed).toEqual({
+			accepted: true,
+			completed: true
+		});
+		await expect(session.alarm()).resolves.toBeUndefined();
+		state = await json(await session.fetch(
+			request("/state", undefined, "GET")
+		));
+		expect(state.session).toBeNull();
+		expect(storage.values.size).toBe(1);
+		expect(storage.alarm).toBeNull();
+		const urls = providerFetch.mock.calls.map(
+			([input]) => String(input)
+		);
+		expect(urls.filter((url) =>
+			url.includes("/actions/hangup")
+		)).toHaveLength(1);
+		expect(urls.filter((url) =>
+			url.includes("/actions/record_stop")
+		)).toHaveLength(1);
+		expect(db.prepare).toHaveBeenCalledOnce();
 	});
 
 	it("uses technical-difficulties call control when live OpenAI evaluation fails", async () => {

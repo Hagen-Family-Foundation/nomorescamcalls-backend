@@ -55,7 +55,7 @@ import type {
 const FIRST_REQUEST =
 	"State your name and reason for calling please.";
 
-const FIRST_REQUEST_TIMEOUT_SECONDS = 10;
+const FIRST_RESPONSE_SILENCE_SECONDS = 5;
 
 export async function handleTelnyxWebhook(
 	payload: unknown,
@@ -384,7 +384,7 @@ export async function handleTelnyxWebhook(
 			{
 				prompt: FIRST_REQUEST,
 				timeoutSeconds:
-					FIRST_REQUEST_TIMEOUT_SECONDS
+					FIRST_RESPONSE_SILENCE_SECONDS
 			},
 			approvedDestination
 		);
