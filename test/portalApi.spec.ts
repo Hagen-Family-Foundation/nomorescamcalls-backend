@@ -56,6 +56,7 @@ describe('subscriber portal API', () => {
 				code: inviteCode,
 				firstName: 'Portal',
 				lastName: 'Participant',
+				callerFacingBusinessName: 'Portal Plumbing',
 				email: 'portal.integration@example.com',
 				phoneNumber: '+15550001020',
 				carrier: 'Example Carrier',
@@ -77,6 +78,7 @@ describe('subscriber portal API', () => {
 		expect(registerBody.token.length).toBeGreaterThan(20);
 
 		expect(registerBody.user.email).toBe('portal.integration@example.com');
+		expect((registerBody.user as any).callerFacingBusinessName).toBe('Portal Plumbing');
 
 		const meResponse = await SELF.fetch('http://example.com/portal/me', {
 			headers: {

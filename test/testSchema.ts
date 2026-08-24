@@ -7,6 +7,7 @@ export async function ensureTestSchema(): Promise<void> {
 				id INTEGER PRIMARY KEY AUTOINCREMENT,
 				first_name TEXT,
 				last_name TEXT,
+				caller_facing_business_name TEXT,
 				carrier TEXT,
 				contact_method TEXT,
 				password_hash TEXT,
@@ -23,6 +24,17 @@ export async function ensureTestSchema(): Promise<void> {
 			)
 		`)
 		.run();
+
+	const userColumns = await env.nomorescamcalls_db
+		.prepare("PRAGMA table_info(users)")
+		.all<{ name: string }>();
+	if (!userColumns.results.some((column) =>
+		column.name === "caller_facing_business_name"
+	)) {
+		await env.nomorescamcalls_db
+			.prepare("ALTER TABLE users ADD COLUMN caller_facing_business_name TEXT")
+			.run();
+	}
 
 	await env.nomorescamcalls_db
 		.prepare(`
@@ -289,6 +301,7 @@ export async function ensureTestSchema(): Promise<void> {
 				caller_deductions TEXT,
 				subscriber_id INTEGER,
 				subscriber_name TEXT,
+				subscriber_caller_facing_business_name TEXT,
 				subscriber_phone_number TEXT,
 				subscriber_screening_number TEXT,
 				subscriber_sip_username TEXT,
@@ -308,6 +321,17 @@ export async function ensureTestSchema(): Promise<void> {
 			)
 		`)
 		.run();
+
+	const evidenceColumns = await env.nomorescamcalls_db
+		.prepare("PRAGMA table_info(evidence_library_calls)")
+		.all<{ name: string }>();
+	if (!evidenceColumns.results.some((column) =>
+		column.name === "subscriber_caller_facing_business_name"
+	)) {
+		await env.nomorescamcalls_db
+			.prepare("ALTER TABLE evidence_library_calls ADD COLUMN subscriber_caller_facing_business_name TEXT")
+			.run();
+	}
 
 	await env.nomorescamcalls_db
 		.prepare(`

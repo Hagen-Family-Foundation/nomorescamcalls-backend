@@ -11,6 +11,7 @@ interface LoginUserRow {
 	id: number;
 	first_name: string | null;
 	last_name: string | null;
+	caller_facing_business_name: string | null;
 	email: string | null;
 	phone_number: string;
 	screening_number: string | null;
@@ -36,6 +37,7 @@ function mapLoginUserRow(row: LoginUserRow): UserRecord {
 		id: row.id,
 		firstName: row.first_name,
 		lastName: row.last_name,
+		callerFacingBusinessName: row.caller_facing_business_name,
 		email: row.email,
 		phoneNumber: row.phone_number,
 		screeningNumber: row.screening_number,
@@ -63,6 +65,7 @@ export async function loginBetaParticipant(
 				id,
 				first_name,
 				last_name,
+				caller_facing_business_name,
 				email,
 				phone_number,
 				screening_number,

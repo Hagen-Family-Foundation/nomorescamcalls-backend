@@ -23,6 +23,12 @@ Block 3 processes only evidence from the current call.
 
 Block 3 begins when it receives the completed Block 2 evidence.
 
+The Telnyx destination screening number resolves the protected subscriber account. Onboarding requires the customer to choose the exact `caller_facing_business_name` announced to callers and stores it as a dedicated value on that account. The value is distinct from legal, billing, invoice, account-holder, owner, and other formal names. It is never inferred from those fields and flows with the resolved subscriber identity into Block 3.
+
+The field is mandatory for completed onboarding, account activation, and subscriber provisioning. Existing records may remain unset only while incomplete and must receive an explicitly customer-selected value before activation. No generic, inferred, or unbranded fallback is permitted. If live resolution finds the value missing, processing stops before caller-facing playback with HTTP `409` and reason `caller_facing_business_name_unavailable`.
+
+NoMoreScamCalls is operationally present but caller-facing invisible. Prompts identify only the protected business and do not disclose NoMoreScamCalls, a third-party provider, screening, scoring, or evidence collection.
+
 ---
 
 ## Recording
@@ -52,7 +58,7 @@ Recording ends:
 
 Telnyx plays:
 
-> "Please state your name and reason for calling."
+> "Thank you for calling [CALLER-FACING BUSINESS NAME]. Please say your name and reason for calling so that we may route your call appropriately. Thank you."
 
 Telnyx captures the caller’s response.
 
@@ -119,7 +125,7 @@ When either part of the first response produces no:
 
 Telnyx plays:
 
-> "Please speak slowly and clearly. State your name and reason for calling."
+> "Our apologies. Please speak clearly with your name and reason for calling so we may route your call to the correct department."
 
 Telnyx captures the caller’s second response.
 

@@ -7,6 +7,7 @@ interface SessionUserRow {
 	id: number;
 	first_name: string | null;
 	last_name: string | null;
+	caller_facing_business_name: string | null;
 	email: string | null;
 	phone_number: string;
 	screening_number: string | null;
@@ -30,6 +31,7 @@ function mapSessionUserRow(row: SessionUserRow): UserRecord {
 		id: row.id,
 		firstName: row.first_name,
 		lastName: row.last_name,
+		callerFacingBusinessName: row.caller_facing_business_name,
 		email: row.email,
 		phoneNumber: row.phone_number,
 		screeningNumber: row.screening_number,
@@ -59,6 +61,7 @@ export async function authenticateBetaSession(
 				users.id,
 				users.first_name,
 				users.last_name,
+				users.caller_facing_business_name,
 				users.email,
 				users.phone_number,
 				users.screening_number,

@@ -133,7 +133,7 @@ interface Block3LiveSessionEnv {
 }
 
 const SECOND_REQUEST =
-	"Please speak slowly and clearly. State your name and reason for calling.";
+	"Our apologies. Please speak clearly with your name and reason for calling so we may route your call to the correct department.";
 
 function promptEvidence(
 	segments: string[]

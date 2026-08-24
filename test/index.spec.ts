@@ -24,6 +24,27 @@ describe("NoMoreScamCalls Worker", () => {
 	});
 
 	it("handles a simulated Telnyx initiated call webhook without live execution", async () => {
+		await env.nomorescamcalls_db.prepare(`
+			INSERT INTO users (
+				phone_number,
+				screening_number,
+				sip_username,
+				caller_facing_business_name,
+				status
+			)
+			VALUES (?, ?, ?, ?, 'active')
+			ON CONFLICT(phone_number) DO UPDATE SET
+				screening_number = excluded.screening_number,
+				sip_username = excluded.sip_username,
+				caller_facing_business_name = excluded.caller_facing_business_name,
+				status = 'active'
+		`).bind(
+			"+18005550100",
+			"+18005550001",
+			"test_user_18005550100",
+			"Acme Repair"
+		).run();
+
 		const response = await SELF.fetch("http://example.com/webhooks/telnyx", {
 			method: "POST",
 			headers: {
@@ -36,7 +57,7 @@ describe("NoMoreScamCalls Worker", () => {
 						call_control_id: "test-call-control-id",
 						call_session_id: "test-call-session-id",
 						from: "+18005551234",
-						to: "+18005550000"
+						to: "+18005550001"
 					}
 				}
 			})
@@ -88,7 +109,7 @@ describe("NoMoreScamCalls Worker", () => {
 			"/calls/test-call-control-id/actions/speak"
 		);
 		expect(body.firstRequest.body.payload).toBe(
-			"State your name and reason for calling please."
+			"Thank you for calling Acme Repair. Please say your name and reason for calling so that we may route your call appropriately. Thank you."
 		);
 		expect(body.answerExecution.executed).toBe(false);
 		expect(body.firstRequestExecution.executed).toBe(false);
@@ -394,6 +415,7 @@ describe("NoMoreScamCalls Worker", () => {
 			},
 			body: JSON.stringify({
 				phoneNumber: "+18165550002",
+				callerFacingBusinessName: "Example Services",
 				screeningNumber: "+18165550003",
 				sipUsername: "user_18165550002",
 				status: "active"
@@ -439,18 +461,21 @@ describe("NoMoreScamCalls Worker", () => {
 					phone_number,
 					screening_number,
 					sip_username,
+					caller_facing_business_name,
 					status
 				)
-				VALUES (?, ?, ?, 'active')
+				VALUES (?, ?, ?, ?, 'active')
 				ON CONFLICT(phone_number) DO UPDATE SET
 					screening_number = excluded.screening_number,
 					sip_username = excluded.sip_username,
+					caller_facing_business_name = excluded.caller_facing_business_name,
 					status = 'active'
 			`)
 			.bind(
 				"+18005550101",
 				"+18005550000",
-				"test_user_18005550101"
+				"test_user_18005550101",
+				"Protected Test Business"
 			)
 			.run();
 
@@ -517,7 +542,7 @@ describe("NoMoreScamCalls Worker", () => {
 			"/calls/test-user-call-control-id/actions/speak"
 		);
 		expect(body.firstRequest.body.payload).toBe(
-			"State your name and reason for calling please."
+			"Thank you for calling Protected Test Business. Please say your name and reason for calling so that we may route your call appropriately. Thank you."
 		);
 	});
 
@@ -568,6 +593,7 @@ describe("NoMoreScamCalls Worker", () => {
 					code: "BETA-REGISTER-ONE",
 					firstName: "Kelly",
 					lastName: "Hagen",
+					callerFacingBusinessName: "Hagen Home Services",
 					email: "kelly.beta@example.com",
 					phoneNumber: "+15550001001",
 					carrier: "Example Carrier",
@@ -603,6 +629,7 @@ describe("NoMoreScamCalls Worker", () => {
 		expect(body.registration.inviteCode).toBe("BETA-REGISTER-ONE");
 		expect(body.registration.user.firstName).toBe("Kelly");
 		expect(body.registration.user.lastName).toBe("Hagen");
+		expect((body.registration.user as any).callerFacingBusinessName).toBe("Hagen Home Services");
 		expect(body.registration.user.email).toBe("kelly.beta@example.com");
 		expect(body.registration.user.phoneNumber).toBe("+15550001001");
 		expect(body.registration.user.carrier).toBe("Example Carrier");
@@ -614,7 +641,7 @@ describe("NoMoreScamCalls Worker", () => {
 
 		const storedUser = await env.nomorescamcalls_db
 			.prepare(`
-				SELECT id, password_hash
+				SELECT id, password_hash, caller_facing_business_name
 				FROM users
 				WHERE phone_number = ?
 			`)
@@ -622,11 +649,13 @@ describe("NoMoreScamCalls Worker", () => {
 			.first<{
 				id: number;
 				password_hash: string;
+				caller_facing_business_name: string;
 			}>();
 
 		expect(storedUser).not.toBeNull();
 		expect(storedUser?.password_hash).not.toBe("beta-password");
 		expect(storedUser?.password_hash.startsWith("pbkdf2_sha256$")).toBe(true);
+		expect(storedUser?.caller_facing_business_name).toBe("Hagen Home Services");
 
 		const storedInvite = await env.nomorescamcalls_db
 			.prepare(`
@@ -658,6 +687,7 @@ describe("NoMoreScamCalls Worker", () => {
 					code: "BETA-REGISTER-ONE",
 					firstName: "Second",
 					lastName: "Participant",
+					callerFacingBusinessName: "Second Services",
 					email: "second.beta@example.com",
 					phoneNumber: "+15550001002",
 					carrier: "Example Carrier",
@@ -716,6 +746,7 @@ describe("NoMoreScamCalls Worker", () => {
 					code: "BETA-REGISTER-EXPIRED",
 					firstName: "Expired",
 					lastName: "Participant",
+					callerFacingBusinessName: "Expired Services",
 					email: "expired.beta@example.com",
 					phoneNumber: "+15550001003",
 					carrier: "Example Carrier",
@@ -749,7 +780,7 @@ describe("NoMoreScamCalls Worker", () => {
 		}>();
 
 		expect(body.error).toBe(
-			"code, firstName, lastName, email, phoneNumber, carrier, contactMethod, and password are required"
+			"code, firstName, lastName, callerFacingBusinessName, email, phoneNumber, carrier, contactMethod, and password are required"
 		);
 	});
 
@@ -778,6 +809,7 @@ describe("NoMoreScamCalls Worker", () => {
 					code: "BETA-LOGIN-ONE",
 					firstName: "Kelly",
 					lastName: "Hagen",
+					callerFacingBusinessName: "Hagen Home Services",
 					email: "kelly.beta@example.com",
 					phoneNumber: "+15550001004",
 					carrier: "Example Carrier",
@@ -1013,6 +1045,7 @@ describe("NoMoreScamCalls Worker", () => {
 					code: "BETA-LOGOUT-ONE",
 					firstName: "Logout",
 					lastName: "Participant",
+					callerFacingBusinessName: "Logout Services",
 					email: "logout.beta@example.com",
 					phoneNumber: "+15550001007",
 					carrier: "Example Carrier",
@@ -1132,6 +1165,7 @@ describe("NoMoreScamCalls Worker", () => {
 					code: "BETA-DASHBOARD-SUMMARY",
 					firstName: "Dashboard",
 					lastName: "Summary",
+					callerFacingBusinessName: "Dashboard Services",
 					email: "dashboard.summary@example.com",
 					phoneNumber: "+15550002001",
 					carrier: "Example Carrier",
@@ -1258,6 +1292,7 @@ describe("NoMoreScamCalls Worker", () => {
 					code: "BETA-DASHBOARD-CALLS",
 					firstName: "Dashboard",
 					lastName: "Calls",
+					callerFacingBusinessName: "Dashboard Call Services",
 					email: "dashboard.calls@example.com",
 					phoneNumber: "+15550002002",
 					carrier: "Example Carrier",

@@ -140,6 +140,8 @@ describe("Evidence Engine Call Flow", () => {
 					id: 1,
 					name:
 						"Test Subscriber",
+					callerFacingBusinessName:
+						"Test Subscriber Services",
 					phoneNumber:
 						"+19135550200",
 					screeningNumber:

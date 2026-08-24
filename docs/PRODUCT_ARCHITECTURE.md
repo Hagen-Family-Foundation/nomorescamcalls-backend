@@ -118,9 +118,17 @@ The governing document is:
 
 Block 3 owns the caller-response process.
 
+NoMoreScamCalls is operationally present but invisible to callers. Caller-facing prompts present only the protected business's identity and never identify NoMoreScamCalls, screening, scoring, or evidence collection.
+
+Onboarding requires and stores an explicit customer-selected `caller_facing_business_name` for each protected subscriber account. The customer chooses the exact wording announced to callers. This value is distinct from legal, billing, invoice, account-holder, owner, and other formal names and is never inferred from them.
+
+An account cannot complete onboarding, activate protection, or be provisioned until this value has been explicitly supplied. Existing records created before this requirement may remain unset in storage, but they are incomplete and must receive a customer-selected value before activation. No generic, inferred, or unbranded fallback identity is permitted. If an incoming call resolves an account that lacks the value, live handling stops with HTTP `409` and reason `caller_facing_business_name_unavailable` before any caller-facing prompt is issued.
+
+The incoming screening number resolves the protected subscriber and carries the stored caller-facing business name into Block 3.
+
 The initial request is:
 
-> "Please state your name and reason for calling."
+> "Thank you for calling [CALLER-FACING BUSINESS NAME]. Please say your name and reason for calling so that we may route your call appropriately. Thank you."
 
 Block 3 captures, records, transcribes, and evaluates the caller's response.
 
@@ -133,6 +141,10 @@ The live scoring rules evaluate the value and completeness of the information su
 - approved complementary crossed responses: one 5-point complete-response-deficiency deduction
 
 When the first response is insufficient, Block 3 may perform the approved second-prompt process.
+
+The second request is:
+
+> "Our apologies. Please speak clearly with your name and reason for calling so we may route your call to the correct department."
 
 No more than two requests are made.
 

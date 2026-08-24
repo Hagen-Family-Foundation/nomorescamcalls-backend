@@ -21,7 +21,7 @@ It:
 
 ## Request #1
 
-“Please speak slowly and clearly, stating your name and reason for calling.”
+“Our apologies. Please speak clearly with your name and reason for calling so we may route your call to the correct department.”
 
 ## Response #1 Evaluation
 

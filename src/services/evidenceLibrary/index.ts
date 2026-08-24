@@ -5,6 +5,7 @@ import type {
 export interface EvidenceLibrarySubscriber {
 	id: number | null;
 	name: string | null;
+	callerFacingBusinessName: string | null;
 	phoneNumber: string | null;
 	screeningNumber: string | null;
 	sipUsername: string | null;
@@ -327,6 +328,7 @@ export async function receiveEvidenceBox(
 
 				subscriber_id,
 				subscriber_name,
+				subscriber_caller_facing_business_name,
 				subscriber_phone_number,
 				subscriber_screening_number,
 				subscriber_sip_username,
@@ -353,7 +355,7 @@ export async function receiveEvidenceBox(
 				?, ?, ?, ?, ?, ?, ?,
 				?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
 				?, ?, ?, ?, ?,
-				?, ?, ?, ?, ?, ?, ?, ?,
+				?, ?, ?, ?, ?, ?, ?, ?, ?,
 				?, ?,
 				?, ?, ?, ?, ?, ?,
 				?
@@ -469,6 +471,8 @@ export async function receiveEvidenceBox(
 					excluded.subscriber_id,
 				subscriber_name =
 					excluded.subscriber_name,
+				subscriber_caller_facing_business_name =
+					excluded.subscriber_caller_facing_business_name,
 				subscriber_phone_number =
 					excluded.subscriber_phone_number,
 				subscriber_screening_number =
@@ -594,6 +598,7 @@ export async function receiveEvidenceBox(
 
 			subscriber.id,
 			subscriber.name,
+			subscriber.callerFacingBusinessName,
 			subscriber.phoneNumber,
 			subscriber.screeningNumber,
 			subscriber.sipUsername,

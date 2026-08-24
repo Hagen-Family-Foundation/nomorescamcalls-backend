@@ -280,16 +280,20 @@ export default {
 		if (request.method === "POST" && url.pathname === "/users") {
 			const body = await request.json() as {
 				phoneNumber?: string;
+				callerFacingBusinessName?: string;
 				screeningNumber?: string | null;
 				sipUsername?: string | null;
 				status?: string;
 			};
 
 			const phoneNumber = body.phoneNumber ?? "";
+			const callerFacingBusinessName =
+				body.callerFacingBusinessName?.trim() ?? "";
 
-			if (!phoneNumber) {
+			if (!phoneNumber || !callerFacingBusinessName) {
 				return Response.json({
-					error: "phoneNumber is required"
+					error:
+						"phoneNumber and callerFacingBusinessName are required"
 				}, {
 					status: 400
 				});
@@ -299,6 +303,7 @@ export default {
 				env.nomorescamcalls_db,
 				{
 					phoneNumber,
+					callerFacingBusinessName,
 					screeningNumber: body.screeningNumber ?? null,
 					sipUsername: body.sipUsername ?? null,
 					status: body.status ?? "active"
@@ -376,6 +381,7 @@ export default {
 				code?: string;
 				firstName?: string;
 				lastName?: string;
+				callerFacingBusinessName?: string;
 				email?: string;
 				phoneNumber?: string;
 				carrier?: string;
@@ -389,6 +395,8 @@ export default {
 				body.firstName?.trim() ?? "";
 			const lastName =
 				body.lastName?.trim() ?? "";
+			const callerFacingBusinessName =
+				body.callerFacingBusinessName?.trim() ?? "";
 			const email =
 				body.email?.trim() ?? "";
 			const phoneNumber =
@@ -404,6 +412,7 @@ export default {
 				!code
 				|| !firstName
 				|| !lastName
+				|| !callerFacingBusinessName
 				|| !email
 				|| !phoneNumber
 				|| !carrier
@@ -413,7 +422,7 @@ export default {
 				return portalJson(
 					{
 						error:
-							"code, firstName, lastName, email, phoneNumber, carrier, contactMethod, and password are required"
+							"code, firstName, lastName, callerFacingBusinessName, email, phoneNumber, carrier, contactMethod, and password are required"
 					},
 					400
 				);
@@ -427,6 +436,7 @@ export default {
 							code,
 							firstName,
 							lastName,
+							callerFacingBusinessName,
 							email,
 							phoneNumber,
 							carrier,
@@ -1008,6 +1018,7 @@ export default {
 				code?: string;
 				firstName?: string;
 				lastName?: string;
+				callerFacingBusinessName?: string;
 				email?: string;
 				phoneNumber?: string;
 				carrier?: string;
@@ -1018,6 +1029,7 @@ export default {
 			const code = body.code?.trim() ?? "";
 			const firstName = body.firstName?.trim() ?? "";
 			const lastName = body.lastName?.trim() ?? "";
+			const callerFacingBusinessName = body.callerFacingBusinessName?.trim() ?? "";
 			const email = body.email?.trim() ?? "";
 			const phoneNumber = body.phoneNumber?.trim() ?? "";
 			const carrier = body.carrier?.trim() ?? "";
@@ -1028,6 +1040,7 @@ export default {
 				!code
 				|| !firstName
 				|| !lastName
+				|| !callerFacingBusinessName
 				|| !email
 				|| !phoneNumber
 				|| !carrier
@@ -1035,7 +1048,7 @@ export default {
 				|| !password
 			) {
 				return Response.json({
-					error: "code, firstName, lastName, email, phoneNumber, carrier, contactMethod, and password are required"
+					error: "code, firstName, lastName, callerFacingBusinessName, email, phoneNumber, carrier, contactMethod, and password are required"
 				}, {
 					status: 400
 				});
@@ -1048,6 +1061,7 @@ export default {
 						code,
 						firstName,
 						lastName,
+						callerFacingBusinessName,
 						email,
 						phoneNumber,
 						carrier,

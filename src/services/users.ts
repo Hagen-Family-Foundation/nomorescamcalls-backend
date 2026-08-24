@@ -2,6 +2,7 @@ export interface UserRecord {
 	id: number;
 	firstName: string | null;
 	lastName: string | null;
+	callerFacingBusinessName: string | null;
 	email: string | null;
 	phoneNumber: string;
 	screeningNumber: string | null;
@@ -18,6 +19,7 @@ export interface UserRecord {
 export interface CreateUserInput {
 	firstName?: string | null;
 	lastName?: string | null;
+	callerFacingBusinessName: string;
 	email?: string | null;
 	phoneNumber: string;
 	screeningNumber?: string | null;
@@ -35,6 +37,7 @@ interface UserRow {
 	id: number;
 	first_name: string | null;
 	last_name: string | null;
+	caller_facing_business_name: string | null;
 	email: string | null;
 	phone_number: string;
 	screening_number: string | null;
@@ -52,6 +55,7 @@ const USER_COLUMNS = `
 	id,
 	first_name,
 	last_name,
+	caller_facing_business_name,
 	email,
 	phone_number,
 	screening_number,
@@ -70,6 +74,7 @@ function mapUserRow(row: UserRow): UserRecord {
 		id: row.id,
 		firstName: row.first_name,
 		lastName: row.last_name,
+		callerFacingBusinessName: row.caller_facing_business_name,
 		email: row.email,
 		phoneNumber: row.phone_number,
 		screeningNumber: row.screening_number,
@@ -88,6 +93,15 @@ export async function createUser(
 	db: D1Database,
 	input: CreateUserInput
 ): Promise<UserRecord> {
+	const callerFacingBusinessName =
+		input.callerFacingBusinessName.trim();
+
+	if (!callerFacingBusinessName) {
+		throw new Error(
+			"Caller-facing business name is required"
+		);
+	}
+
 	const status = input.status ?? "active";
 	const coverageStatus = input.coverageStatus ?? "inactive";
 
@@ -96,6 +110,7 @@ export async function createUser(
 			INSERT INTO users (
 				first_name,
 				last_name,
+				caller_facing_business_name,
 				email,
 				phone_number,
 				screening_number,
@@ -108,10 +123,11 @@ export async function createUser(
 				status,
 				coverage_status
 			)
-			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 			ON CONFLICT(phone_number) DO UPDATE SET
 				first_name = excluded.first_name,
 				last_name = excluded.last_name,
+				caller_facing_business_name = excluded.caller_facing_business_name,
 				email = excluded.email,
 				screening_number = excluded.screening_number,
 				sip_username = excluded.sip_username,
@@ -126,6 +142,7 @@ export async function createUser(
 		.bind(
 			input.firstName ?? null,
 			input.lastName ?? null,
+			callerFacingBusinessName,
 			input.email ?? null,
 			input.phoneNumber,
 			input.screeningNumber ?? null,

@@ -52,8 +52,11 @@ import type {
 	EvidenceLibrarySubscriber
 } from "./evidenceLibrary";
 
-const FIRST_REQUEST =
-	"State your name and reason for calling please.";
+export function buildFirstRequest(
+	callerFacingBusinessName: string
+): string {
+	return `Thank you for calling ${callerFacingBusinessName}. Please say your name and reason for calling so that we may route your call appropriately. Thank you.`;
+}
 
 const FIRST_RESPONSE_SILENCE_SECONDS = 5;
 
@@ -223,6 +226,14 @@ export async function handleTelnyxWebhook(
 			)
 			: null;
 
+	if (!protectedUser?.callerFacingBusinessName) {
+		return Response.json({
+			received: true,
+			screened: false,
+			reason: "caller_facing_business_name_unavailable"
+		}, { status: 409 });
+	}
+
 	const approvedDestination =
 		planApprovedCallDestination(
 			protectedUser
@@ -285,6 +296,8 @@ export async function handleTelnyxWebhook(
 				protectedUser.lastName
 			].filter(Boolean).join(" ") || null
 			: null,
+		callerFacingBusinessName:
+			protectedUser.callerFacingBusinessName,
 		phoneNumber: protectedUser?.phoneNumber ?? null,
 		screeningNumber:
 			protectedUser?.screeningNumber ?? null,
@@ -382,7 +395,9 @@ export async function handleTelnyxWebhook(
 		buildTelnyxRequest(
 			firstRequestCommand,
 			{
-				prompt: FIRST_REQUEST,
+				prompt: buildFirstRequest(
+					protectedUser.callerFacingBusinessName
+				),
 				timeoutSeconds:
 					FIRST_RESPONSE_SILENCE_SECONDS
 			},

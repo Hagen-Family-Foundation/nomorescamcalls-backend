@@ -32,6 +32,12 @@ export async function provisionSubscriber(
 		throw new Error("Subscriber not found");
 	}
 
+	if (!existingUser.callerFacingBusinessName) {
+		throw new Error(
+			"Caller-facing business name is required before subscriber provisioning"
+		);
+	}
+
 	if (
 		existingUser.screeningNumber
 		&& existingUser.sipUsername

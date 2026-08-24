@@ -215,6 +215,8 @@ It is not customer-facing.
 
 The onboarding process intentionally asks for useful starting data so protection begins with a stronger foundation.
 
+Completed onboarding requires the customer to supply the exact caller-facing business name they want announced to inbound callers. Account activation and subscriber provisioning cannot complete without that explicit value. It is never inferred from a personal, legal, billing, invoice, account, or other identity, and no generic or unbranded fallback is permitted.
+
 This may take time for seniors because of typing and phone-number entry.
 
 In-person sales presentations may include helpers who sit with seniors and assist with onboarding.
@@ -375,9 +377,9 @@ The primary recording problem is how to retrieve the correct recording reliably 
 
 ## Voice Evidence Architecture Direction
 
-The caller hears:
+The caller hears the customer-selected protected-business identity stored during onboarding:
 
-> Please state your name and reason for calling.
+> Thank you for calling [CALLER-FACING BUSINESS NAME]. Please say your name and reason for calling so that we may route your call appropriately. Thank you.
 
 The spoken response becomes evidence for the current call.
 

@@ -5,6 +5,7 @@ export interface RegisterBetaParticipantInput {
 	code: string;
 	firstName: string;
 	lastName: string;
+	callerFacingBusinessName: string;
 	email: string;
 	phoneNumber: string;
 	carrier: string;
@@ -24,6 +25,8 @@ export async function registerBetaParticipant(
 	const code = input.code.trim();
 	const firstName = input.firstName.trim();
 	const lastName = input.lastName.trim();
+	const callerFacingBusinessName =
+		input.callerFacingBusinessName.trim();
 	const email = input.email.trim().toLowerCase();
 	const phoneNumber = input.phoneNumber.trim();
 	const carrier = input.carrier.trim();
@@ -38,6 +41,7 @@ export async function registerBetaParticipant(
 				INSERT INTO users (
 					first_name,
 					last_name,
+					caller_facing_business_name,
 					email,
 					phone_number,
 					carrier,
@@ -50,6 +54,7 @@ export async function registerBetaParticipant(
 					coverage_status
 				)
 				SELECT
+					?,
 					?,
 					?,
 					?,
@@ -75,6 +80,7 @@ export async function registerBetaParticipant(
 			.bind(
 				firstName,
 				lastName,
+				callerFacingBusinessName,
 				email,
 				phoneNumber,
 				carrier,

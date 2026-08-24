@@ -135,7 +135,7 @@ describe("Telnyx request builder", () => {
 				command("gather"),
 				{
 					prompt:
-						"State your name and reason for calling please.",
+						"Thank you for calling ABC Auto Repair. Please say your name and reason for calling so that we may route your call appropriately. Thank you.",
 					timeoutSeconds: 5
 				}
 			);
@@ -151,13 +151,13 @@ describe("Telnyx request builder", () => {
 		expect(
 			request?.body.payload
 		).toBe(
-			"State your name and reason for calling please."
+			"Thank you for calling ABC Auto Repair. Please say your name and reason for calling so that we may route your call appropriately. Thank you."
 		);
 
 		expect(
 			request?.metadata.speechPrompt
 		).toBe(
-			"State your name and reason for calling please."
+			"Thank you for calling ABC Auto Repair. Please say your name and reason for calling so that we may route your call appropriately. Thank you."
 		);
 
 		expect(

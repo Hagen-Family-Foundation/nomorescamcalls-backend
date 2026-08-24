@@ -96,6 +96,7 @@ async function ensureEvidenceLibrarySchema():
 
 				subscriber_id INTEGER,
 				subscriber_name TEXT,
+				subscriber_caller_facing_business_name TEXT,
 				subscriber_phone_number TEXT,
 				subscriber_screening_number TEXT,
 				subscriber_sip_username TEXT,
@@ -231,6 +232,8 @@ function createLibraryInput(
 			id: 12,
 			name:
 				"Test Subscriber",
+			callerFacingBusinessName:
+				"Test Subscriber Services",
 			phoneNumber:
 				"+15550002222",
 			screeningNumber:

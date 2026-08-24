@@ -128,6 +128,7 @@ function liveContext() {
 		subscriber: {
 			id: 1,
 			name: "Test Subscriber",
+			callerFacingBusinessName: "Test Subscriber Services",
 			phoneNumber: "+18005559875",
 			screeningNumber: "+18005559876",
 			sipUsername: "test_subscriber",
@@ -662,6 +663,19 @@ describe("Block 3 live-session Durable Object", () => {
 		expect(urls.some((url) =>
 			url.includes("/actions/speak")
 		)).toBe(true);
+		const prompt2Request = (providerFetch.mock.calls as any[][])
+			.find(([input]) =>
+				String(input).includes("/actions/speak")
+			);
+		expect(JSON.parse(String(prompt2Request?.[1]?.body))).toEqual({
+			payload:
+				"Our apologies. Please speak clearly with your name and reason for calling so we may route your call to the correct department.",
+			language: "en-US",
+			voice: "female"
+		});
+		expect(String(prompt2Request?.[1]?.body)).not.toMatch(
+			/Test Subscriber Services|NoMoreScamCalls|NMSC/
+		);
 		expect(storage.values.size).toBe(1);
 		expect(db.prepare).toHaveBeenCalledWith(
 			expect.stringContaining(
