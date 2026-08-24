@@ -7,7 +7,7 @@ describe("Evidence Engine Block 1", () => {
 	it("places the Telnyx call information, call record, and billing timer into the Block 1 Evidence Box unchanged", () => {
 		const callInformation = {
 			from: "+18167186960",
-			to: "+19139562493",
+			to: "+18005550993",
 			direction: "incoming"
 		};
 

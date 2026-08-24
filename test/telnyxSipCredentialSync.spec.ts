@@ -34,12 +34,12 @@ describe("syncTelnyxSipCredentials", () => {
 			data: [
 				{
 					id: "credential-1",
-					user_name: "usersupport15892",
+					user_name: "test_user_support_15892",
 					connection_id: "connection-1"
 				},
 				{
 					id: "credential-1-duplicate",
-					user_name: "usersupport15892",
+					user_name: "test_user_support_15892",
 					connection_id: "connection-1"
 				}
 			]
@@ -60,11 +60,11 @@ describe("syncTelnyxSipCredentials", () => {
 
 		expect(result.mode).toBe("live");
 		expect(result.importedCount).toBe(1);
-		expect(result.sipUsernames).toEqual(["usersupport15892"]);
+		expect(result.sipUsernames).toEqual(["test_user_support_15892"]);
 
 		const stored = await findSipCredentialInInventory(
 			env.nomorescamcalls_db,
-			"usersupport15892"
+			"test_user_support_15892"
 		);
 
 		expect(stored?.status).toBe("available");

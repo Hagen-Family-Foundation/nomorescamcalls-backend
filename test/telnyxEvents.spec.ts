@@ -59,9 +59,9 @@ describe("Telnyx event normalization", () => {
 					direction: "outgoing",
 					flow_destination:
 						"telnyx_sip_uri_cred_connection",
-					from: "+19139562493",
+					from: "+18005550993",
 					to:
-						"sip:usersupport15892@sip.telnyx.com"
+						"sip:test_user_support_15892@sip.telnyx.com"
 				}
 			}
 		});
@@ -83,8 +83,8 @@ describe("Telnyx event normalization", () => {
 					direction: "incoming",
 					flow_destination:
 						"telnyx_sip_uri_cred_connection",
-					from: "+19139562493",
-					to: "usersupport15892"
+					from: "+18005550993",
+					to: "test_user_support_15892"
 				}
 			}
 		});

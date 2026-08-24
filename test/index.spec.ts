@@ -30,14 +30,16 @@ describe("NoMoreScamCalls Worker", () => {
 				screening_number,
 				sip_username,
 				caller_facing_business_name,
-				status
+				status,
+				coverage_status
 			)
-			VALUES (?, ?, ?, ?, 'active')
+			VALUES (?, ?, ?, ?, 'active', 'active')
 			ON CONFLICT(phone_number) DO UPDATE SET
 				screening_number = excluded.screening_number,
 				sip_username = excluded.sip_username,
 				caller_facing_business_name = excluded.caller_facing_business_name,
-				status = 'active'
+				status = 'active',
+				coverage_status = 'active'
 		`).bind(
 			"+18005550100",
 			"+18005550001",
@@ -407,36 +409,55 @@ describe("NoMoreScamCalls Worker", () => {
 
 
 
-	it("creates and lists user routing records", async () => {
+	it("creates an incomplete subscriber before provisioning", async () => {
 		const createResponse = await SELF.fetch("http://example.com/users", {
 			method: "POST",
 			headers: {
 				"content-type": "application/json"
 			},
 			body: JSON.stringify({
-				phoneNumber: "+18165550002",
-				callerFacingBusinessName: "Example Services",
-				screeningNumber: "+18165550003",
-				sipUsername: "user_18165550002",
-				status: "active"
+				phoneNumber: "+18005550302"
 			})
 		});
 
-		expect(createResponse.status).toBe(200);
+		expect(createResponse.status).toBe(201);
 
 		const createBody = await createResponse.json<{
 			user: {
+				id: number;
 				phoneNumber: string;
-				screeningNumber: string;
-				sipUsername: string;
+				screeningNumber: string | null;
+				sipUsername: string | null;
+				setupStatus: string;
+				coverageStatus: string;
 				status: string;
 			};
 		}>();
 
-		expect(createBody.user.phoneNumber).toBe("+18165550002");
-		expect(createBody.user.screeningNumber).toBe("+18165550003");
-		expect(createBody.user.sipUsername).toBe("user_18165550002");
+		expect(createBody.user.phoneNumber).toBe("+18005550302");
+		expect(createBody.user.screeningNumber).toBeNull();
+		expect(createBody.user.sipUsername).toBeNull();
+		expect(createBody.user.setupStatus).toBe("onboarding_incomplete");
+		expect(createBody.user.coverageStatus).toBe("inactive");
 		expect(createBody.user.status).toBe("active");
+
+		const provisionResponse = await SELF.fetch(
+			`http://example.com/users/${createBody.user.id}/provision`,
+			{ method: "POST" }
+		);
+		const provisionBody = await provisionResponse.json<{
+			code: string;
+			missingRequirements: string[];
+		}>();
+
+		expect(provisionResponse.status).toBe(409);
+		expect(provisionBody.code).toBe("onboarding_incomplete");
+		expect(provisionBody.missingRequirements).toEqual(
+			expect.arrayContaining([
+				"caller_facing_business_name",
+				"required_agreement"
+			])
+		);
 
 		const listResponse = await SELF.fetch("http://example.com/users?limit=10");
 
@@ -451,7 +472,7 @@ describe("NoMoreScamCalls Worker", () => {
 			}>;
 		}>();
 
-		expect(listBody.users.some((user) => user.phoneNumber === "+18165550002")).toBe(true);
+		expect(listBody.users.some((user) => user.phoneNumber === "+18005550302")).toBe(true);
 	});
 
 	it("resolves protected user from Telnyx destination number", async () => {
@@ -462,14 +483,16 @@ describe("NoMoreScamCalls Worker", () => {
 					screening_number,
 					sip_username,
 					caller_facing_business_name,
-					status
+					status,
+					coverage_status
 				)
-				VALUES (?, ?, ?, ?, 'active')
+				VALUES (?, ?, ?, ?, 'active', 'active')
 				ON CONFLICT(phone_number) DO UPDATE SET
 					screening_number = excluded.screening_number,
 					sip_username = excluded.sip_username,
 					caller_facing_business_name = excluded.caller_facing_business_name,
-					status = 'active'
+					status = 'active',
+					coverage_status = 'active'
 			`)
 			.bind(
 				"+18005550101",
@@ -583,7 +606,7 @@ describe("NoMoreScamCalls Worker", () => {
 			.run();
 
 		const response = await SELF.fetch(
-			"http://example.com/beta/register",
+			"http://example.com/portal/auth/register",
 			{
 				method: "POST",
 				headers: {
@@ -607,37 +630,33 @@ describe("NoMoreScamCalls Worker", () => {
 
 		const body = await response.json<{
 			registered: boolean;
-			registration: {
-				inviteCode: string;
-				user: {
-					id: number;
-					firstName: string;
-					lastName: string;
-					email: string;
-					phoneNumber: string;
-					carrier: string;
-					contactMethod: string;
-					role: string;
-					accountStatus: string;
-					setupStatus: string;
-					coverageStatus: string;
-				};
+			user: {
+				id: number;
+				firstName: string;
+				lastName: string;
+				email: string;
+				phoneNumber: string;
+				carrier: string;
+				contactMethod: string;
+				role: string;
+				accountStatus: string;
+				setupStatus: string;
+				coverageStatus: string;
 			};
 		}>();
 
 		expect(body.registered).toBe(true);
-		expect(body.registration.inviteCode).toBe("BETA-REGISTER-ONE");
-		expect(body.registration.user.firstName).toBe("Kelly");
-		expect(body.registration.user.lastName).toBe("Hagen");
-		expect((body.registration.user as any).callerFacingBusinessName).toBe("Hagen Home Services");
-		expect(body.registration.user.email).toBe("kelly.beta@example.com");
-		expect(body.registration.user.phoneNumber).toBe("+15550001001");
-		expect(body.registration.user.carrier).toBe("Example Carrier");
-		expect(body.registration.user.contactMethod).toBe("email");
-		expect(body.registration.user.role).toBe("participant");
-		expect(body.registration.user.accountStatus).toBe("active");
-		expect(body.registration.user.setupStatus).toBe("registration_information_completed");
-		expect(body.registration.user.coverageStatus).toBe("inactive");
+		expect(body.user.firstName).toBe("Kelly");
+		expect(body.user.lastName).toBe("Hagen");
+		expect((body.user as any).callerFacingBusinessName).toBe("Hagen Home Services");
+		expect(body.user.email).toBe("kelly.beta@example.com");
+		expect(body.user.phoneNumber).toBe("+15550001001");
+		expect(body.user.carrier).toBe("Example Carrier");
+		expect(body.user.contactMethod).toBe("email");
+		expect(body.user.role).toBe("participant");
+		expect(body.user.accountStatus).toBe("active");
+		expect(body.user.setupStatus).toBe("onboarding_incomplete");
+		expect(body.user.coverageStatus).toBe("inactive");
 
 		const storedUser = await env.nomorescamcalls_db
 			.prepare(`
@@ -677,7 +696,7 @@ describe("NoMoreScamCalls Worker", () => {
 
 	it("rejects reuse of a registered beta invite", async () => {
 		const response = await SELF.fetch(
-			"http://example.com/beta/register",
+			"http://example.com/portal/auth/register",
 			{
 				method: "POST",
 				headers: {
@@ -736,7 +755,7 @@ describe("NoMoreScamCalls Worker", () => {
 			.run();
 
 		const response = await SELF.fetch(
-			"http://example.com/beta/register",
+			"http://example.com/portal/auth/register",
 			{
 				method: "POST",
 				headers: {
@@ -761,7 +780,7 @@ describe("NoMoreScamCalls Worker", () => {
 
 	it("requires all beta registration fields", async () => {
 		const response = await SELF.fetch(
-			"http://example.com/beta/register",
+			"http://example.com/portal/auth/register",
 			{
 				method: "POST",
 				headers: {
@@ -799,7 +818,7 @@ describe("NoMoreScamCalls Worker", () => {
 			.run();
 
 		const registrationResponse = await SELF.fetch(
-			"http://example.com/beta/register",
+			"http://example.com/portal/auth/register",
 			{
 				method: "POST",
 				headers: {
@@ -822,7 +841,7 @@ describe("NoMoreScamCalls Worker", () => {
 		expect(registrationResponse.status).toBe(201);
 
 		const response = await SELF.fetch(
-			"http://example.com/beta/login",
+			"http://example.com/portal/auth/login",
 			{
 				method: "POST",
 				headers: {
@@ -839,25 +858,23 @@ describe("NoMoreScamCalls Worker", () => {
 
 		const body = await response.json<{
 			authenticated: boolean;
-			login: {
-				sessionToken: string;
-				expiresAt: string;
-				user: {
-					id: number;
-					email: string;
-					role: string;
-					accountStatus: string;
-				};
+			sessionToken: string;
+			expiresAt: string;
+			user: {
+				id: number;
+				email: string;
+				role: string;
+				accountStatus: string;
 			};
 		}>();
 
 		expect(body.authenticated).toBe(true);
-		expect(body.login.sessionToken.length).toBeGreaterThan(20);
-		expect(body.login.user.email).toBe("kelly.beta@example.com");
-		expect(body.login.user.role).toBe("participant");
-		expect(body.login.user.accountStatus).toBe("active");
+		expect(body.sessionToken.length).toBeGreaterThan(20);
+		expect(body.user.email).toBe("kelly.beta@example.com");
+		expect(body.user.role).toBe("participant");
+		expect(body.user.accountStatus).toBe("active");
 		expect(
-			new Date(body.login.expiresAt).getTime()
+			new Date(body.expiresAt).getTime()
 		).toBeGreaterThan(Date.now());
 
 		const storedSession = await env.nomorescamcalls_db
@@ -871,7 +888,7 @@ describe("NoMoreScamCalls Worker", () => {
 				ORDER BY id DESC
 				LIMIT 1
 			`)
-			.bind(body.login.user.id)
+			.bind(body.user.id)
 			.first<{
 				token_hash: string;
 				expires_at: string;
@@ -880,20 +897,20 @@ describe("NoMoreScamCalls Worker", () => {
 
 		expect(storedSession).not.toBeNull();
 		expect(storedSession?.token_hash).not.toBe(
-			body.login.sessionToken
+			body.sessionToken
 		);
 		expect(storedSession?.token_hash).toMatch(
 			/^[a-f0-9]{64}$/
 		);
 		expect(storedSession?.expires_at).toBe(
-			body.login.expiresAt
+			body.expiresAt
 		);
 		expect(storedSession?.revoked_at).toBeNull();
 	});
 
 	it("rejects an incorrect beta participant password", async () => {
 		const response = await SELF.fetch(
-			"http://example.com/beta/login",
+			"http://example.com/portal/auth/login",
 			{
 				method: "POST",
 				headers: {
@@ -917,7 +934,7 @@ describe("NoMoreScamCalls Worker", () => {
 
 	it("rejects an unknown beta portal session token", async () => {
 		const response = await SELF.fetch(
-			"http://example.com/beta/session",
+			"http://example.com/portal/me",
 			{
 				headers: {
 					authorization: "Bearer unknown-session-token"
@@ -949,7 +966,7 @@ describe("NoMoreScamCalls Worker", () => {
 					'+15550001006',
 					'participant',
 					'active',
-					'registration_information_completed',
+					'onboarding_incomplete',
 					'active',
 					'inactive'
 				)
@@ -1007,7 +1024,7 @@ describe("NoMoreScamCalls Worker", () => {
 
 		for (const sessionToken of [revokedToken, expiredToken]) {
 			const response = await SELF.fetch(
-				"http://example.com/beta/session",
+				"http://example.com/portal/me",
 				{
 					headers: {
 						authorization: `Bearer ${sessionToken}`
@@ -1035,7 +1052,7 @@ describe("NoMoreScamCalls Worker", () => {
 			.run();
 
 		const registrationResponse = await SELF.fetch(
-			"http://example.com/beta/register",
+			"http://example.com/portal/auth/register",
 			{
 				method: "POST",
 				headers: {
@@ -1058,7 +1075,7 @@ describe("NoMoreScamCalls Worker", () => {
 		expect(registrationResponse.status).toBe(201);
 
 		const loginResponse = await SELF.fetch(
-			"http://example.com/beta/login",
+			"http://example.com/portal/auth/login",
 			{
 				method: "POST",
 				headers: {
@@ -1074,17 +1091,15 @@ describe("NoMoreScamCalls Worker", () => {
 		expect(loginResponse.status).toBe(200);
 
 		const loginBody = await loginResponse.json<{
-			login: {
-				sessionToken: string;
-			};
+			sessionToken: string;
 		}>();
 
 		const response = await SELF.fetch(
-			"http://example.com/beta/logout",
+			"http://example.com/portal/auth/logout",
 			{
 				method: "POST",
 				headers: {
-					authorization: `Bearer ${loginBody.login.sessionToken}`
+				authorization: `Bearer ${loginBody.sessionToken}`
 				}
 			}
 		);
@@ -1098,10 +1113,10 @@ describe("NoMoreScamCalls Worker", () => {
 		expect(body.loggedOut).toBe(true);
 
 		const sessionResponse = await SELF.fetch(
-			"http://example.com/beta/session",
+			"http://example.com/portal/me",
 			{
 				headers: {
-					authorization: `Bearer ${loginBody.login.sessionToken}`
+				authorization: `Bearer ${loginBody.sessionToken}`
 				}
 			}
 		);
@@ -1109,9 +1124,9 @@ describe("NoMoreScamCalls Worker", () => {
 		expect(sessionResponse.status).toBe(401);
 	});
 
-	it("rejects a missing beta logout session token", async () => {
+	it("rejects a missing portal logout session token", async () => {
 		const response = await SELF.fetch(
-			"http://example.com/beta/logout",
+			"http://example.com/portal/auth/logout",
 			{
 				method: "POST"
 			}
@@ -1123,12 +1138,12 @@ describe("NoMoreScamCalls Worker", () => {
 			error: string;
 		}>();
 
-		expect(body.error).toBe("Valid beta session required");
+		expect(body.error).toBe("Valid portal session required");
 	});
 
 	it("rejects an unknown beta logout session token", async () => {
 		const response = await SELF.fetch(
-			"http://example.com/beta/logout",
+			"http://example.com/portal/auth/logout",
 			{
 				method: "POST",
 				headers: {

@@ -31,8 +31,7 @@ Everything in the product should support one of these goals:
    - trusted/good numbers,
    - numbers they want diverted,
    - relevant phone/carrier information.
-6. Backend provisions the account:
-   - subscriber record,
+6. Backend provisions the already-created subscriber account:
    - Telnyx screening number,
    - SIP/routing identity,
    - user-scoped lists.
@@ -216,6 +215,29 @@ It is not customer-facing.
 The onboarding process intentionally asks for useful starting data so protection begins with a stronger foundation.
 
 Completed onboarding requires the customer to supply the exact caller-facing business name they want announced to inbound callers. Account activation and subscriber provisioning cannot complete without that explicit value. It is never inferred from a personal, legal, billing, invoice, account, or other identity, and no generic or unbranded fallback is permitted.
+
+The permanent onboarding highway uses one authoritative `users` record for
+beta and post-launch subscribers. The record begins with inactive coverage and
+may be resumed as the customer supplies missing information. Completion
+requires first name, last name, email, protected phone number, carrier,
+preferred contact method, password credential, the explicit caller-facing
+business name, and acceptance of the current required agreement.
+
+The lifecycle is:
+
+`onboarding_incomplete / coverage inactive`
+
+→ `onboarding_complete / coverage inactive`
+
+→ screening DID and SIP credential assigned to the existing user
+
+→ `provisioned / coverage active`
+
+Provisioning does not create a user. It uses the common screening-number and
+SIP-credential inventories for every enrollment source. Coverage becomes
+active only when both resources belong to the same subscriber. A failed
+attempt leaves the existing record inactive and recoverable; an already
+provisioned subscriber is not provisioned again.
 
 This may take time for seniors because of typing and phone-number entry.
 

@@ -53,7 +53,9 @@ The existing operational fields remain unchanged:
 - `status`
 - `coverage_status`
 
-`status` and `coverage_status` remain operational service fields.
+`status` remains the operational enablement field. `coverage_status` is the
+authoritative protection field and is `active` only after completed onboarding
+and successful screening-DID plus SIP-credential assignment.
 
 `account_status` and `setup_status` remain portal lifecycle fields.
 
@@ -101,3 +103,6 @@ Purpose:
 - Keep operational status separate from portal/account lifecycle.
 - One subscriber record.
 - One source of truth.
+- One provisioning service for beta and post-launch subscribers.
+- Resumable onboarding on the existing subscriber record.
+- No inferred caller-facing business identity.

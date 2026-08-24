@@ -313,6 +313,58 @@ Operational failures do not alter standing or create caller deductions.
 
 ---
 
+## Subscriber Onboarding and Provisioning
+
+NoMoreScamCalls has one subscriber lifecycle for beta participants, the
+first production businesses, and future subscribers. Beta invitation and
+participation are enrollment context; they do not create a separate kind of
+subscriber or a separate provisioning system.
+
+The existing `users` row is the authoritative subscriber record throughout
+the lifecycle. Account creation happens before provisioning, and a subscriber
+may return to the same record to complete missing onboarding information.
+Provisioning never creates or transfers service to a duplicate user.
+
+The permanent setup states are:
+
+1. `onboarding_incomplete` with `coverage_status = inactive`.
+2. `onboarding_complete` with `coverage_status = inactive`.
+3. `provisioned` with `coverage_status = active`.
+
+Completed onboarding requires all established subscriber registration data:
+
+- first name;
+- last name;
+- email address;
+- protected phone number;
+- carrier;
+- preferred contact method;
+- password credential;
+- an explicitly customer-selected `caller_facing_business_name`;
+- acceptance of the current required agreement.
+
+The caller-facing name is never inferred from personal, account, legal,
+billing, invoice, or other identity. An empty or missing value keeps
+onboarding incomplete.
+
+Provisioning rechecks this single completion contract, reserves an available
+Telnyx screening DID and an available SIP credential from the approved
+inventories, and associates both with the same existing user ID. Only after
+both inventories confirm that ownership does the user transition to
+`setup_status = provisioned` and `coverage_status = active`.
+
+`account_status` controls account lifecycle and portal access. `status`
+controls whether the operational subscriber record is enabled.
+`coverage_status` alone communicates whether protection is active. Neither an
+enabled account nor a completed registration is a coverage claim.
+
+Missing information, missing agreement acceptance, unavailable inventory, or
+an assignment failure leaves the same subscriber recoverable and not covered.
+Partial inventory reservations are released. Retrying an already provisioned
+subscriber is idempotent and does not assign new resources.
+
+---
+
 ## Subscriber Experience
 
 The subscriber experience remains intentionally simple.

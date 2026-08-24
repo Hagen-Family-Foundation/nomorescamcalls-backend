@@ -19,18 +19,24 @@ export interface UserRecord {
 export interface CreateUserInput {
 	firstName?: string | null;
 	lastName?: string | null;
-	callerFacingBusinessName: string;
+	callerFacingBusinessName?: string | null;
 	email?: string | null;
 	phoneNumber: string;
-	screeningNumber?: string | null;
-	sipUsername?: string | null;
 	carrier?: string | null;
 	contactMethod?: string | null;
+	passwordHash?: string | null;
 	role?: string;
-	accountStatus?: string;
-	setupStatus?: string;
-	status?: string;
-	coverageStatus?: string;
+}
+
+export interface UpdateUserOnboardingInput {
+	firstName?: string | null;
+	lastName?: string | null;
+	callerFacingBusinessName?: string | null;
+	email?: string | null;
+	phoneNumber?: string | null;
+	carrier?: string | null;
+	contactMethod?: string | null;
+	passwordHash?: string | null;
 }
 
 interface UserRow {
@@ -93,17 +99,13 @@ export async function createUser(
 	db: D1Database,
 	input: CreateUserInput
 ): Promise<UserRecord> {
+	const phoneNumber = input.phoneNumber.trim();
 	const callerFacingBusinessName =
-		input.callerFacingBusinessName.trim();
+		input.callerFacingBusinessName?.trim() || null;
 
-	if (!callerFacingBusinessName) {
-		throw new Error(
-			"Caller-facing business name is required"
-		);
+	if (!phoneNumber) {
+		throw new Error("Subscriber phone number is required");
 	}
-
-	const status = input.status ?? "active";
-	const coverageStatus = input.coverageStatus ?? "inactive";
 
 	await db
 		.prepare(`
@@ -117,53 +119,105 @@ export async function createUser(
 				sip_username,
 				carrier,
 				contact_method,
+				password_hash,
 				role,
 				account_status,
 				setup_status,
 				status,
 				coverage_status
 			)
-			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-			ON CONFLICT(phone_number) DO UPDATE SET
-				first_name = excluded.first_name,
-				last_name = excluded.last_name,
-				caller_facing_business_name = excluded.caller_facing_business_name,
-				email = excluded.email,
-				screening_number = excluded.screening_number,
-				sip_username = excluded.sip_username,
-				carrier = excluded.carrier,
-				contact_method = excluded.contact_method,
-				role = excluded.role,
-				account_status = excluded.account_status,
-				setup_status = excluded.setup_status,
-				status = excluded.status,
-				coverage_status = excluded.coverage_status
+			VALUES (?, ?, ?, ?, ?, NULL, NULL, ?, ?, ?, ?, ?, ?, ?, ?)
 		`)
 		.bind(
-			input.firstName ?? null,
-			input.lastName ?? null,
+			input.firstName?.trim() || null,
+			input.lastName?.trim() || null,
 			callerFacingBusinessName,
-			input.email ?? null,
-			input.phoneNumber,
-			input.screeningNumber ?? null,
-			input.sipUsername ?? null,
-			input.carrier ?? null,
-			input.contactMethod ?? null,
-			input.role ?? "participant",
-			input.accountStatus ?? "active",
-			input.setupStatus ?? "registration_information_completed",
-			status,
-			coverageStatus
+			input.email?.trim().toLowerCase() || null,
+			phoneNumber,
+			input.carrier?.trim() || null,
+			input.contactMethod?.trim() || null,
+			input.passwordHash ?? null,
+			input.role ?? "subscriber",
+			"active",
+			"onboarding_incomplete",
+			"active",
+			"inactive"
 		)
 		.run();
 
-	const user = await findUserByPhoneNumber(db, input.phoneNumber);
+	const user = await findUserByPhoneNumber(db, phoneNumber);
 
 	if (!user) {
-		throw new Error("Failed to create or update user");
+		throw new Error("Failed to create subscriber");
 	}
 
 	return user;
+}
+
+export async function updateUserOnboardingInformation(
+	db: D1Database,
+	userId: number,
+	input: UpdateUserOnboardingInput
+): Promise<UserRecord> {
+	const result = await db
+		.prepare(`
+			UPDATE users
+			SET first_name = COALESCE(?, first_name),
+				last_name = COALESCE(?, last_name),
+				caller_facing_business_name = COALESCE(?, caller_facing_business_name),
+				email = COALESCE(?, email),
+				phone_number = COALESCE(?, phone_number),
+				carrier = COALESCE(?, carrier),
+				contact_method = COALESCE(?, contact_method),
+				password_hash = COALESCE(?, password_hash)
+			WHERE id = ?
+				AND status = 'active'
+				AND coverage_status <> 'active'
+		`)
+		.bind(
+			input.firstName?.trim() || null,
+			input.lastName?.trim() || null,
+			input.callerFacingBusinessName?.trim() || null,
+			input.email?.trim().toLowerCase() || null,
+			input.phoneNumber?.trim() || null,
+			input.carrier?.trim() || null,
+			input.contactMethod?.trim() || null,
+			input.passwordHash || null,
+			userId
+		)
+		.run();
+
+	if (result.meta.changes !== 1) {
+		throw new Error(
+			"Subscriber not found or onboarding is already provisioned"
+		);
+	}
+
+	const user = await findUserById(db, userId);
+
+	if (!user) {
+		throw new Error("Failed to update subscriber onboarding");
+	}
+
+	return user;
+}
+
+export async function updateUserOnboardingState(
+	db: D1Database,
+	userId: number,
+	setupStatus: "onboarding_incomplete" | "onboarding_complete"
+): Promise<void> {
+	await db
+		.prepare(`
+			UPDATE users
+			SET setup_status = ?,
+				coverage_status = 'inactive'
+			WHERE id = ?
+				AND status = 'active'
+				AND coverage_status <> 'active'
+		`)
+		.bind(setupStatus, userId)
+		.run();
 }
 
 export async function findUserById(
@@ -210,12 +264,37 @@ export async function updateUserProvisioningAssignment(
 			UPDATE users
 			SET screening_number = ?,
 				sip_username = ?,
-				setup_status = 'sip_credential_assigned',
-				coverage_status = 'inactive'
+				setup_status = 'provisioned',
+				coverage_status = 'active'
 			WHERE id = ?
 				AND status = 'active'
+				AND coverage_status <> 'active'
+				AND screening_number IS NULL
+				AND sip_username IS NULL
+				AND EXISTS (
+					SELECT 1
+					FROM screening_number_inventory
+					WHERE phone_number = ?
+						AND status = 'assigned'
+						AND assigned_user_id = ?
+				)
+				AND EXISTS (
+					SELECT 1
+					FROM sip_credential_inventory
+					WHERE sip_username = ?
+						AND status = 'assigned'
+						AND assigned_user_id = ?
+				)
 		`)
-		.bind(screeningNumber, sipUsername, userId)
+		.bind(
+			screeningNumber,
+			sipUsername,
+			userId,
+			screeningNumber,
+			userId,
+			sipUsername,
+			userId
+		)
 		.run();
 
 	const user = await findUserByIdIncludingInactive(db, userId);
@@ -224,9 +303,9 @@ export async function updateUserProvisioningAssignment(
 		!user
 		|| user.screeningNumber !== screeningNumber
 		|| user.sipUsername !== sipUsername
-		|| user.setupStatus !== "sip_credential_assigned"
+		|| user.setupStatus !== "provisioned"
 		|| user.status !== "active"
-		|| user.coverageStatus !== "inactive"
+		|| user.coverageStatus !== "active"
 	) {
 		throw new Error(
 			"Failed to assign subscriber provisioning resources"
@@ -246,7 +325,7 @@ export async function deleteUserById(
 		.run();
 }
 
-async function findUserByIdIncludingInactive(
+export async function findUserByIdIncludingInactive(
 	db: D1Database,
 	id: number
 ): Promise<UserRecord | null> {
@@ -272,6 +351,7 @@ export async function findUserByScreeningNumber(
 			FROM users
 			WHERE screening_number = ?
 				AND status = 'active'
+				AND coverage_status = 'active'
 		`)
 		.bind(screeningNumber)
 		.first<UserRow>();

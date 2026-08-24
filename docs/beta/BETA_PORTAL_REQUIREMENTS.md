@@ -81,17 +81,17 @@ The beta account must support the following setup information:
 * Service activation status.
 * Date service was activated.
 
-Setup statuses should include:
+The beta portal uses the same permanent subscriber setup states as every other
+enrollment source:
 
-* Invitation Sent.
-* Account Created.
-* Agreement Accepted.
-* Setup Incomplete.
-* Forwarding Ready.
-* Test Call Pending.
-* Active.
-* Suspended.
-* Closed.
+* `onboarding_incomplete` — the existing account is recoverable and coverage is inactive.
+* `onboarding_complete` — all required information and agreement acceptance are present; coverage remains inactive until provisioning succeeds.
+* `provisioned` — the screening DID and SIP credential belong to this subscriber and coverage is active.
+
+Invitation, suspension, and closure remain enrollment/account context rather
+than a parallel provisioning workflow. Forwarding guidance and test-call
+progress may be presented by the portal without redefining whether backend
+coverage is active.
 
 ---
 

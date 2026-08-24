@@ -33,6 +33,20 @@ export async function registerBetaParticipant(
 	const contactMethod = input.contactMethod.trim();
 	const now = new Date().toISOString();
 
+	if (
+		!code
+		|| !firstName
+		|| !lastName
+		|| !callerFacingBusinessName
+		|| !email
+		|| !phoneNumber
+		|| !carrier
+		|| !contactMethod
+		|| !input.password
+	) {
+		throw new Error("All beta enrollment fields are required");
+	}
+
 	const passwordHash = await hashPassword(input.password);
 
 	const [userInsert, inviteUpdate] = await db.batch([
@@ -64,7 +78,7 @@ export async function registerBetaParticipant(
 					?,
 					'participant',
 					'active',
-					'registration_information_completed',
+					'onboarding_incomplete',
 					'active',
 					'inactive'
 				FROM beta_invite_codes

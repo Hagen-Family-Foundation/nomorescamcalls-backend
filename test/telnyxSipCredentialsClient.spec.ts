@@ -14,7 +14,7 @@ describe("verifyTelnyxSipUsername", () => {
 			data: [
 				{
 					id: "credential-1",
-					user_name: "usersupport15892",
+					user_name: "test_user_support_15892",
 					connection_id: "connection-1"
 				}
 			]
@@ -27,12 +27,12 @@ describe("verifyTelnyxSipUsername", () => {
 				apiKey: "test-api-key",
 				baseUrl: "https://api.telnyx.test/v2"
 			},
-			"usersupport15892"
+			"test_user_support_15892"
 		);
 
 		expect(result.mode).toBe("live");
 		expect(result.verified).toBe(true);
-		expect(result.sipUsername).toBe("usersupport15892");
+		expect(result.sipUsername).toBe("test_user_support_15892");
 
 		expect(fetch).toHaveBeenCalledWith(
 			"https://api.telnyx.test/v2/credential_connections",
@@ -50,7 +50,7 @@ describe("verifyTelnyxSipUsername", () => {
 			data: [
 				{
 					id: "credential-1",
-					user_name: "usersupport15892",
+					user_name: "test_user_support_15892",
 					connection_id: "connection-1"
 				}
 			]
@@ -73,7 +73,7 @@ describe("verifyTelnyxSipUsername", () => {
 	it("does not verify when no API key is configured", async () => {
 		const result = await verifyTelnyxSipUsername(
 			{},
-			"usersupport15892"
+			"test_user_support_15892"
 		);
 
 		expect(result.mode).toBe("simulated");
@@ -85,7 +85,7 @@ describe("verifyTelnyxSipUsername", () => {
 			data: [
 				{
 					id: "credential-1",
-					user_name: "usersupport15892",
+					user_name: "test_user_support_15892",
 					connection_id: "connection-1"
 				},
 				{
@@ -97,7 +97,7 @@ describe("verifyTelnyxSipUsername", () => {
 		})).toEqual([
 			{
 				id: "credential-1",
-				sipUsername: "usersupport15892",
+				sipUsername: "test_user_support_15892",
 				connectionId: "connection-1"
 			},
 			{

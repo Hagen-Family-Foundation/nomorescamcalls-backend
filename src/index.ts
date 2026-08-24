@@ -12,7 +12,10 @@ import { createUser, listUsers } from "./services/users";
 import { getScreeningNumberInventoryHealth } from "./services/screeningNumberInventory";
 import { getSipCredentialInventoryHealth } from "./services/sipCredentialInventory";
 import { getTelnyxExecutionPolicy } from "./services/telnyxExecutionPolicy";
-import { provisionSubscriber } from "./services/provisioning";
+import {
+	provisionSubscriber,
+	SubscriberProvisioningError
+} from "./services/provisioning";
 import { syncTelnyxInventory } from "./services/telnyxInventorySync";
 import { syncTelnyxSipCredentials } from "./services/telnyxSipCredentialSync";
 import { fetchTelnyxVoiceApplication } from "./services/telnyxVoiceApplicationsClient";
@@ -27,6 +30,13 @@ import {
 	getCurrentBetaAgreement,
 	hasAcceptedCurrentBetaAgreement
 } from "./services/betaAgreement";
+import { hashPassword } from "./utils/passwordHash";
+import {
+	updateSubscriberOnboarding
+} from "./services/subscriberOnboarding";
+import {
+	advanceSubscriberLifecycle
+} from "./services/subscriberLifecycle";
 import {
 	addSearchToRecipeCatalog,
 	listRecipeCatalog,
@@ -276,43 +286,132 @@ export default {
 			});
 		}
 
-		// Create or Update User Endpoint
+		// Create Subscriber Account Endpoint
 		if (request.method === "POST" && url.pathname === "/users") {
 			const body = await request.json() as {
+				firstName?: string;
+				lastName?: string;
 				phoneNumber?: string;
 				callerFacingBusinessName?: string;
-				screeningNumber?: string | null;
-				sipUsername?: string | null;
-				status?: string;
+				email?: string;
+				carrier?: string;
+				contactMethod?: string;
+				password?: string;
 			};
 
-			const phoneNumber = body.phoneNumber ?? "";
-			const callerFacingBusinessName =
-				body.callerFacingBusinessName?.trim() ?? "";
+			const phoneNumber = body.phoneNumber?.trim() ?? "";
 
-			if (!phoneNumber || !callerFacingBusinessName) {
+			if (!phoneNumber) {
 				return Response.json({
-					error:
-						"phoneNumber and callerFacingBusinessName are required"
+					error: "phoneNumber is required"
 				}, {
 					status: 400
 				});
 			}
 
-			const user = await createUser(
-				env.nomorescamcalls_db,
-				{
-					phoneNumber,
-					callerFacingBusinessName,
-					screeningNumber: body.screeningNumber ?? null,
-					sipUsername: body.sipUsername ?? null,
-					status: body.status ?? "active"
-				}
-			);
+			try {
+				const password = body.password?.trim();
+				const user = await createUser(
+					env.nomorescamcalls_db,
+					{
+						firstName: body.firstName?.trim() || null,
+						lastName: body.lastName?.trim() || null,
+						phoneNumber,
+						callerFacingBusinessName:
+							body.callerFacingBusinessName?.trim() || null,
+						email: body.email?.trim().toLowerCase() || null,
+						carrier: body.carrier?.trim() || null,
+						contactMethod: body.contactMethod?.trim() || null,
+						passwordHash: password
+							? await hashPassword(password)
+							: null,
+						role: "subscriber"
+					}
+				);
 
-			return Response.json({
-				user
-			});
+				return Response.json({ user }, { status: 201 });
+			} catch (error) {
+				return Response.json({
+					error: "Subscriber account could not be created",
+					reason: error instanceof Error
+						? error.message
+						: "Unknown account creation error"
+				}, {
+					status: 409
+				});
+			}
+		}
+
+		const onboardingUserMatch =
+			url.pathname.match(/^\/users\/(\d+)\/onboarding$/);
+
+		if (request.method === "PATCH" && onboardingUserMatch) {
+			const userId = Number(onboardingUserMatch[1]);
+			const body = await request.json() as {
+				firstName?: string;
+				lastName?: string;
+				callerFacingBusinessName?: string;
+				email?: string;
+				phoneNumber?: string;
+				carrier?: string;
+				contactMethod?: string;
+				password?: string;
+			};
+
+			try {
+				const onboarding = await updateSubscriberOnboarding(
+					env.nomorescamcalls_db,
+					userId,
+					body
+				);
+				const lifecycle = onboarding.complete
+					? await advanceSubscriberLifecycle(
+						env.nomorescamcalls_db,
+						userId
+					)
+					: { onboarding, provisioning: null };
+
+				return Response.json(lifecycle);
+			} catch (error) {
+				return Response.json({
+					error: error instanceof Error
+						? error.message
+						: "Subscriber onboarding update failed"
+				}, {
+					status: 409
+				});
+			}
+		}
+
+		const provisioningUserMatch =
+			url.pathname.match(/^\/users\/(\d+)\/provision$/);
+
+		if (request.method === "POST" && provisioningUserMatch) {
+			const userId = Number(provisioningUserMatch[1]);
+
+			try {
+				return Response.json({
+					provisioning: await provisionSubscriber(
+						env.nomorescamcalls_db,
+						userId
+					)
+				});
+			} catch (error) {
+				return Response.json({
+					error: error instanceof Error
+						? error.message
+						: "Subscriber provisioning failed",
+					code: error instanceof SubscriberProvisioningError
+						? error.code
+						: "subscriber_provisioning_failed",
+					missingRequirements:
+						error instanceof SubscriberProvisioningError
+							? error.missingRequirements
+							: []
+				}, {
+					status: 409
+				});
+			}
 		}
 
 
@@ -850,6 +949,69 @@ export default {
 			});
 		}
 
+		// Subscriber Portal Onboarding Completion
+		if (
+			request.method === "PATCH"
+			&& url.pathname === "/portal/me/onboarding"
+		) {
+			const sessionToken = getBearerToken(request);
+
+			if (!sessionToken) {
+				return portalJson(
+					{ error: "Valid portal session required" },
+					401
+				);
+			}
+
+			const session = await authenticateBetaSession(
+				env.nomorescamcalls_db,
+				sessionToken
+			);
+
+			if (!session) {
+				return portalJson(
+					{ error: "Valid portal session required" },
+					401
+				);
+			}
+
+			const body = await request.json() as {
+				firstName?: string;
+				lastName?: string;
+				callerFacingBusinessName?: string;
+				email?: string;
+				phoneNumber?: string;
+				carrier?: string;
+				contactMethod?: string;
+				password?: string;
+			};
+
+			try {
+				const onboarding = await updateSubscriberOnboarding(
+					env.nomorescamcalls_db,
+					session.user.id,
+					body
+				);
+				const lifecycle = onboarding.complete
+					? await advanceSubscriberLifecycle(
+						env.nomorescamcalls_db,
+						session.user.id
+					)
+					: { onboarding, provisioning: null };
+
+				return portalJson(lifecycle);
+			} catch (error) {
+				return portalJson(
+					{
+						error: error instanceof Error
+							? error.message
+							: "Subscriber onboarding update failed"
+					},
+					409
+				);
+			}
+		}
+
 		// Subscriber Portal Agreement Acceptance
 		if (
 			request.method === "POST"
@@ -932,11 +1094,11 @@ export default {
 				);
 			}
 
-			let provisioning;
+			let lifecycle;
 
 			try {
-				provisioning =
-					await provisionSubscriber(
+				lifecycle =
+					await advanceSubscriberLifecycle(
 						env.nomorescamcalls_db,
 						session.user.id
 					);
@@ -951,6 +1113,22 @@ export default {
 					409
 				);
 			}
+
+			if (!lifecycle.provisioning) {
+				return portalJson(
+					{
+						accepted: true,
+						agreement: acceptance.agreement,
+						acceptedAt: acceptance.acceptedAt,
+						error: "Subscriber onboarding is incomplete",
+						missingRequirements:
+							lifecycle.onboarding.missingRequirements
+					},
+					409
+				);
+			}
+
+			const provisioning = lifecycle.provisioning;
 
 			return portalJson({
 				accepted: true,
@@ -1008,253 +1186,6 @@ export default {
 			}
 
 			return portalJson({
-				loggedOut: true
-			});
-		}
-
-		// Beta Participant Registration Endpoint
-		if (request.method === "POST" && url.pathname === "/beta/register") {
-			const body = await request.json() as {
-				code?: string;
-				firstName?: string;
-				lastName?: string;
-				callerFacingBusinessName?: string;
-				email?: string;
-				phoneNumber?: string;
-				carrier?: string;
-				contactMethod?: string;
-				password?: string;
-			};
-
-			const code = body.code?.trim() ?? "";
-			const firstName = body.firstName?.trim() ?? "";
-			const lastName = body.lastName?.trim() ?? "";
-			const callerFacingBusinessName = body.callerFacingBusinessName?.trim() ?? "";
-			const email = body.email?.trim() ?? "";
-			const phoneNumber = body.phoneNumber?.trim() ?? "";
-			const carrier = body.carrier?.trim() ?? "";
-			const contactMethod = body.contactMethod?.trim() ?? "";
-			const password = body.password ?? "";
-
-			if (
-				!code
-				|| !firstName
-				|| !lastName
-				|| !callerFacingBusinessName
-				|| !email
-				|| !phoneNumber
-				|| !carrier
-				|| !contactMethod
-				|| !password
-			) {
-				return Response.json({
-					error: "code, firstName, lastName, callerFacingBusinessName, email, phoneNumber, carrier, contactMethod, and password are required"
-				}, {
-					status: 400
-				});
-			}
-
-			try {
-				const registration = await registerBetaParticipant(
-					env.nomorescamcalls_db,
-					{
-						code,
-						firstName,
-						lastName,
-						callerFacingBusinessName,
-						email,
-						phoneNumber,
-						carrier,
-						contactMethod,
-						password
-					}
-				);
-
-				if (!registration) {
-					return Response.json({
-						error: "Beta invite code is invalid or unavailable"
-					}, {
-						status: 409
-					});
-				}
-
-				return Response.json({
-					registered: true,
-					registration
-				}, {
-					status: 201
-				});
-			} catch (error) {
-				const reason = error instanceof Error
-					? error.message
-					: "Registration failed";
-
-				return Response.json({
-					error: "Registration failed",
-					reason
-				}, {
-					status: 409
-				});
-			}
-		}
-
-		// Beta Participant Login Endpoint
-		if (request.method === "POST" && url.pathname === "/beta/login") {
-			const body = await request.json() as {
-				email?: string;
-				password?: string;
-			};
-
-			const email = body.email?.trim() ?? "";
-			const password = body.password ?? "";
-
-			if (!email || !password) {
-				return Response.json({
-					error: "email and password are required"
-				}, {
-					status: 400
-				});
-			}
-
-			const login = await loginBetaParticipant(
-				env.nomorescamcalls_db,
-				email,
-				password
-			);
-
-			if (!login) {
-				return Response.json({
-					error: "Invalid email or password"
-				}, {
-					status: 401
-				});
-			}
-
-			return Response.json({
-				authenticated: true,
-				login
-			});
-		}
-
-		// Beta Participant Session Endpoint
-		if (request.method === "GET" && url.pathname === "/beta/session") {
-			const authorization = request.headers.get("authorization") ?? "";
-			const [scheme, sessionToken] = authorization.split(" ", 2);
-
-			if (
-				scheme?.toLowerCase() !== "bearer"
-				|| !sessionToken
-			) {
-				return Response.json({
-					error: "Valid beta session required"
-				}, {
-					status: 401
-				});
-			}
-
-			const session = await authenticateBetaSession(
-				env.nomorescamcalls_db,
-				sessionToken
-			);
-
-			if (!session) {
-				return Response.json({
-					error: "Valid beta session required"
-				}, {
-					status: 401
-				});
-			}
-
-			return Response.json({
-				authenticated: true,
-				session
-			});
-		}
-
-		// Current Beta Agreement Endpoint
-		if (request.method === "GET" && url.pathname === "/beta/agreement") {
-			const authorization = request.headers.get("authorization") ?? "";
-			const [scheme, sessionToken] = authorization.split(" ", 2);
-
-			if (
-				scheme?.toLowerCase() !== "bearer"
-				|| !sessionToken
-			) {
-				return Response.json({
-					error: "Valid beta session required"
-				}, {
-					status: 401
-				});
-			}
-
-			const session = await authenticateBetaSession(
-				env.nomorescamcalls_db,
-				sessionToken
-			);
-
-			if (!session) {
-				return Response.json({
-					error: "Valid beta session required"
-				}, {
-					status: 401
-				});
-			}
-
-			const agreement = await getCurrentBetaAgreement(
-				env.nomorescamcalls_db
-			);
-
-			if (!agreement) {
-				return Response.json({
-					error: "No active beta agreement"
-				}, {
-					status: 404
-				});
-			}
-
-			const accepted = await hasAcceptedCurrentBetaAgreement(
-				env.nomorescamcalls_db,
-				session.user.id
-			);
-
-			return Response.json({
-				agreement: {
-					...agreement,
-					accepted
-				}
-			});
-		}
-
-		// Beta Participant Logout Endpoint
-		if (request.method === "POST" && url.pathname === "/beta/logout") {
-			const authorization = request.headers.get("authorization") ?? "";
-			const [scheme, sessionToken] = authorization.split(" ", 2);
-
-			if (
-				scheme?.toLowerCase() !== "bearer"
-				|| !sessionToken
-			) {
-				return Response.json({
-					error: "Valid beta session required"
-				}, {
-					status: 401
-				});
-			}
-
-			const loggedOut = await logoutBetaParticipant(
-				env.nomorescamcalls_db,
-				sessionToken
-			);
-
-			if (!loggedOut) {
-				return Response.json({
-					error: "Valid beta session required"
-				}, {
-					status: 401
-				});
-			}
-
-			return Response.json({
 				loggedOut: true
 			});
 		}

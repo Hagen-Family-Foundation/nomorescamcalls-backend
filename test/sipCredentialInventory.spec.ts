@@ -35,13 +35,13 @@ describe("SIP credential inventory", () => {
 		const credential = await addSipCredentialToInventory(
 			env.nomorescamcalls_db,
 			{
-				sipUsername: "usersupport15892",
+				sipUsername: "test_user_support_15892",
 				providerCredentialId: "credential-1",
 				connectionId: "connection-1"
 			}
 		);
 
-		expect(credential.sipUsername).toBe("usersupport15892");
+		expect(credential.sipUsername).toBe("test_user_support_15892");
 		expect(credential.status).toBe("available");
 		expect(credential.provider).toBe("telnyx");
 		expect(credential.providerCredentialId).toBe("credential-1");
@@ -49,16 +49,16 @@ describe("SIP credential inventory", () => {
 
 		const found = await findSipCredentialInInventory(
 			env.nomorescamcalls_db,
-			"usersupport15892"
+			"test_user_support_15892"
 		);
 
-		expect(found?.sipUsername).toBe("usersupport15892");
+		expect(found?.sipUsername).toBe("test_user_support_15892");
 	});
 
 	it("reserves the first available SIP credential", async () => {
 		await addSipCredentialToInventory(
 			env.nomorescamcalls_db,
-			"usersupport15892"
+			"test_user_support_15892"
 		);
 
 		const reserved = await reserveAvailableSipCredential(
@@ -66,7 +66,7 @@ describe("SIP credential inventory", () => {
 			42
 		);
 
-		expect(reserved.sipUsername).toBe("usersupport15892");
+		expect(reserved.sipUsername).toBe("test_user_support_15892");
 		expect(reserved.status).toBe("assigned");
 		expect(reserved.assignedUserId).toBe(42);
 	});
@@ -74,7 +74,7 @@ describe("SIP credential inventory", () => {
 	it("reports SIP credential inventory health", async () => {
 		await addSipCredentialToInventory(
 			env.nomorescamcalls_db,
-			"usersupport15892"
+			"test_user_support_15892"
 		);
 
 		const health = await getSipCredentialInventoryHealth(

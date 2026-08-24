@@ -193,7 +193,7 @@ describe('subscriber portal API', () => {
 			},
 			provisioning: {
 				status: 'active',
-				coverageStatus: 'inactive',
+				coverageStatus: 'active',
 				screeningNumber: '+15550002020',
 				sipUsername: 'portal_integration_user',
 			},
@@ -220,8 +220,36 @@ describe('subscriber portal API', () => {
 		expect(provisionedUser).toEqual({
 			screening_number: '+15550002020',
 			sip_username: 'portal_integration_user',
-			coverage_status: 'inactive',
+			coverage_status: 'active',
 		});
+
+		const callResponse = await SELF.fetch('http://example.com/webhooks/telnyx', {
+			method: 'POST',
+			headers: {
+				'content-type': 'application/json',
+			},
+			body: JSON.stringify({
+				data: {
+					event_type: 'call.initiated',
+					payload: {
+						call_control_id: 'portal-provisioned-control',
+						call_session_id: 'portal-provisioned-session',
+						from: '+18005551220',
+						to: '+15550002020',
+					},
+				},
+			}),
+		});
+		const callBody = await callResponse.json<{
+			protectedUser: { id: number };
+			firstRequest: { body: { payload: string } };
+		}>();
+
+		expect(callResponse.status).toBe(200);
+		expect(callBody.protectedUser.id).toBe(registerBody.user.id);
+		expect(callBody.firstRequest.body.payload).toContain(
+			'Thank you for calling Portal Plumbing.'
+		);
 
 		const logoutResponse = await SELF.fetch('http://example.com/portal/auth/logout', {
 			method: 'POST',

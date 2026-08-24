@@ -56,7 +56,7 @@ describe("Telnyx webhook native transcription path", () => {
 			contact_method: null,
 			role: "participant",
 			account_status: "active",
-			setup_status: "sip_credential_assigned",
+			setup_status: "provisioned",
 			status: "active",
 			coverage_status: "active"
 		};
@@ -173,7 +173,7 @@ describe("Telnyx webhook native transcription path", () => {
 				contact_method: null,
 				role: "participant",
 				account_status: "active",
-				setup_status: "sip_credential_assigned",
+				setup_status: "provisioned",
 				status: "active",
 				coverage_status: "active"
 			}), disabledPolicy, {}, sessions.namespace);
@@ -213,7 +213,7 @@ describe("Telnyx webhook native transcription path", () => {
 			contact_method: null,
 			role: "participant",
 			account_status: "active",
-			setup_status: "sip_credential_assigned",
+			setup_status: "provisioned",
 			status: "active",
 			coverage_status: "active"
 		}), disabledPolicy);
