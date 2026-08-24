@@ -31,9 +31,9 @@ async function createParticipant(
 				?,
 				'participant',
 				'active',
-				'registered',
+				'onboarding_incomplete',
 				'active',
-				'pending'
+				'inactive'
 			)
 		`)
 		.bind(email, phoneNumber)
