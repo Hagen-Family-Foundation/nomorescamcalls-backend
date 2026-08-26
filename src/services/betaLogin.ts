@@ -14,6 +14,8 @@ interface LoginUserRow {
 	email: string | null;
 	contact_phone_number: string | null;
 	contact_method: string | null;
+	sms_contact_number: string | null;
+	sms_capable: number;
 	password_hash: string | null;
 	role: string;
 	account_status: string;
@@ -35,6 +37,8 @@ function mapLoginUserRow(row: LoginUserRow): UserRecord {
 		email: row.email,
 		contactPhoneNumber: row.contact_phone_number,
 		contactMethod: row.contact_method,
+		smsContactNumber: row.sms_contact_number,
+		smsCapable: row.sms_capable === 1,
 		role: row.role,
 		accountStatus: row.account_status,
 		setupStatus: row.setup_status,
@@ -58,6 +62,8 @@ export async function loginBetaParticipant(
 				email,
 				contact_phone_number,
 				contact_method,
+				sms_contact_number,
+				sms_capable,
 				password_hash,
 				role,
 				account_status,

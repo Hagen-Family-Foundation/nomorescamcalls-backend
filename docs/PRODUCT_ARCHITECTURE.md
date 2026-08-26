@@ -320,6 +320,16 @@ businesses, residential customers, and future subscribers:
 
 `Customer Account → Location → Protected Line`
 
+Beta authorization begins with an invitation bound to an explicit contact
+destination. An explicitly supplied SMS-capable number is preferred; email is
+the supported fallback. SMS capability is never inferred from an account
+contact phone, Protected Line, carrier, or number format. The invitation first
+waits for a simple `Y`/`YES` response. Only an affirmative response issues the
+single onboarding credential and credential-bearing portal link. Registration
+validates that credential, binds the resulting account to the invitation
+destination, and redeems both exactly once. Delivery attempts are durable and
+must report provider absence or failure honestly.
+
 The existing `users` row is the authoritative customer account. It owns
 identity, email, account contact phone, preferred communication method,
 authentication, agreement acceptance, onboarding state, and account status.
@@ -344,10 +354,13 @@ relationship. New lines start `unprovisioned` with inactive coverage.
 
 Provisioning rechecks account onboarding and the exact line's eligibility,
 then reserves one available Telnyx screening DID and one available SIP
-credential from the approved inventories for that Protected Line. Only that
-line becomes `provisioned` with active coverage. Other lines under the account
-are untouched. Partial reservations are released after failure, and retrying
-an already provisioned line is idempotent.
+credential from the approved inventories for that Protected Line. The selected
+line then becomes `provisioned`, remains coverage-inactive, and waits for
+forwarding confirmation. Line-specific instructions expose its screening DID
+but never its SIP credential. Only an affirmative confirmation for that exact
+line changes forwarding to `confirmed` and coverage to `active`; sibling lines
+remain untouched. Partial reservations are released after failure, and
+retrying an already provisioned line is idempotent.
 
 `account_status` controls account lifecycle and portal access. Account
 `setup_status` records account onboarding completion. Coverage claims are

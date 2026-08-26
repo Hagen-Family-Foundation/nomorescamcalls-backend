@@ -5,6 +5,8 @@ export interface UserRecord {
 	email: string | null;
 	contactPhoneNumber: string | null;
 	contactMethod: string | null;
+	smsContactNumber: string | null;
+	smsCapable: boolean;
 	role: string;
 	accountStatus: string;
 	setupStatus: string;
@@ -17,6 +19,8 @@ export interface CreateUserInput {
 	email?: string | null;
 	contactPhoneNumber: string;
 	contactMethod?: string | null;
+	smsContactNumber?: string | null;
+	smsCapable?: boolean;
 	passwordHash?: string | null;
 	role?: string;
 }
@@ -37,6 +41,8 @@ interface UserRow {
 	email: string | null;
 	contact_phone_number: string | null;
 	contact_method: string | null;
+	sms_contact_number: string | null;
+	sms_capable: number;
 	role: string;
 	account_status: string;
 	setup_status: string;
@@ -50,6 +56,8 @@ const USER_COLUMNS = `
 	email,
 	contact_phone_number,
 	contact_method,
+	sms_contact_number,
+	sms_capable,
 	role,
 	account_status,
 	setup_status,
@@ -64,6 +72,8 @@ function mapUserRow(row: UserRow): UserRecord {
 		email: row.email,
 		contactPhoneNumber: row.contact_phone_number,
 		contactMethod: row.contact_method,
+		smsContactNumber: row.sms_contact_number,
+		smsCapable: row.sms_capable === 1,
 		role: row.role,
 		accountStatus: row.account_status,
 		setupStatus: row.setup_status,
@@ -76,9 +86,15 @@ export async function createUser(
 	input: CreateUserInput
 ): Promise<UserRecord> {
 	const contactPhoneNumber = input.contactPhoneNumber.trim();
+	const smsContactNumber = input.smsContactNumber?.trim() || null;
 
 	if (!contactPhoneNumber) {
 		throw new Error("Account contact phone number is required");
+	}
+	if (input.smsCapable && !smsContactNumber) {
+		throw new Error(
+			"Explicit SMS capability requires an SMS contact number"
+		);
 	}
 
 	const result = await db
@@ -94,6 +110,8 @@ export async function createUser(
 				sip_username,
 				carrier,
 				contact_method,
+				sms_contact_number,
+				sms_capable,
 				password_hash,
 				role,
 				account_status,
@@ -101,7 +119,7 @@ export async function createUser(
 				status,
 				coverage_status
 			)
-			VALUES (?, ?, NULL, ?, ?, ?, NULL, NULL, NULL, ?, ?, ?, ?, ?, ?, ?)
+			VALUES (?, ?, NULL, ?, ?, ?, NULL, NULL, NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 		`)
 		.bind(
 			input.firstName?.trim() || null,
@@ -110,6 +128,8 @@ export async function createUser(
 			contactPhoneNumber,
 			contactPhoneNumber,
 			input.contactMethod?.trim() || null,
+			smsContactNumber,
+			input.smsCapable ? 1 : 0,
 			input.passwordHash ?? null,
 			input.role ?? "subscriber",
 			"active",

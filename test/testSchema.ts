@@ -16,6 +16,16 @@ export async function ensureTestSchema(): Promise<void> {
 				setup_status TEXT NOT NULL DEFAULT 'onboarding_incomplete',
 				email TEXT UNIQUE,
 				contact_phone_number TEXT,
+				sms_contact_number TEXT,
+				sms_capable INTEGER NOT NULL DEFAULT 0
+					CHECK (sms_capable IN (0, 1))
+					CHECK (
+						sms_capable = 0
+						OR (
+							sms_contact_number IS NOT NULL
+							AND length(trim(sms_contact_number)) > 0
+						)
+					),
 				phone_number TEXT NOT NULL UNIQUE,
 				screening_number TEXT UNIQUE,
 				sip_username TEXT UNIQUE,
@@ -41,6 +51,20 @@ export async function ensureTestSchema(): Promise<void> {
 	)) {
 		await env.nomorescamcalls_db
 			.prepare("ALTER TABLE users ADD COLUMN contact_phone_number TEXT")
+			.run();
+	}
+	if (!userColumns.results.some((column) =>
+		column.name === "sms_contact_number"
+	)) {
+		await env.nomorescamcalls_db
+			.prepare("ALTER TABLE users ADD COLUMN sms_contact_number TEXT")
+			.run();
+	}
+	if (!userColumns.results.some((column) =>
+		column.name === "sms_capable"
+	)) {
+		await env.nomorescamcalls_db
+			.prepare("ALTER TABLE users ADD COLUMN sms_capable INTEGER NOT NULL DEFAULT 0")
 			.run();
 	}
 
@@ -69,6 +93,11 @@ export async function ensureTestSchema(): Promise<void> {
 				sip_username TEXT UNIQUE,
 				provisioning_status TEXT NOT NULL DEFAULT 'unprovisioned',
 				coverage_status TEXT NOT NULL DEFAULT 'inactive',
+				forwarding_status TEXT NOT NULL DEFAULT 'not_started',
+				resources_provisioned_at TEXT,
+				forwarding_instructions_created_at TEXT,
+				forwarding_confirmed_at TEXT,
+				activated_at TEXT,
 				created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
 				updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
 				FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
@@ -78,6 +107,23 @@ export async function ensureTestSchema(): Promise<void> {
 			)
 		`)
 		.run();
+
+	const protectedLineColumns = await env.nomorescamcalls_db
+		.prepare("PRAGMA table_info(protected_lines)")
+		.all<{ name: string }>();
+	for (const [column, definition] of [
+		["forwarding_status", "TEXT NOT NULL DEFAULT 'not_started'"],
+		["resources_provisioned_at", "TEXT"],
+		["forwarding_instructions_created_at", "TEXT"],
+		["forwarding_confirmed_at", "TEXT"],
+		["activated_at", "TEXT"]
+	] as const) {
+		if (!protectedLineColumns.results.some((entry) => entry.name === column)) {
+			await env.nomorescamcalls_db
+				.prepare(`ALTER TABLE protected_lines ADD COLUMN ${column} ${definition}`)
+				.run();
+		}
+	}
 
 	await env.nomorescamcalls_db
 		.prepare(`
@@ -145,6 +191,31 @@ export async function ensureTestSchema(): Promise<void> {
 
 	await env.nomorescamcalls_db
 		.prepare(`
+			CREATE TABLE IF NOT EXISTS beta_invitations (
+				id INTEGER PRIMARY KEY AUTOINCREMENT,
+				response_token TEXT NOT NULL UNIQUE,
+				sms_contact_number TEXT,
+				sms_capable INTEGER NOT NULL DEFAULT 0,
+				email_contact TEXT,
+				selected_channel TEXT NOT NULL,
+				selected_destination TEXT NOT NULL,
+				status TEXT NOT NULL DEFAULT 'awaiting_response',
+				created_by_user_id INTEGER NOT NULL,
+				issued_at TEXT NOT NULL,
+				awaiting_response_at TEXT NOT NULL,
+				response_received_at TEXT,
+				accepted_at TEXT,
+				credential_issued_at TEXT,
+				redeemed_at TEXT,
+				expires_at TEXT,
+				created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+				updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+			)
+		`)
+		.run();
+
+	await env.nomorescamcalls_db
+		.prepare(`
 			CREATE TABLE IF NOT EXISTS beta_invite_codes (
 				id INTEGER PRIMARY KEY AUTOINCREMENT,
 				code TEXT NOT NULL UNIQUE,
@@ -154,8 +225,44 @@ export async function ensureTestSchema(): Promise<void> {
 				use_count INTEGER NOT NULL DEFAULT 0,
 				created_by_user_id INTEGER,
 				redeemed_by_user_id INTEGER,
+				invitation_id INTEGER,
 				created_at TEXT DEFAULT CURRENT_TIMESTAMP,
 				updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+			)
+		`)
+		.run();
+
+	const inviteCodeColumns = await env.nomorescamcalls_db
+		.prepare("PRAGMA table_info(beta_invite_codes)")
+		.all<{ name: string }>();
+	if (!inviteCodeColumns.results.some((column) =>
+		column.name === "invitation_id"
+	)) {
+		await env.nomorescamcalls_db
+			.prepare("ALTER TABLE beta_invite_codes ADD COLUMN invitation_id INTEGER")
+			.run();
+	}
+
+	await env.nomorescamcalls_db
+		.prepare(`
+			CREATE TABLE IF NOT EXISTS customer_communication_deliveries (
+				id INTEGER PRIMARY KEY AUTOINCREMENT,
+				invitation_id INTEGER,
+				user_id INTEGER,
+				protected_line_id INTEGER,
+				purpose TEXT NOT NULL,
+				channel TEXT NOT NULL,
+				destination TEXT NOT NULL,
+				subject TEXT,
+				message_body TEXT NOT NULL,
+				status TEXT NOT NULL,
+				provider TEXT,
+				provider_message_id TEXT,
+				failure_reason TEXT,
+				attempted_at TEXT,
+				sent_at TEXT,
+				created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+				updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
 			)
 		`)
 		.run();

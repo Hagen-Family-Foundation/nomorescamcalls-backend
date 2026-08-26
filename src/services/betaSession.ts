@@ -10,6 +10,8 @@ interface SessionUserRow {
 	email: string | null;
 	contact_phone_number: string | null;
 	contact_method: string | null;
+	sms_contact_number: string | null;
+	sms_capable: number;
 	role: string;
 	account_status: string;
 	setup_status: string;
@@ -29,6 +31,8 @@ function mapSessionUserRow(row: SessionUserRow): UserRecord {
 		email: row.email,
 		contactPhoneNumber: row.contact_phone_number,
 		contactMethod: row.contact_method,
+		smsContactNumber: row.sms_contact_number,
+		smsCapable: row.sms_capable === 1,
 		role: row.role,
 		accountStatus: row.account_status,
 		setupStatus: row.setup_status,
@@ -54,6 +58,8 @@ export async function authenticateBetaSession(
 				users.email,
 				users.contact_phone_number,
 				users.contact_method,
+				users.sms_contact_number,
+				users.sms_capable,
 				users.role,
 				users.account_status,
 				users.setup_status,

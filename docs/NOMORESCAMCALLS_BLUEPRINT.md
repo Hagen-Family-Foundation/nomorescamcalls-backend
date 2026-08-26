@@ -225,6 +225,14 @@ phone, communication preference, authentication, agreement acceptance, and
 onboarding state. Account onboarding may be resumed and completes without
 creating or provisioning a telephone line.
 
+For beta enrollment, an authorized invitation is bound to an explicit SMS
+destination or email destination. SMS is used only when capability was
+explicitly supplied; otherwise email is used. A simple case-insensitive
+`Y`/`YES` response issues one one-time onboarding credential and a portal link
+that carries it. The credential is validated and redeemed through registration
+and cannot authorize a second account. Invitation and delivery state remains
+durable even when no external communication provider is configured.
+
 A Location is a minimal administrative grouping. Each Location supports up to
 six Protected Lines, with the same capacity for every customer type. A
 Protected Line owns its protected phone number, carrier information, exact
@@ -237,15 +245,21 @@ The line lifecycle is:
 
 → screening DID and SIP credential assigned to the exact Protected Line
 
-→ `provisioned / coverage active`
+→ `provisioned / forwarding awaiting confirmation / coverage inactive`
+
+→ customer confirms forwarding for that exact Protected Line
+
+→ `provisioned / forwarding confirmed / coverage active`
 
 The caller-facing phrase is never inferred from account, legal, billing,
 location, branch, department, or other identity. Provisioning does not create
 a user or Location. It uses the common screening-number and SIP-credential
-inventories and marks only the selected line covered. A failed attempt leaves
-that line inactive and recoverable; an already provisioned line is not
-provisioned again. Later lines reuse the completed account onboarding and
-agreement.
+inventories. Customer-facing setup exposes the selected line's screening DID
+and simple forwarding instructions but never its SIP credential. A failed
+attempt leaves that line inactive and recoverable; an already provisioned line
+is not provisioned again. Only confirmation activates the selected line, and
+sibling lines remain independent. Later lines reuse the completed account
+onboarding and agreement.
 
 This may take time for seniors because of typing and phone-number entry.
 

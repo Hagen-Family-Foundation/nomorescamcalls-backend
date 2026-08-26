@@ -9,27 +9,80 @@ describe('subscriber portal API', () => {
 
 	it('completes invite, registration, session, agreement, and logout', async () => {
 		const inviteCode = 'PORTAL-INTEGRATION-ONE';
+		await env.nomorescamcalls_db.prepare(`
+			INSERT OR IGNORE INTO users (
+				phone_number,
+				email,
+				role,
+				account_status,
+				setup_status,
+				status,
+				coverage_status
+			)
+			VALUES (
+				'+18005559980',
+				'portal-invite-admin@example.com',
+				'administrator',
+				'active',
+				'onboarding_complete',
+				'active',
+				'inactive'
+			)
+		`).run();
 
-		await env.nomorescamcalls_db
-			.prepare(
-				`
+		await env.nomorescamcalls_db.batch([
+			env.nomorescamcalls_db.prepare(`
+				INSERT INTO beta_invitations (
+					response_token,
+					sms_capable,
+					email_contact,
+					selected_channel,
+					selected_destination,
+					status,
+					created_by_user_id,
+					issued_at,
+					awaiting_response_at,
+					response_received_at,
+					accepted_at,
+					credential_issued_at
+				)
+				SELECT
+					'portal-integration-response-token',
+					0,
+					'portal.integration@example.com',
+					'email',
+					'portal.integration@example.com',
+					'credential_issued',
+					id,
+					CURRENT_TIMESTAMP,
+					CURRENT_TIMESTAMP,
+					CURRENT_TIMESTAMP,
+					CURRENT_TIMESTAMP,
+					CURRENT_TIMESTAMP
+				FROM users
+				WHERE role IN ('admin', 'administrator')
+				LIMIT 1
+			`),
+			env.nomorescamcalls_db.prepare(`
 				INSERT INTO beta_invite_codes (
 					code,
 					status,
 					max_uses,
-					use_count
+					use_count,
+					invitation_id
 				)
-				VALUES (?, 'active', 1, 0)
+				SELECT ?, 'active', 1, 0, id
+				FROM beta_invitations
+				WHERE response_token = 'portal-integration-response-token'
 				ON CONFLICT(code) DO UPDATE SET
 					status = 'active',
 					max_uses = 1,
 					use_count = 0,
 					expires_at = NULL,
-					redeemed_by_user_id = NULL
-			`,
-			)
-			.bind(inviteCode)
-			.run();
+					redeemed_by_user_id = NULL,
+					invitation_id = excluded.invitation_id
+			`).bind(inviteCode)
+		]);
 
 		const validateResponse = await SELF.fetch('http://example.com/portal/invite-codes/validate', {
 			method: 'POST',
@@ -213,19 +266,37 @@ describe('subscriber portal API', () => {
 				coverageStatus: string;
 				protectedLine: {
 					screeningNumber: string | null;
-					sipUsername: string | null;
+					forwardingStatus: string;
 				};
 			};
 		}>();
 
 		expect(provisioningBody).toMatchObject({
 			provisioning: {
-				provisioningStatus: 'active',
-				coverageStatus: 'active',
+				provisioningStatus: 'provisioned',
+				coverageStatus: 'inactive',
 				protectedLine: {
 					screeningNumber: '+15550002020',
-					sipUsername: 'portal_integration_user',
+					forwardingStatus: 'awaiting_confirmation',
 				},
+			},
+		});
+		expect(JSON.stringify(provisioningBody)).not.toContain('sipUsername');
+
+		const confirmationResponse = await SELF.fetch(
+			`http://example.com/portal/me/protected-lines/${protectedLine.id}/forwarding-confirm`,
+			{
+				method: 'POST',
+				headers: { authorization: `Bearer ${registerBody.token}` },
+			},
+		);
+		expect(confirmationResponse.status).toBe(200);
+		expect(await confirmationResponse.json()).toMatchObject({
+			coverageActive: true,
+			protectedLine: {
+				id: protectedLine.id,
+				forwardingStatus: 'confirmed',
+				coverageStatus: 'active',
 			},
 		});
 

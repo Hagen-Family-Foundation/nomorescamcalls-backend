@@ -19,8 +19,11 @@ import {
 import {
 	createAccountLocation,
 	createProtectedLine,
+	confirmProtectedLineForwarding,
+	findProtectedLineById,
 	listAccountLocations,
-	listProtectedLinesForAccount,
+	listCustomerProtectedLinesForAccount,
+	toCustomerProtectedLine,
 	ProtectedLineError
 } from "./services/protectedLines";
 import { syncTelnyxInventory } from "./services/telnyxInventorySync";
@@ -28,6 +31,11 @@ import { syncTelnyxSipCredentials } from "./services/telnyxSipCredentialSync";
 import { fetchTelnyxVoiceApplication } from "./services/telnyxVoiceApplicationsClient";
 import { fetchTelnyxRecordings } from "./services/telnyxRecordingsClient";
 import { validateBetaInviteCode } from "./services/betaInviteCodes";
+import {
+	BetaInvitationError,
+	issueBetaInvitation,
+	respondToBetaInvitation
+} from "./services/betaInvitations";
 import { registerBetaParticipant } from "./services/betaRegistration";
 import { loginBetaParticipant } from "./services/betaLogin";
 import { authenticateBetaSession } from "./services/betaSession";
@@ -159,6 +167,81 @@ export default {
 					error: "Administrative review failed",
 					code: "administrative_review_failed"
 				}, 500);
+			}
+		}
+
+		// Authorized operational beta-invitation issuance.
+		if (
+			request.method === "POST"
+			&& url.pathname === "/beta/invitations"
+		) {
+			const sessionToken = getBearerToken(request);
+			const session = sessionToken
+				? await authenticateBetaSession(
+					env.nomorescamcalls_db,
+					sessionToken
+				)
+				: null;
+
+			if (!session) {
+				return portalJson({
+					error: "Valid administrative portal session required",
+					code: "beta_invitation_unauthenticated"
+				}, 401);
+			}
+
+			const body = await request.json() as {
+				smsContactNumber?: string;
+				smsCapable?: boolean;
+				email?: string;
+				expiresAt?: string;
+			};
+
+			try {
+				return portalJson(await issueBetaInvitation(
+					env.nomorescamcalls_db,
+					session.user,
+					body
+				), 201);
+			} catch (error) {
+				if (error instanceof BetaInvitationError) {
+					return portalJson({
+						error: error.message,
+						code: error.code
+					}, error.status);
+				}
+
+				throw error;
+			}
+		}
+
+		// Provider-neutral boundary for an affirmative invitation response.
+		if (
+			request.method === "POST"
+			&& url.pathname === "/beta/invitations/respond"
+		) {
+			const body = await request.json() as {
+				responseToken?: string;
+				response?: string;
+			};
+
+			try {
+				return portalJson(await respondToBetaInvitation(
+					env.nomorescamcalls_db,
+					{
+						responseToken: body.responseToken ?? "",
+						response: body.response ?? ""
+					}
+				));
+			} catch (error) {
+				if (error instanceof BetaInvitationError) {
+					return portalJson({
+						error: error.message,
+						code: error.code
+					}, error.status);
+				}
+
+				throw error;
 			}
 		}
 
@@ -503,6 +586,163 @@ export default {
 			}
 		}
 
+		// Authenticated customer Location creation.
+		if (
+			request.method === "POST"
+			&& url.pathname === "/portal/me/locations"
+		) {
+			const sessionToken = getBearerToken(request);
+			const session = sessionToken
+				? await authenticateBetaSession(env.nomorescamcalls_db, sessionToken)
+				: null;
+			if (!session) {
+				return portalJson({ error: "Valid portal session required" }, 401);
+			}
+			if (session.user.setupStatus !== "onboarding_complete") {
+				return portalJson({
+					error: "Account onboarding and agreement must be complete",
+					code: "onboarding_incomplete"
+				}, 409);
+			}
+
+			try {
+				return portalJson({
+					location: await createAccountLocation(
+						env.nomorescamcalls_db,
+						session.user.id
+					)
+				}, 201);
+			} catch (error) {
+				return portalJson({
+					error: error instanceof Error ? error.message : "Location creation failed",
+					code: error instanceof ProtectedLineError
+						? error.code
+						: "location_creation_failed"
+				}, 409);
+			}
+		}
+
+		const portalProtectedLinesMatch = url.pathname.match(
+			/^\/portal\/me\/locations\/(\d+)\/protected-lines$/
+		);
+		if (request.method === "POST" && portalProtectedLinesMatch) {
+			const sessionToken = getBearerToken(request);
+			const session = sessionToken
+				? await authenticateBetaSession(env.nomorescamcalls_db, sessionToken)
+				: null;
+			if (!session) {
+				return portalJson({ error: "Valid portal session required" }, 401);
+			}
+			if (session.user.setupStatus !== "onboarding_complete") {
+				return portalJson({
+					error: "Account onboarding and agreement must be complete",
+					code: "onboarding_incomplete"
+				}, 409);
+			}
+
+			const body = await request.json() as {
+				protectedPhoneNumber?: string;
+				callerFacingBusinessName?: string;
+				carrier?: string;
+			};
+			try {
+				const line = await createProtectedLine(
+					env.nomorescamcalls_db,
+					session.user.id,
+					Number(portalProtectedLinesMatch[1]),
+					{
+						protectedPhoneNumber: body.protectedPhoneNumber ?? "",
+						callerFacingBusinessName: body.callerFacingBusinessName ?? "",
+						carrier: body.carrier
+					}
+				);
+				return portalJson({
+					protectedLine: toCustomerProtectedLine(line)
+				}, 201);
+			} catch (error) {
+				return portalJson({
+					error: error instanceof Error ? error.message : "Protected-line creation failed",
+					code: error instanceof ProtectedLineError
+						? error.code
+						: "protected_line_creation_failed"
+				}, 409);
+			}
+		}
+
+		const portalProvisionLineMatch = url.pathname.match(
+			/^\/portal\/me\/protected-lines\/(\d+)\/provision$/
+		);
+		if (request.method === "POST" && portalProvisionLineMatch) {
+			const sessionToken = getBearerToken(request);
+			const session = sessionToken
+				? await authenticateBetaSession(env.nomorescamcalls_db, sessionToken)
+				: null;
+			if (!session) {
+				return portalJson({ error: "Valid portal session required" }, 401);
+			}
+
+			const lineId = Number(portalProvisionLineMatch[1]);
+			const line = await findProtectedLineById(env.nomorescamcalls_db, lineId);
+			if (!line || line.userId !== session.user.id) {
+				return portalJson({
+					error: "Protected line not found",
+					code: "protected_line_not_found"
+				}, 404);
+			}
+
+			try {
+				return portalJson({
+					provisioning: await provisionProtectedLine(
+						env.nomorescamcalls_db,
+						line.id
+					)
+				});
+			} catch (error) {
+				return portalJson({
+					error: error instanceof Error ? error.message : "Protected-line provisioning failed",
+					code: error instanceof ProtectedLineProvisioningError
+						? error.code
+						: "protected_line_provisioning_failed",
+					missingRequirements: error instanceof ProtectedLineProvisioningError
+						? error.missingRequirements
+						: []
+				}, 409);
+			}
+		}
+
+		const portalForwardingConfirmationMatch = url.pathname.match(
+			/^\/portal\/me\/protected-lines\/(\d+)\/forwarding-confirm$/
+		);
+		if (request.method === "POST" && portalForwardingConfirmationMatch) {
+			const sessionToken = getBearerToken(request);
+			const session = sessionToken
+				? await authenticateBetaSession(env.nomorescamcalls_db, sessionToken)
+				: null;
+			if (!session) {
+				return portalJson({ error: "Valid portal session required" }, 401);
+			}
+
+			try {
+				const protectedLine = await confirmProtectedLineForwarding(
+					env.nomorescamcalls_db,
+					session.user.id,
+					Number(portalForwardingConfirmationMatch[1])
+				);
+				return portalJson({
+					forwardingConfirmed: true,
+					coverageActive: true,
+					protectedLine
+				});
+			} catch (error) {
+				return portalJson({
+					error: error instanceof Error ? error.message : "Forwarding confirmation failed",
+					code: error instanceof ProtectedLineError
+						? error.code
+						: "forwarding_confirmation_failed"
+				}, 409);
+			}
+		}
+
 
 		// Subscriber Portal CORS Preflight
 		if (
@@ -522,10 +762,11 @@ export default {
 		) {
 			const body = await request.json() as {
 				code?: string;
+				invite?: string;
 			};
 
 			const code =
-				body.code?.trim().toUpperCase() ?? "";
+				(body.invite ?? body.code)?.trim().toUpperCase() ?? "";
 
 			if (!code) {
 				return portalJson(
@@ -567,6 +808,7 @@ export default {
 		) {
 			const body = await request.json() as {
 				code?: string;
+				invite?: string;
 				firstName?: string;
 				lastName?: string;
 				email?: string;
@@ -576,7 +818,7 @@ export default {
 			};
 
 			const code =
-				body.code?.trim().toUpperCase() ?? "";
+				(body.invite ?? body.code)?.trim().toUpperCase() ?? "";
 			const firstName =
 				body.firstName?.trim() ?? "";
 			const lastName =
@@ -828,7 +1070,7 @@ export default {
 					.bind(session.user.id)
 					.first<PortalCallSummaryRow>(),
 				listAccountLocations(env.nomorescamcalls_db, session.user.id),
-				listProtectedLinesForAccount(env.nomorescamcalls_db, session.user.id)
+				listCustomerProtectedLinesForAccount(env.nomorescamcalls_db, session.user.id)
 			]);
 
 			return portalJson({
@@ -1009,12 +1251,12 @@ export default {
 							session.user.id
 						),
 						listAccountLocations(env.nomorescamcalls_db, session.user.id),
-						listProtectedLinesForAccount(env.nomorescamcalls_db, session.user.id)
+						listCustomerProtectedLinesForAccount(env.nomorescamcalls_db, session.user.id)
 					])
 					: [
 						false,
 						await listAccountLocations(env.nomorescamcalls_db, session.user.id),
-						await listProtectedLinesForAccount(env.nomorescamcalls_db, session.user.id)
+						await listCustomerProtectedLinesForAccount(env.nomorescamcalls_db, session.user.id)
 					] as const;
 
 			return portalJson({

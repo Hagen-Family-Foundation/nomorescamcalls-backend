@@ -42,7 +42,7 @@ export async function registerBetaParticipant(
 
 	const passwordHash = await hashPassword(input.password);
 
-	const [userInsert, inviteUpdate] = await db.batch([
+	const [userInsert, inviteUpdate, invitationUpdate] = await db.batch([
 		db
 			.prepare(`
 				INSERT INTO users (
@@ -52,6 +52,8 @@ export async function registerBetaParticipant(
 					contact_phone_number,
 					phone_number,
 					contact_method,
+					sms_contact_number,
+					sms_capable,
 					password_hash,
 					role,
 					account_status,
@@ -66,6 +68,8 @@ export async function registerBetaParticipant(
 					?,
 					?,
 					?,
+					beta_invitations.sms_contact_number,
+					beta_invitations.sms_capable,
 					?,
 					'participant',
 					'active',
@@ -73,13 +77,24 @@ export async function registerBetaParticipant(
 					'active',
 					'inactive'
 				FROM beta_invite_codes
-				WHERE code = ?
-					AND status = 'active'
-					AND use_count < max_uses
-					AND redeemed_by_user_id IS NULL
+				INNER JOIN beta_invitations
+					ON beta_invitations.id = beta_invite_codes.invitation_id
+				WHERE beta_invite_codes.code = ?
+					AND beta_invite_codes.status = 'active'
+					AND beta_invite_codes.use_count < beta_invite_codes.max_uses
+					AND beta_invite_codes.redeemed_by_user_id IS NULL
+					AND beta_invitations.status = 'credential_issued'
 					AND (
-						expires_at IS NULL
-						OR expires_at > ?
+						(beta_invitations.selected_channel = 'email'
+							AND beta_invitations.email_contact = ?)
+						OR
+						(beta_invitations.selected_channel = 'sms'
+							AND beta_invitations.sms_capable = 1
+							AND beta_invitations.sms_contact_number = ?)
+					)
+					AND (
+						beta_invite_codes.expires_at IS NULL
+						OR beta_invite_codes.expires_at > ?
 					)
 			`)
 			.bind(
@@ -91,6 +106,8 @@ export async function registerBetaParticipant(
 				contactMethod,
 				passwordHash,
 				code,
+				email,
+				contactPhoneNumber,
 				now
 			),
 		db
@@ -112,6 +129,7 @@ export async function registerBetaParticipant(
 					AND status = 'active'
 					AND use_count < max_uses
 					AND redeemed_by_user_id IS NULL
+					AND invitation_id IS NOT NULL
 					AND EXISTS (
 						SELECT 1
 						FROM users
@@ -127,11 +145,39 @@ export async function registerBetaParticipant(
 				email,
 				contactPhoneNumber
 			)
+		,
+		db
+			.prepare(`
+				UPDATE beta_invitations
+				SET status = 'redeemed',
+					redeemed_at = ?,
+					updated_at = ?
+				WHERE id = (
+					SELECT invitation_id
+					FROM beta_invite_codes
+					WHERE code = ?
+						AND redeemed_by_user_id = (
+							SELECT id
+							FROM users
+							WHERE email = ?
+								AND contact_phone_number = ?
+						)
+				)
+					AND status = 'credential_issued'
+			`)
+			.bind(
+				now,
+				now,
+				code,
+				email,
+				contactPhoneNumber
+			)
 	]);
 
 	if (
 		userInsert.meta.changes !== 1
 		|| inviteUpdate.meta.changes !== 1
+		|| invitationUpdate.meta.changes !== 1
 	) {
 		return null;
 	}

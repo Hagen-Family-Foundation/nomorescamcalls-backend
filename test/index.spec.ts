@@ -2,6 +2,82 @@ import { env, SELF } from "cloudflare:test";
 import { beforeAll, describe, it, expect } from "vitest";
 import { ensureTestSchema } from "./testSchema";
 
+async function seedAcceptedBetaInvite(
+	code: string,
+	email: string,
+	expiresAt: string | null = null
+): Promise<void> {
+	const responseToken = `response-${code.toLowerCase()}`;
+	await env.nomorescamcalls_db.batch([
+		env.nomorescamcalls_db.prepare(`
+			INSERT OR IGNORE INTO users (
+				phone_number,
+				email,
+				role,
+				account_status,
+				setup_status,
+				status,
+				coverage_status
+			)
+			VALUES (
+				'+18005559999',
+				'index-invite-admin@example.com',
+				'administrator',
+				'active',
+				'onboarding_complete',
+				'active',
+				'inactive'
+			)
+		`),
+		env.nomorescamcalls_db.prepare(`
+			INSERT INTO beta_invitations (
+				response_token,
+				sms_capable,
+				email_contact,
+				selected_channel,
+				selected_destination,
+				status,
+				created_by_user_id,
+				issued_at,
+				awaiting_response_at,
+				response_received_at,
+				accepted_at,
+				credential_issued_at,
+				expires_at
+			)
+			SELECT
+				?,
+				0,
+				?,
+				'email',
+				?,
+				'credential_issued',
+				id,
+				CURRENT_TIMESTAMP,
+				CURRENT_TIMESTAMP,
+				CURRENT_TIMESTAMP,
+				CURRENT_TIMESTAMP,
+				CURRENT_TIMESTAMP,
+				?
+			FROM users
+			WHERE email = 'index-invite-admin@example.com'
+		`).bind(responseToken, email, email, expiresAt),
+		env.nomorescamcalls_db.prepare(`
+			INSERT INTO beta_invite_codes (
+				code,
+				status,
+				expires_at,
+				max_uses,
+				use_count,
+				invitation_id
+			)
+			SELECT ?, 'active', ?, 1, 0, id
+			FROM beta_invitations
+			WHERE response_token = ?
+		`).bind(code, expiresAt, responseToken)
+	]);
+}
+
 describe("NoMoreScamCalls Worker", () => {
 	beforeAll(async () => {
 		await ensureTestSchema();
@@ -633,24 +709,10 @@ describe("NoMoreScamCalls Worker", () => {
 	});
 
 	it("registers a beta participant and associates the invite", async () => {
-		await env.nomorescamcalls_db
-			.prepare(`
-				INSERT INTO beta_invite_codes (
-					code,
-					status,
-					max_uses,
-					use_count
-				)
-				VALUES (?, 'active', 1, 0)
-				ON CONFLICT(code) DO UPDATE SET
-					status = 'active',
-					max_uses = 1,
-					use_count = 0,
-					expires_at = NULL,
-					redeemed_by_user_id = NULL
-			`)
-			.bind("BETA-REGISTER-ONE")
-			.run();
+		await seedAcceptedBetaInvite(
+			"BETA-REGISTER-ONE",
+			"kelly.beta@example.com"
+		);
 
 		const response = await SELF.fetch(
 			"http://example.com/portal/auth/register",
@@ -771,28 +833,11 @@ describe("NoMoreScamCalls Worker", () => {
 	});
 
 	it("rejects an expired beta invite during registration", async () => {
-		await env.nomorescamcalls_db
-			.prepare(`
-				INSERT INTO beta_invite_codes (
-					code,
-					status,
-					expires_at,
-					max_uses,
-					use_count
-				)
-				VALUES (?, 'active', ?, 1, 0)
-				ON CONFLICT(code) DO UPDATE SET
-					status = 'active',
-					expires_at = excluded.expires_at,
-					max_uses = 1,
-					use_count = 0,
-					redeemed_by_user_id = NULL
-			`)
-			.bind(
-				"BETA-REGISTER-EXPIRED",
-				"2020-01-01T00:00:00.000Z"
-			)
-			.run();
+		await seedAcceptedBetaInvite(
+			"BETA-REGISTER-EXPIRED",
+			"expired.beta@example.com",
+			"2020-01-01T00:00:00.000Z"
+		);
 
 		const response = await SELF.fetch(
 			"http://example.com/portal/auth/register",
@@ -842,18 +887,10 @@ describe("NoMoreScamCalls Worker", () => {
 	});
 
 	it("logs in a registered beta participant and creates a session", async () => {
-		await env.nomorescamcalls_db
-			.prepare(`
-				INSERT INTO beta_invite_codes (
-					code,
-					status,
-					max_uses,
-					use_count
-				)
-				VALUES (?, 'active', 1, 0)
-			`)
-			.bind("BETA-LOGIN-ONE")
-			.run();
+		await seedAcceptedBetaInvite(
+			"BETA-LOGIN-ONE",
+			"kelly.beta@example.com"
+		);
 
 		const registrationResponse = await SELF.fetch(
 			"http://example.com/portal/auth/register",
@@ -1074,18 +1111,10 @@ describe("NoMoreScamCalls Worker", () => {
 
 
 	it("logs out an authenticated beta participant", async () => {
-		await env.nomorescamcalls_db
-			.prepare(`
-				INSERT INTO beta_invite_codes (
-					code,
-					status,
-					max_uses,
-					use_count
-				)
-				VALUES (?, 'active', 1, 0)
-			`)
-			.bind("BETA-LOGOUT-ONE")
-			.run();
+		await seedAcceptedBetaInvite(
+			"BETA-LOGOUT-ONE",
+			"logout.beta@example.com"
+		);
 
 		const registrationResponse = await SELF.fetch(
 			"http://example.com/portal/auth/register",
@@ -1190,18 +1219,10 @@ describe("NoMoreScamCalls Worker", () => {
 	});
 
 	it("returns the authenticated participant dashboard summary", async () => {
-		await env.nomorescamcalls_db
-			.prepare(`
-				INSERT INTO beta_invite_codes (
-					code,
-					status,
-					max_uses,
-					use_count
-				)
-				VALUES (?, 'active', 1, 0)
-			`)
-			.bind("BETA-DASHBOARD-SUMMARY")
-			.run();
+		await seedAcceptedBetaInvite(
+			"BETA-DASHBOARD-SUMMARY",
+			"dashboard.summary@example.com"
+		);
 
 		const registrationResponse = await SELF.fetch(
 			"http://example.com/portal/auth/register",
@@ -1341,18 +1362,10 @@ describe("NoMoreScamCalls Worker", () => {
 	});
 
 	it("returns only the authenticated participant recent calls", async () => {
-		await env.nomorescamcalls_db
-			.prepare(`
-				INSERT INTO beta_invite_codes (
-					code,
-					status,
-					max_uses,
-					use_count
-				)
-				VALUES (?, 'active', 1, 0)
-			`)
-			.bind("BETA-DASHBOARD-CALLS")
-			.run();
+		await seedAcceptedBetaInvite(
+			"BETA-DASHBOARD-CALLS",
+			"dashboard.calls@example.com"
+		);
 
 		const registrationResponse = await SELF.fetch(
 			"http://example.com/portal/auth/register",

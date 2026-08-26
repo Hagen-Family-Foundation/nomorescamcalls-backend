@@ -5,6 +5,7 @@ export interface RedeemedBetaInviteCode {
 	maxUses: number;
 	useCount: number;
 	expiresAt: string | null;
+	invitationId: number;
 }
 
 interface BetaInviteCodeRow {
@@ -14,6 +15,7 @@ interface BetaInviteCodeRow {
 	max_uses: number;
 	use_count: number;
 	expires_at: string | null;
+	invitation_id: number;
 }
 
 function mapBetaInviteCodeRow(
@@ -25,7 +27,8 @@ function mapBetaInviteCodeRow(
 		status: row.status,
 		maxUses: row.max_uses,
 		useCount: row.use_count,
-		expiresAt: row.expires_at
+		expiresAt: row.expires_at,
+		invitationId: row.invitation_id
 	};
 }
 
@@ -44,20 +47,24 @@ export async function validateBetaInviteCode(
 	const row = await db
 		.prepare(`
 			SELECT
-				id,
-				code,
-				status,
-				max_uses,
-				use_count,
-				expires_at
+				beta_invite_codes.id,
+				beta_invite_codes.code,
+				beta_invite_codes.status,
+				beta_invite_codes.max_uses,
+				beta_invite_codes.use_count,
+				beta_invite_codes.expires_at,
+				beta_invite_codes.invitation_id
 			FROM beta_invite_codes
-			WHERE code = ?
-				AND status = 'active'
-				AND use_count < max_uses
-				AND redeemed_by_user_id IS NULL
+			INNER JOIN beta_invitations
+				ON beta_invitations.id = beta_invite_codes.invitation_id
+			WHERE beta_invite_codes.code = ?
+				AND beta_invite_codes.status = 'active'
+				AND beta_invite_codes.use_count < beta_invite_codes.max_uses
+				AND beta_invite_codes.redeemed_by_user_id IS NULL
+				AND beta_invitations.status = 'credential_issued'
 				AND (
-					expires_at IS NULL
-					OR expires_at > ?
+					beta_invite_codes.expires_at IS NULL
+					OR beta_invite_codes.expires_at > ?
 				)
 			LIMIT 1
 		`)
@@ -90,6 +97,14 @@ export async function redeemBetaInviteCode(
 			WHERE code = ?
 				AND status = 'active'
 				AND use_count < max_uses
+				AND redeemed_by_user_id IS NULL
+				AND invitation_id IS NOT NULL
+				AND EXISTS (
+					SELECT 1
+					FROM beta_invitations
+					WHERE beta_invitations.id = beta_invite_codes.invitation_id
+						AND beta_invitations.status = 'credential_issued'
+				)
 				AND (
 					expires_at IS NULL
 					OR expires_at > ?
@@ -114,7 +129,8 @@ export async function redeemBetaInviteCode(
 				status,
 				max_uses,
 				use_count,
-				expires_at
+				expires_at,
+				invitation_id
 			FROM beta_invite_codes
 			WHERE code = ?
 		`)

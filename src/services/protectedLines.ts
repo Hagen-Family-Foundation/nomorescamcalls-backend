@@ -22,6 +22,11 @@ export interface ProtectedLineRecord {
 	sipUsername: string | null;
 	provisioningStatus: "unprovisioned" | "provisioned" | "failed";
 	coverageStatus: "inactive" | "active";
+	forwardingStatus: "not_started" | "awaiting_confirmation" | "confirmed";
+	resourcesProvisionedAt: string | null;
+	forwardingInstructionsCreatedAt: string | null;
+	forwardingConfirmedAt: string | null;
+	activatedAt: string | null;
 	createdAt: string;
 	updatedAt: string;
 }
@@ -30,6 +35,11 @@ export interface ProtectedLineWithAccount {
 	protectedLine: ProtectedLineRecord;
 	account: UserRecord;
 }
+
+export type CustomerProtectedLineRecord = Omit<
+	ProtectedLineRecord,
+	"sipUsername"
+>;
 
 export interface CreateProtectedLineInput {
 	protectedPhoneNumber: string;
@@ -54,6 +64,11 @@ interface ProtectedLineRow {
 	sip_username: string | null;
 	provisioning_status: "unprovisioned" | "provisioned" | "failed";
 	coverage_status: "inactive" | "active";
+	forwarding_status: "not_started" | "awaiting_confirmation" | "confirmed";
+	resources_provisioned_at: string | null;
+	forwarding_instructions_created_at: string | null;
+	forwarding_confirmed_at: string | null;
+	activated_at: string | null;
 	created_at: string;
 	updated_at: string;
 }
@@ -69,6 +84,11 @@ const PROTECTED_LINE_COLUMNS = `
 	sip_username,
 	provisioning_status,
 	coverage_status,
+	forwarding_status,
+	resources_provisioned_at,
+	forwarding_instructions_created_at,
+	forwarding_confirmed_at,
+	activated_at,
 	created_at,
 	updated_at
 `;
@@ -93,9 +113,21 @@ function mapProtectedLineRow(row: ProtectedLineRow): ProtectedLineRecord {
 		sipUsername: row.sip_username,
 		provisioningStatus: row.provisioning_status,
 		coverageStatus: row.coverage_status,
+		forwardingStatus: row.forwarding_status,
+		resourcesProvisionedAt: row.resources_provisioned_at,
+		forwardingInstructionsCreatedAt: row.forwarding_instructions_created_at,
+		forwardingConfirmedAt: row.forwarding_confirmed_at,
+		activatedAt: row.activated_at,
 		createdAt: row.created_at,
 		updatedAt: row.updated_at
 	};
+}
+
+export function toCustomerProtectedLine(
+	line: ProtectedLineRecord
+): CustomerProtectedLineRecord {
+	const { sipUsername: _sipUsername, ...customerLine } = line;
+	return customerLine;
 }
 
 export class ProtectedLineError extends Error {
@@ -341,6 +373,14 @@ export async function listProtectedLinesForAccount(
 	return result.results.map(mapProtectedLineRow);
 }
 
+export async function listCustomerProtectedLinesForAccount(
+	db: D1Database,
+	userId: number
+): Promise<CustomerProtectedLineRecord[]> {
+	return (await listProtectedLinesForAccount(db, userId))
+		.map(toCustomerProtectedLine);
+}
+
 export async function findProtectedLineByScreeningNumber(
 	db: D1Database,
 	screeningNumber: string
@@ -379,14 +419,20 @@ export async function assignProtectedLineResources(
 	screeningNumber: string,
 	sipUsername: string
 ): Promise<ProtectedLineRecord> {
+	const assignedAt = new Date().toISOString();
 	await db
 		.prepare(`
 			UPDATE protected_lines
 			SET screening_number = ?,
 				sip_username = ?,
 				provisioning_status = 'provisioned',
-				coverage_status = 'active',
-				updated_at = CURRENT_TIMESTAMP
+				coverage_status = 'inactive',
+				forwarding_status = 'awaiting_confirmation',
+				resources_provisioned_at = ?,
+				forwarding_instructions_created_at = ?,
+				forwarding_confirmed_at = NULL,
+				activated_at = NULL,
+				updated_at = ?
 			WHERE id = ?
 				AND coverage_status = 'inactive'
 				AND screening_number IS NULL
@@ -409,6 +455,9 @@ export async function assignProtectedLineResources(
 		.bind(
 			screeningNumber,
 			sipUsername,
+			assignedAt,
+			assignedAt,
+			assignedAt,
 			lineId,
 			screeningNumber,
 			lineId,
@@ -424,12 +473,84 @@ export async function assignProtectedLineResources(
 		|| line.screeningNumber !== screeningNumber
 		|| line.sipUsername !== sipUsername
 		|| line.provisioningStatus !== "provisioned"
-		|| line.coverageStatus !== "active"
+		|| line.coverageStatus !== "inactive"
+		|| line.forwardingStatus !== "awaiting_confirmation"
 	) {
 		throw new Error("Failed to assign protected-line provisioning resources");
 	}
 
 	return line;
+}
+
+export async function confirmProtectedLineForwarding(
+	db: D1Database,
+	userId: number,
+	lineId: number,
+	now = new Date().toISOString()
+): Promise<CustomerProtectedLineRecord> {
+	const existingLine = await findProtectedLineById(db, lineId);
+
+	if (!existingLine || existingLine.userId !== userId) {
+		throw new ProtectedLineError(
+			"Protected line does not belong to the customer account",
+			"protected_line_not_found"
+		);
+	}
+
+	if (
+		existingLine.provisioningStatus !== "provisioned"
+		|| !existingLine.screeningNumber
+		|| !existingLine.sipUsername
+	) {
+		throw new ProtectedLineError(
+			"Protected line resources must be provisioned before forwarding can be confirmed",
+			"forwarding_not_ready"
+		);
+	}
+
+	if (
+		existingLine.forwardingStatus === "confirmed"
+		&& existingLine.coverageStatus === "active"
+	) {
+		return toCustomerProtectedLine(existingLine);
+	}
+
+	const result = await db
+		.prepare(`
+			UPDATE protected_lines
+			SET forwarding_status = 'confirmed',
+				forwarding_confirmed_at = ?,
+				coverage_status = 'active',
+				activated_at = ?,
+				updated_at = ?
+			WHERE id = ?
+				AND user_id = ?
+				AND provisioning_status = 'provisioned'
+				AND screening_number IS NOT NULL
+				AND sip_username IS NOT NULL
+				AND forwarding_status = 'awaiting_confirmation'
+				AND coverage_status = 'inactive'
+		`)
+		.bind(now, now, now, lineId, userId)
+		.run();
+
+	if (result.meta.changes !== 1) {
+		throw new ProtectedLineError(
+			"Protected line is not awaiting forwarding confirmation",
+			"forwarding_not_awaiting_confirmation"
+		);
+	}
+
+	const confirmedLine = await findProtectedLineById(db, lineId);
+	if (
+		!confirmedLine
+		|| confirmedLine.coverageStatus !== "active"
+		|| confirmedLine.forwardingStatus !== "confirmed"
+	) {
+		throw new Error("Failed to activate confirmed Protected Line coverage");
+	}
+
+	return toCustomerProtectedLine(confirmedLine);
 }
 
 export async function markProtectedLineProvisioningFailed(
@@ -441,6 +562,11 @@ export async function markProtectedLineProvisioningFailed(
 			UPDATE protected_lines
 			SET provisioning_status = 'failed',
 				coverage_status = 'inactive',
+				forwarding_status = 'not_started',
+				resources_provisioned_at = NULL,
+				forwarding_instructions_created_at = NULL,
+				forwarding_confirmed_at = NULL,
+				activated_at = NULL,
 				updated_at = CURRENT_TIMESTAMP
 			WHERE id = ?
 				AND coverage_status = 'inactive'

@@ -10,6 +10,8 @@ import {
 	assignProtectedLineResources,
 	findProtectedLineById,
 	markProtectedLineProvisioningFailed,
+	toCustomerProtectedLine,
+	type CustomerProtectedLineRecord,
 	type ProtectedLineRecord
 } from "./protectedLines";
 import {
@@ -20,12 +22,26 @@ import {
 	releaseSipCredentialForProtectedLine,
 	reserveAvailableSipCredential
 } from "./sipCredentialInventory";
+import {
+	deliverCustomerCommunication,
+	findLatestCustomerCommunication,
+	selectAccountCommunicationDestination,
+	type CustomerCommunicationProvider,
+	type CustomerCommunicationRecord
+} from "./customerCommunications";
 
 export interface ProvisionProtectedLineResult {
 	account: UserRecord;
-	protectedLine: ProtectedLineRecord;
+	protectedLine: CustomerProtectedLineRecord;
 	coverageStatus: string;
-	provisioningStatus: "active" | "already_provisioned";
+	provisioningStatus: "provisioned" | "already_provisioned";
+	forwardingInstructions: {
+		protectedPhoneNumber: string;
+		screeningNumber: string;
+		forwardingStatus: CustomerProtectedLineRecord["forwardingStatus"];
+		instructions: string;
+	};
+	delivery: CustomerCommunicationRecord;
 	steps: Array<{
 		name: string;
 		status: "complete";
@@ -43,30 +59,73 @@ export class ProtectedLineProvisioningError extends Error {
 	}
 }
 
-function activeResult(
+async function provisionedResult(
+	db: D1Database,
 	account: UserRecord,
 	protectedLine: ProtectedLineRecord,
-	provisioningStatus: "active" | "already_provisioned"
-): ProvisionProtectedLineResult {
+	provisioningStatus: "provisioned" | "already_provisioned",
+	provider?: CustomerCommunicationProvider
+): Promise<ProvisionProtectedLineResult> {
+	if (!protectedLine.screeningNumber) {
+		throw new Error("Provisioned Protected Line is missing its screening number");
+	}
+
+	const destination = selectAccountCommunicationDestination(account);
+	const instructions = `For protected line ${protectedLine.protectedPhoneNumber}, forward calls to ${protectedLine.screeningNumber}. After forwarding is set, confirm this exact line in the portal.`;
+	let delivery = await findLatestCustomerCommunication(db, {
+		protectedLineId: protectedLine.id,
+		purpose: "forwarding_instructions"
+	});
+	if (!delivery) {
+		delivery = await deliverCustomerCommunication(
+			db,
+			{
+				userId: account.id,
+				protectedLineId: protectedLine.id,
+				purpose: "forwarding_instructions",
+				message: {
+					channel: destination.channel,
+					destination: destination.destination,
+					subject: destination.channel === "email"
+						? "Set up call forwarding for your Protected Line"
+						: null,
+					body: instructions
+				}
+			},
+			provider
+		);
+	}
+
 	return {
 		account,
-		protectedLine,
+		protectedLine: toCustomerProtectedLine(protectedLine),
 		coverageStatus: protectedLine.coverageStatus,
 		provisioningStatus,
+		forwardingInstructions: {
+			protectedPhoneNumber: protectedLine.protectedPhoneNumber,
+			screeningNumber: protectedLine.screeningNumber,
+			forwardingStatus: protectedLine.forwardingStatus,
+			instructions
+		},
+		delivery,
 		steps: [
 			{ name: "existing_account_found", status: "complete" },
 			{ name: "existing_location_found", status: "complete" },
 			{ name: "existing_protected_line_found", status: "complete" },
 			{ name: "screening_number_assigned", status: "complete" },
 			{ name: "sip_credential_assigned", status: "complete" },
-			{ name: "line_coverage_active", status: "complete" }
+			{ name: "forwarding_instructions_created", status: "complete" },
+			{ name: "forwarding_confirmation_required", status: "complete" }
 		]
 	};
 }
 
 export async function provisionProtectedLine(
 	db: D1Database,
-	lineId: number
+	lineId: number,
+	options: {
+		provider?: CustomerCommunicationProvider;
+	} = {}
 ): Promise<ProvisionProtectedLineResult> {
 	const existingLine = await findProtectedLineById(db, lineId);
 
@@ -103,9 +162,14 @@ export async function provisionProtectedLine(
 		existingLine.screeningNumber
 		&& existingLine.sipUsername
 		&& existingLine.provisioningStatus === "provisioned"
-		&& existingLine.coverageStatus === "active"
 	) {
-		return activeResult(account, existingLine, "already_provisioned");
+		return provisionedResult(
+			db,
+			account,
+			existingLine,
+			"already_provisioned",
+			options.provider
+		);
 	}
 
 	if (existingLine.screeningNumber || existingLine.sipUsername) {
@@ -137,17 +201,28 @@ export async function provisionProtectedLine(
 			assignedSipCredential.sipUsername
 		);
 
-		return activeResult(account, protectedLine, "active");
+		return provisionedResult(
+			db,
+			account,
+			protectedLine,
+			"provisioned",
+			options.provider
+		);
 	} catch (error) {
 		const currentLine = await findProtectedLineById(db, lineId);
 
 		if (
 			currentLine?.provisioningStatus === "provisioned"
-			&& currentLine.coverageStatus === "active"
 			&& currentLine.screeningNumber
 			&& currentLine.sipUsername
 		) {
-			return activeResult(account, currentLine, "active");
+			return provisionedResult(
+				db,
+				account,
+				currentLine,
+				"provisioned",
+				options.provider
+			);
 		}
 
 		await releaseScreeningNumberForProtectedLine(db, lineId);

@@ -55,6 +55,18 @@ function applyMigration0030(db) {
 	);
 }
 
+function applyMigration0031(db) {
+	db.exec(
+		readFileSync(
+			join(
+				migrationsDirectory,
+				"0031_add_beta_invitation_and_forwarding_lifecycle.sql"
+			),
+			"utf8"
+		)
+	);
+}
+
 function foreignKeyReferencesToUsers(db) {
 	const tables = db
 		.prepare(`
@@ -91,7 +103,7 @@ function foreignKeyReferencesToUsers(db) {
 
 test("the complete migration chain applies with clean foreign keys", () => {
 	const db = createDatabaseThrough(
-		"0030_add_account_locations_and_protected_lines.sql"
+		"0031_add_beta_invitation_and_forwarding_lifecycle.sql"
 	);
 
 	assert.deepEqual(db.prepare("PRAGMA foreign_key_check").all(), []);
@@ -127,6 +139,12 @@ test("the complete migration chain applies with clean foreign keys", () => {
 			onDelete: "RESTRICT"
 		},
 		{
+			table: "beta_invitations",
+			from: "created_by_user_id",
+			to: "id",
+			onDelete: "RESTRICT"
+		},
+		{
 			table: "beta_invite_codes",
 			from: "created_by_user_id",
 			to: "id",
@@ -137,6 +155,12 @@ test("the complete migration chain applies with clean foreign keys", () => {
 			from: "redeemed_by_user_id",
 			to: "id",
 			onDelete: "SET NULL"
+		},
+		{
+			table: "customer_communication_deliveries",
+			from: "user_id",
+			to: "id",
+			onDelete: "RESTRICT"
 		},
 		{
 			table: "portal_sessions",
@@ -151,6 +175,89 @@ test("the complete migration chain applies with clean foreign keys", () => {
 			onDelete: "CASCADE"
 		}
 	]);
+
+	db.close();
+});
+
+test("0031 preserves existing rows without inferring SMS capability or forwarding confirmation", () => {
+	const db = createDatabaseThrough(
+		"0030_add_account_locations_and_protected_lines.sql"
+	);
+
+	db.exec(`
+		INSERT INTO users (id, phone_number, email, role)
+		VALUES
+			(90, '+18005550090', 'creator-90@example.com', 'administrator'),
+			(91, '+18005550091', 'customer-91@example.com', 'subscriber');
+
+		INSERT INTO account_locations (id, user_id)
+		VALUES (910, 91);
+
+		INSERT INTO protected_lines (
+			id,
+			user_id,
+			location_id,
+			protected_phone_number,
+			caller_facing_business_name,
+			screening_number,
+			sip_username,
+			provisioning_status,
+			coverage_status
+		)
+		VALUES (
+			911,
+			91,
+			910,
+			'+18005550911',
+			'Existing Protected Line',
+			'+18005551911',
+			'test_user_existing_911',
+			'provisioned',
+			'active'
+		);
+
+		INSERT INTO beta_invite_codes (code, status)
+		VALUES ('EXISTING-UNMAPPED-CODE', 'active');
+	`);
+
+	applyMigration0031(db);
+
+	assert.deepEqual(db.prepare("PRAGMA foreign_key_check").all(), []);
+	assert.deepEqual(
+		{ ...db.prepare(`
+			SELECT sms_contact_number, sms_capable
+			FROM users
+			WHERE id = 91
+		`).get() },
+		{ sms_contact_number: null, sms_capable: 0 }
+	);
+	assert.deepEqual(
+		{ ...db.prepare(`
+			SELECT
+				forwarding_status,
+				forwarding_confirmed_at,
+				coverage_status
+			FROM protected_lines
+			WHERE id = 911
+		`).get() },
+		{
+			forwarding_status: "not_started",
+			forwarding_confirmed_at: null,
+			coverage_status: "active"
+		}
+	);
+	assert.equal(
+		db.prepare(`
+			SELECT invitation_id
+			FROM beta_invite_codes
+			WHERE code = 'EXISTING-UNMAPPED-CODE'
+		`).get().invitation_id,
+		null
+	);
+	assert.equal(
+		db.prepare("SELECT COUNT(*) AS count FROM beta_invitations").get().count,
+		0
+	);
 
 	db.close();
 });

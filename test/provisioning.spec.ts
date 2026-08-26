@@ -16,6 +16,7 @@ import {
 import {
 	createAccountLocation,
 	createProtectedLine,
+	confirmProtectedLineForwarding,
 	findProtectedLineById,
 	listAccountLocations,
 	listProtectedLinesForAccount
@@ -150,7 +151,7 @@ describe("account, location, and protected-line provisioning", () => {
 		}
 	);
 
-	it("provisions and activates only the selected protected line", async () => {
+	it("provisions only the selected line and waits for forwarding confirmation", async () => {
 		const account = await createCompleteAccount();
 		const location = await createAccountLocation(
 			env.nomorescamcalls_db,
@@ -192,10 +193,26 @@ describe("account, location, and protected-line provisioning", () => {
 			protectedLine: {
 				id: firstLine.id,
 				screeningNumber: "+18005555002",
-				sipUsername: "test_line_4002",
 				provisioningStatus: "provisioned",
-				coverageStatus: "active"
+				coverageStatus: "inactive",
+				forwardingStatus: "awaiting_confirmation"
 			}
+		});
+		expect(result.protectedLine).not.toHaveProperty("sipUsername");
+		expect(JSON.stringify(result)).not.toContain("test_line_4002");
+		expect(result.delivery).toMatchObject({
+			channel: "email",
+			destination: account.email,
+			status: "provider_unavailable"
+		});
+		expect(await findProtectedLineById(
+			env.nomorescamcalls_db,
+			firstLine.id
+		)).toMatchObject({
+			sipUsername: "test_line_4002",
+			provisioningStatus: "provisioned",
+			coverageStatus: "inactive",
+			forwardingStatus: "awaiting_confirmation"
 		});
 		expect(await findProtectedLineById(
 			env.nomorescamcalls_db,
@@ -204,7 +221,8 @@ describe("account, location, and protected-line provisioning", () => {
 			screeningNumber: null,
 			sipUsername: null,
 			provisioningStatus: "unprovisioned",
-			coverageStatus: "inactive"
+			coverageStatus: "inactive",
+			forwardingStatus: "not_started"
 		});
 		expect(await findScreeningNumberInInventory(
 			env.nomorescamcalls_db,
@@ -231,6 +249,24 @@ describe("account, location, and protected-line provisioning", () => {
 			firstLine.id
 		);
 		expect(repeated.provisioningStatus).toBe("already_provisioned");
+		expect(repeated.protectedLine.coverageStatus).toBe("inactive");
+
+		await expect(confirmProtectedLineForwarding(
+			env.nomorescamcalls_db,
+			account.id,
+			firstLine.id
+		)).resolves.toMatchObject({
+			id: firstLine.id,
+			coverageStatus: "active",
+			forwardingStatus: "confirmed"
+		});
+		expect(await findProtectedLineById(
+			env.nomorescamcalls_db,
+			secondLine.id
+		)).toMatchObject({
+			coverageStatus: "inactive",
+			forwardingStatus: "not_started"
+		});
 	});
 
 	it("releases partial resources, marks only that line failed, and permits retry", async () => {
@@ -279,7 +315,12 @@ describe("account, location, and protected-line provisioning", () => {
 		await expect(provisionProtectedLine(
 			env.nomorescamcalls_db,
 			line.id
-		)).resolves.toMatchObject({ coverageStatus: "active" });
+		)).resolves.toMatchObject({
+			coverageStatus: "inactive",
+			protectedLine: {
+				forwardingStatus: "awaiting_confirmation"
+			}
+		});
 	});
 
 	it("adds later lines without repeating account onboarding or agreement acceptance", async () => {

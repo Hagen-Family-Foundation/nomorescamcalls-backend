@@ -6,6 +6,7 @@
 Purpose:
 - Customer-account identity and status.
 - Email and distinct account contact phone.
+- Optional explicit SMS-capable contact number and capability flag.
 - Authentication, communication preference, agreement, and onboarding state.
 
 ### account_locations
@@ -19,6 +20,8 @@ Purpose:
 - Carrier/line information.
 - Screening DID and SIP-resource assignment.
 - Line-specific provisioning and coverage state.
+- Line-specific forwarding state and provisioning, instruction, confirmation,
+  and activation timestamps.
 - Explicit account and Location ownership.
 
 ### call_events
@@ -69,6 +72,8 @@ Add:
 - `role`
 - `account_status`
 - `setup_status`
+- `sms_contact_number`
+- `sms_capable`
 
 Legacy one-line operational fields remain temporarily for safe production
 transition:
@@ -95,12 +100,30 @@ that transition requires a separately approved explicit mapping.
 
 ## New Portal Tables
 
+### beta_invitations
+
+Purpose:
+
+- Bind one beta invitation to an explicit SMS or email destination.
+- Preserve issuance, response, acceptance, credential issuance, redemption,
+  expiration, cancellation, and audit timestamps.
+- Ensure repeated affirmative responses reuse the one issued credential.
+
 ### beta_invite_codes
 
 Purpose:
 
 - Control access to beta registration.
 - Record code status, expiration, and use.
+- Link the one-time code to its accepted parent invitation.
+
+### customer_communication_deliveries
+
+Purpose:
+
+- Persist invitation, onboarding-link, and forwarding-instruction attempts.
+- Preserve exact channel, destination, payload, provider state, and timestamps.
+- Represent provider absence and delivery failure without claiming success.
 
 ### portal_sessions
 

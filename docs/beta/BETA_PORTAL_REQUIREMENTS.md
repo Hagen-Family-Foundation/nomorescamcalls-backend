@@ -12,13 +12,21 @@ It must also provide an administrative dashboard for monitoring every beta accou
 
 ## Beta Access
 
-Each beta participant must receive a unique beta access code from NoMoreScamCalls.
+Each beta participant must receive an invitation bound to an explicit customer
+contact destination. An explicitly supplied SMS-capable destination is
+preferred and email is the supported fallback. SMS capability must not be
+inferred from an account contact phone, Protected Line, carrier, or number
+format. The invitation waits for a simple case-insensitive `Y` or `YES`
+response before a unique beta access code and credential-bearing portal link
+are issued.
 
 The portal must:
 
 * Require a valid beta access code before account creation.
 * Prevent the same beta access code from being reused.
 * Associate the beta access code with the created account.
+* Validate the credential carried by the portal link before registration.
+* Bind registration to the accepted invitation destination.
 * Allow the beta participant to create login credentials.
 * Allow the beta participant to log in and return to the portal.
 * Allow an administrator to activate, suspend, or close the beta account.
@@ -71,9 +79,10 @@ The agreement will describe:
 ## Service Setup
 
 The beta account must support account email, a distinct account contact phone,
-preferred contact method, authentication, agreement acceptance, and account
-onboarding state. The account contact phone is for setup communication and is
-not assumed to be a protected number or SMS-capable.
+an optional explicitly approved SMS contact, preferred contact method,
+authentication, agreement acceptance, and account onboarding state. The
+account contact phone is for setup communication and is not assumed to be a
+protected number or SMS-capable.
 
 The beta portal uses the same permanent `Customer Account → Location →
 Protected Line` model as every other enrollment source. Locations are minimal
@@ -85,14 +94,16 @@ provisioning state, coverage state, call-forwarding progress, test-call
 status, and activation date where those workflow fields are available.
 
 Account setup remains `onboarding_incomplete` or `onboarding_complete`.
-Provisioning and coverage are line-specific: an unprovisioned line is inactive
-and a provisioned line is active only after its screening DID and SIP
-credential are assigned to that exact line.
+Provisioning and coverage are line-specific: an unprovisioned line is inactive;
+resource assignment makes the exact line provisioned and forwarding-pending,
+but coverage remains inactive. Coverage becomes active only after the customer
+confirms forwarding for that exact line. Sibling lines are unaffected.
 
 Invitation, suspension, and closure remain enrollment/account context rather
-than a parallel provisioning workflow. Forwarding guidance and test-call
-progress may be presented by the portal without redefining whether backend
-coverage is active.
+than a parallel provisioning workflow. Forwarding guidance exposes the
+line-specific screening number but never SIP credentials. Delivery uses the
+explicit SMS destination when available and email otherwise; provider absence
+or failure must not be presented as successful delivery.
 
 ---
 
