@@ -70,23 +70,24 @@ The agreement will describe:
 
 ## Service Setup
 
-The beta account must support the following setup information:
+The beta account must support account email, a distinct account contact phone,
+preferred contact method, authentication, agreement acceptance, and account
+onboarding state. The account contact phone is for setup communication and is
+not assumed to be a protected number or SMS-capable.
 
-* Protected telephone number.
-* Assigned NoMoreScamCalls screening number.
-* Subscriber call-delivery destination.
-* Carrier.
-* Call-forwarding setup status.
-* Test-call status.
-* Service activation status.
-* Date service was activated.
+The beta portal uses the same permanent `Customer Account → Location →
+Protected Line` model as every other enrollment source. Locations are minimal
+administrative groupings and each may contain up to six Protected Lines.
 
-The beta portal uses the same permanent subscriber setup states as every other
-enrollment source:
+Each Protected Line carries its own protected telephone number, exact
+caller-facing phrase, carrier, assigned screening number, SIP resource,
+provisioning state, coverage state, call-forwarding progress, test-call
+status, and activation date where those workflow fields are available.
 
-* `onboarding_incomplete` — the existing account is recoverable and coverage is inactive.
-* `onboarding_complete` — all required information and agreement acceptance are present; coverage remains inactive until provisioning succeeds.
-* `provisioned` — the screening DID and SIP credential belong to this subscriber and coverage is active.
+Account setup remains `onboarding_incomplete` or `onboarding_complete`.
+Provisioning and coverage are line-specific: an unprovisioned line is inactive
+and a provisioned line is active only after its screening DID and SIP
+credential are assigned to that exact line.
 
 Invitation, suspension, and closure remain enrollment/account context rather
 than a parallel provisioning workflow. Forwarding guidance and test-call
@@ -99,9 +100,9 @@ coverage is active.
 
 The participant dashboard must display:
 
-* Service status.
-* Protected telephone number.
-* Assigned screening number.
+* Account onboarding and service status.
+* Locations and Protected Lines, identifiable primarily by protected telephone number.
+* Per-line assigned screening number and coverage state.
 * Total calls handled.
 * Successful calls.
 * Diverted calls.
@@ -132,9 +133,9 @@ For each beta account, it must display:
 
 * Participant name.
 * Email address.
-* Protected telephone number.
-* Assigned screening number.
-* Carrier.
+* Account contact information and onboarding status.
+* Each Location and its Protected Lines.
+* Per-line protected number, assigned screening number, carrier, provisioning state, and coverage state.
 * Beta access code.
 * Account status.
 * Setup status.
@@ -145,6 +146,15 @@ For each beta account, it must display:
 * Diverted calls.
 
 The administrator must be able to open an individual account and review its activity.
+
+All customer/account review must enter through the single authenticated
+administrative review gate. A valid portal session for an `admin` or
+`administrator` establishes reviewer identity. Resolving any Protected Line
+returns its parent account, every Location, and every sibling Protected Line,
+with the initial target clearly marked. The gate records review-session start
+and end, meaningful sections and lines viewed, and approved write actions with
+ordinary before/after values. It must not store passwords, session tokens,
+keys, credentials, or other secrets in the review audit trail.
 
 ---
 

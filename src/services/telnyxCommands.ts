@@ -72,7 +72,7 @@ export function planTelnyxExecution(
 				command(
 					event,
 					"transfer",
-					"Approved caller should be transferred to the protected user's Telnyx WebRTC app identity.",
+					"Approved caller should be transferred to the exact protected line's Telnyx WebRTC app identity.",
 					"Transfer is guarded by TELNYX_LIVE_EXECUTION and remains disabled unless explicitly enabled."
 				)
 			],

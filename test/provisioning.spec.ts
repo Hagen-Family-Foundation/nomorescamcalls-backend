@@ -10,235 +10,347 @@ import {
 	findSipCredentialInInventory
 } from "../src/services/sipCredentialInventory";
 import {
-	provisionSubscriber,
-	type SubscriberProvisioningError
+	ProtectedLineProvisioningError,
+	provisionProtectedLine
 } from "../src/services/provisioning";
 import {
+	createAccountLocation,
+	createProtectedLine,
+	findProtectedLineById,
+	listAccountLocations,
+	listProtectedLinesForAccount
+} from "../src/services/protectedLines";
+import {
 	getSubscriberOnboardingStatus,
-	updateSubscriberOnboarding
+	refreshSubscriberOnboardingStatus
 } from "../src/services/subscriberOnboarding";
 import { createUser, findUserById } from "../src/services/users";
 import { ensureTestSchema } from "./testSchema";
 
-async function createCompleteInformationSubscriber(
-	phoneNumber: string,
+let fixtureSequence = 0;
+
+function nextFixture(prefix: string): string {
+	fixtureSequence += 1;
+	return `${prefix}${fixtureSequence.toString().padStart(4, "0")}`;
+}
+
+async function createCompleteAccount(
 	role: "subscriber" | "participant" = "subscriber"
 ) {
-	return createUser(env.nomorescamcalls_db, {
+	const suffix = nextFixture("");
+	const account = await createUser(env.nomorescamcalls_db, {
 		firstName: "Account",
 		lastName: "Owner",
-		callerFacingBusinessName: "Our Office",
-		email: `${phoneNumber.slice(-4)}@example.com`,
-		phoneNumber,
-		carrier: "Example Carrier",
+		email: `account-${suffix}@example.com`,
+		contactPhoneNumber: `+1800555${suffix}`,
 		contactMethod: "email",
 		passwordHash: "stored-test-password-hash",
 		role
 	});
+	await acceptCurrentBetaAgreement(env.nomorescamcalls_db, account.id);
+	await refreshSubscriberOnboardingStatus(env.nomorescamcalls_db, account.id);
+	return account;
 }
 
 async function addProvisioningInventory(
 	screeningNumber: string,
 	sipUsername: string
 ): Promise<void> {
-	await addScreeningNumberToInventory(
-		env.nomorescamcalls_db,
-		screeningNumber
-	);
-	await addSipCredentialToInventory(
-		env.nomorescamcalls_db,
-		sipUsername
-	);
+	await addScreeningNumberToInventory(env.nomorescamcalls_db, screeningNumber);
+	await addSipCredentialToInventory(env.nomorescamcalls_db, sipUsername);
 }
 
-describe("subscriber provisioning", () => {
+describe("account, location, and protected-line provisioning", () => {
 	beforeAll(async () => {
 		await ensureTestSchema();
 	});
 
-	it("creates a recoverable incomplete account and never infers caller identity", async () => {
-		const user = await createUser(env.nomorescamcalls_db, {
-			firstName: "Personal",
-			lastName: "Identity",
-			phoneNumber: "+18005551001",
-			role: "subscriber"
-		});
-		const onboarding = await getSubscriberOnboardingStatus(
+	it("keeps account contact information separate from protected landline information", async () => {
+		const account = await createCompleteAccount();
+		const location = await createAccountLocation(
 			env.nomorescamcalls_db,
-			user.id
+			account.id
 		);
-
-		expect(onboarding.complete).toBe(false);
-		expect(onboarding.user.callerFacingBusinessName).toBeNull();
-		expect(onboarding.missingRequirements).toContain(
-			"caller_facing_business_name"
-		);
-		await expect(
-			provisionSubscriber(env.nomorescamcalls_db, user.id)
-		).rejects.toMatchObject({
-			code: "onboarding_incomplete",
-			missingRequirements: expect.arrayContaining([
-				"caller_facing_business_name",
-				"required_agreement"
-			])
-		});
-		expect(await findUserById(env.nomorescamcalls_db, user.id))
-			.toMatchObject({
-				id: user.id,
-				screeningNumber: null,
-				sipUsername: null,
-				coverageStatus: "inactive"
-			});
-	});
-
-	it("lets the same existing subscriber complete onboarding", async () => {
-		const user = await createUser(env.nomorescamcalls_db, {
-			phoneNumber: "+18005551002",
-			role: "subscriber"
-		});
-		await acceptCurrentBetaAgreement(env.nomorescamcalls_db, user.id);
-		const onboarding = await updateSubscriberOnboarding(
+		const line = await createProtectedLine(
 			env.nomorescamcalls_db,
-			user.id,
+			account.id,
+			location.id,
 			{
-				firstName: "Jordan",
-				lastName: "Lee",
+				protectedPhoneNumber: "+18005554001",
 				callerFacingBusinessName: "Our Office",
-				email: "existing-completion@example.com",
-				carrier: "Example Carrier",
-				contactMethod: "email",
-				password: "new-test-password"
+				carrier: "Example Landline Carrier"
 			}
 		);
 
-		expect(onboarding.complete).toBe(true);
-		expect(onboarding.missingRequirements).toEqual([]);
-		expect(onboarding.user).toMatchObject({
-			id: user.id,
-			firstName: "Jordan",
-			lastName: "Lee",
+		expect(account.contactPhoneNumber).not.toBe(line.protectedPhoneNumber);
+		expect(line).toMatchObject({
+			userId: account.id,
+			locationId: location.id,
+			protectedPhoneNumber: "+18005554001",
 			callerFacingBusinessName: "Our Office",
-			setupStatus: "onboarding_complete",
+			carrier: "Example Landline Carrier",
+			provisioningStatus: "unprovisioned",
 			coverageStatus: "inactive"
 		});
+		expect((await getSubscriberOnboardingStatus(
+			env.nomorescamcalls_db,
+			account.id
+		)).complete).toBe(true);
 	});
 
-	it("requires agreement acceptance and provisions the existing subscriber exactly once", async () => {
-		const user = await createCompleteInformationSubscriber("+18005551003");
-		await expect(
-			provisionSubscriber(env.nomorescamcalls_db, user.id)
-		).rejects.toEqual(expect.objectContaining({
-			code: "onboarding_incomplete",
-			missingRequirements: ["required_agreement"]
-		}));
-
-		await acceptCurrentBetaAgreement(env.nomorescamcalls_db, user.id);
-		await addProvisioningInventory(
-			"+18005552003",
-			"test_user_unified_1003"
-		);
-		const countBefore = await env.nomorescamcalls_db
-			.prepare("SELECT COUNT(*) AS count FROM users")
-			.first<{ count: number }>();
-		const provisioned = await provisionSubscriber(
-			env.nomorescamcalls_db,
-			user.id
-		);
-		const countAfter = await env.nomorescamcalls_db
-			.prepare("SELECT COUNT(*) AS count FROM users")
-			.first<{ count: number }>();
-
-		expect(provisioned).toMatchObject({
-			provisioningStatus: "active",
-			coverageStatus: "active",
-			user: {
-				id: user.id,
-				screeningNumber: "+18005552003",
-				sipUsername: "test_user_unified_1003",
-				setupStatus: "provisioned",
-				coverageStatus: "active"
-			}
-		});
-		expect(countAfter?.count).toBe(countBefore?.count);
-		expect(await findScreeningNumberInInventory(
-			env.nomorescamcalls_db,
-			"+18005552003"
-		)).toMatchObject({ assignedUserId: user.id, status: "assigned" });
-		expect(await findSipCredentialInInventory(
-			env.nomorescamcalls_db,
-			"test_user_unified_1003"
-		)).toMatchObject({ assignedUserId: user.id, status: "assigned" });
-
-		const repeated = await provisionSubscriber(
-			env.nomorescamcalls_db,
-			user.id
-		);
-		expect(repeated.provisioningStatus).toBe("already_provisioned");
-		expect(repeated.user.id).toBe(user.id);
-	});
-
-	it("releases a partial reservation and leaves coverage inactive", async () => {
-		const user = await createCompleteInformationSubscriber("+18005551004");
-		await acceptCurrentBetaAgreement(env.nomorescamcalls_db, user.id);
-		await addScreeningNumberToInventory(
-			env.nomorescamcalls_db,
-			"+18005552004"
-		);
-
-		await expect(
-			provisionSubscriber(env.nomorescamcalls_db, user.id)
-		).rejects.toThrow("No available SIP credentials");
-		expect(await findScreeningNumberInInventory(
-			env.nomorescamcalls_db,
-			"+18005552004"
-		)).toMatchObject({ status: "available", assignedUserId: null });
-		expect(await findUserById(env.nomorescamcalls_db, user.id))
-			.toMatchObject({
-				screeningNumber: null,
-				sipUsername: null,
-				setupStatus: "onboarding_complete",
-				coverageStatus: "inactive"
-			});
-	});
-
-	it.each([
-		["beta", "participant", "+18005551005", "+18005552005", "test_user_beta_1005"],
-		["future", "subscriber", "+18005551006", "+18005552006", "test_user_future_1006"]
-	] as const)(
-		"uses the same provisioning service for a %s-origin subscriber",
-		async (_source, role, phoneNumber, screeningNumber, sipUsername) => {
-			const user = await createCompleteInformationSubscriber(phoneNumber, role);
-			await acceptCurrentBetaAgreement(env.nomorescamcalls_db, user.id);
-			await addProvisioningInventory(screeningNumber, sipUsername);
-			const result = await provisionSubscriber(
+	it.each(["subscriber", "participant"] as const)(
+		"enforces the same six-line location capacity for role %s",
+		async (role) => {
+			const account = await createCompleteAccount(role);
+			const firstLocation = await createAccountLocation(
 				env.nomorescamcalls_db,
-				user.id
+				account.id
+			);
+			const secondLocation = await createAccountLocation(
+				env.nomorescamcalls_db,
+				account.id
 			);
 
-			expect(result.user).toMatchObject({
-				id: user.id,
-				role,
-				screeningNumber,
-				sipUsername,
-				coverageStatus: "active"
-			});
+			for (let index = 1; index <= 6; index += 1) {
+				await createProtectedLine(
+					env.nomorescamcalls_db,
+					account.id,
+					firstLocation.id,
+					{
+						protectedPhoneNumber: `+1800555${nextFixture("")}`,
+						callerFacingBusinessName: `Exact Phrase ${index}`
+					}
+				);
+			}
+
+			await expect(createProtectedLine(
+				env.nomorescamcalls_db,
+				account.id,
+				firstLocation.id,
+				{
+					protectedPhoneNumber: `+1800555${nextFixture("")}`,
+					callerFacingBusinessName: "Seventh Exact Phrase"
+				}
+			)).rejects.toMatchObject({ code: "location_line_limit_reached" });
+
+			await expect(createProtectedLine(
+				env.nomorescamcalls_db,
+				account.id,
+				secondLocation.id,
+				{
+					protectedPhoneNumber: `+1800555${nextFixture("")}`,
+					callerFacingBusinessName: "Other Location Phrase"
+				}
+			)).resolves.toMatchObject({ locationId: secondLocation.id });
+
+			expect(await listAccountLocations(
+				env.nomorescamcalls_db,
+				account.id
+			)).toHaveLength(2);
 		}
 	);
 
-	it("rejects an inconsistent pre-existing resource state", async () => {
-		const user = await createCompleteInformationSubscriber("+18005551007");
-		await acceptCurrentBetaAgreement(env.nomorescamcalls_db, user.id);
-		await env.nomorescamcalls_db
-			.prepare("UPDATE users SET screening_number = ? WHERE id = ?")
-			.bind("+18005552007", user.id)
-			.run();
-
-		await expect(
-			provisionSubscriber(env.nomorescamcalls_db, user.id)
-		).rejects.toEqual(
-			expect.objectContaining<Partial<SubscriberProvisioningError>>({
-				code: "incomplete_provisioning_state"
-			})
+	it("provisions and activates only the selected protected line", async () => {
+		const account = await createCompleteAccount();
+		const location = await createAccountLocation(
+			env.nomorescamcalls_db,
+			account.id
 		);
+		const firstLine = await createProtectedLine(
+			env.nomorescamcalls_db,
+			account.id,
+			location.id,
+			{
+				protectedPhoneNumber: "+18005554002",
+				callerFacingBusinessName: "First Exact Phrase"
+			}
+		);
+		const secondLine = await createProtectedLine(
+			env.nomorescamcalls_db,
+			account.id,
+			location.id,
+			{
+				protectedPhoneNumber: "+18005554003",
+				callerFacingBusinessName: "our office"
+			}
+		);
+		await addProvisioningInventory(
+			"+18005555002",
+			"test_line_4002"
+		);
+		const userCountBefore = await env.nomorescamcalls_db
+			.prepare("SELECT COUNT(*) AS count FROM users")
+			.first<{ count: number }>();
+
+		const result = await provisionProtectedLine(
+			env.nomorescamcalls_db,
+			firstLine.id
+		);
+
+		expect(result).toMatchObject({
+			account: { id: account.id, setupStatus: "onboarding_complete" },
+			protectedLine: {
+				id: firstLine.id,
+				screeningNumber: "+18005555002",
+				sipUsername: "test_line_4002",
+				provisioningStatus: "provisioned",
+				coverageStatus: "active"
+			}
+		});
+		expect(await findProtectedLineById(
+			env.nomorescamcalls_db,
+			secondLine.id
+		)).toMatchObject({
+			screeningNumber: null,
+			sipUsername: null,
+			provisioningStatus: "unprovisioned",
+			coverageStatus: "inactive"
+		});
+		expect(await findScreeningNumberInInventory(
+			env.nomorescamcalls_db,
+			"+18005555002"
+		)).toMatchObject({
+			assignedUserId: account.id,
+			assignedProtectedLineId: firstLine.id,
+			status: "assigned"
+		});
+		expect(await findSipCredentialInInventory(
+			env.nomorescamcalls_db,
+			"test_line_4002"
+		)).toMatchObject({
+			assignedUserId: account.id,
+			assignedProtectedLineId: firstLine.id,
+			status: "assigned"
+		});
+		expect((await env.nomorescamcalls_db
+			.prepare("SELECT COUNT(*) AS count FROM users")
+			.first<{ count: number }>())?.count).toBe(userCountBefore?.count);
+
+		const repeated = await provisionProtectedLine(
+			env.nomorescamcalls_db,
+			firstLine.id
+		);
+		expect(repeated.provisioningStatus).toBe("already_provisioned");
+	});
+
+	it("releases partial resources, marks only that line failed, and permits retry", async () => {
+		const account = await createCompleteAccount();
+		const location = await createAccountLocation(
+			env.nomorescamcalls_db,
+			account.id
+		);
+		const line = await createProtectedLine(
+			env.nomorescamcalls_db,
+			account.id,
+			location.id,
+			{
+				protectedPhoneNumber: "+18005554004",
+				callerFacingBusinessName: "Unchanged Exact Phrase"
+			}
+		);
+		await addScreeningNumberToInventory(
+			env.nomorescamcalls_db,
+			"+18005555004"
+		);
+
+		await expect(provisionProtectedLine(
+			env.nomorescamcalls_db,
+			line.id
+		)).rejects.toThrow("No available SIP credentials");
+		expect(await findScreeningNumberInInventory(
+			env.nomorescamcalls_db,
+			"+18005555004"
+		)).toMatchObject({
+			status: "available",
+			assignedProtectedLineId: null
+		});
+		expect(await findProtectedLineById(
+			env.nomorescamcalls_db,
+			line.id
+		)).toMatchObject({
+			provisioningStatus: "failed",
+			coverageStatus: "inactive"
+		});
+
+		await addSipCredentialToInventory(
+			env.nomorescamcalls_db,
+			"test_line_4004"
+		);
+		await expect(provisionProtectedLine(
+			env.nomorescamcalls_db,
+			line.id
+		)).resolves.toMatchObject({ coverageStatus: "active" });
+	});
+
+	it("adds later lines without repeating account onboarding or agreement acceptance", async () => {
+		const account = await createCompleteAccount();
+		const location = await createAccountLocation(
+			env.nomorescamcalls_db,
+			account.id
+		);
+		await createProtectedLine(
+			env.nomorescamcalls_db,
+			account.id,
+			location.id,
+			{
+				protectedPhoneNumber: "+18005554005",
+				callerFacingBusinessName: "First Phrase"
+			}
+		);
+		const laterLine = await createProtectedLine(
+			env.nomorescamcalls_db,
+			account.id,
+			location.id,
+			{
+				protectedPhoneNumber: "+18005554006",
+				callerFacingBusinessName: "Second Phrase"
+			}
+		);
+
+		expect((await getSubscriberOnboardingStatus(
+			env.nomorescamcalls_db,
+			account.id
+		)).complete).toBe(true);
+		expect((await listProtectedLinesForAccount(
+			env.nomorescamcalls_db,
+			account.id
+		)).map((line) => line.callerFacingBusinessName)).toEqual([
+			"First Phrase",
+			"Second Phrase"
+		]);
+		expect(laterLine.coverageStatus).toBe("inactive");
+		expect((await findUserById(env.nomorescamcalls_db, account.id))?.setupStatus)
+			.toBe("onboarding_complete");
+	});
+
+	it("rejects provisioning when account onboarding is incomplete", async () => {
+		const account = await createUser(env.nomorescamcalls_db, {
+			contactPhoneNumber: `+1800555${nextFixture("")}`,
+			role: "subscriber"
+		});
+		const location = await createAccountLocation(
+			env.nomorescamcalls_db,
+			account.id
+		);
+		const line = await createProtectedLine(
+			env.nomorescamcalls_db,
+			account.id,
+			location.id,
+			{
+				protectedPhoneNumber: `+1800555${nextFixture("")}`,
+				callerFacingBusinessName: "Explicit Phrase"
+			}
+		);
+
+		await expect(provisionProtectedLine(
+			env.nomorescamcalls_db,
+			line.id
+		)).rejects.toEqual(expect.objectContaining<Partial<ProtectedLineProvisioningError>>({
+			code: "onboarding_incomplete",
+			missingRequirements: expect.arrayContaining([
+				"first_name",
+				"required_agreement"
+			])
+		}));
 	});
 });

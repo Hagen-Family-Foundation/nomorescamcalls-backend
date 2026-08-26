@@ -230,6 +230,7 @@ function createLibraryInput(
 		},
 		subscriber: {
 			id: 12,
+			protectedLineId: 120,
 			name:
 				"Test Subscriber",
 			callerFacingBusinessName:
@@ -298,6 +299,7 @@ describe("Evidence Library", () => {
 				.prepare(`
 					SELECT
 						call_session_id,
+						protected_line_id,
 						call_day_of_week,
 						call_start_time,
 						caller_state,
@@ -310,6 +312,7 @@ describe("Evidence Library", () => {
 				.bind("library-session-1")
 				.first<{
 					call_session_id: string;
+					protected_line_id: number;
 					call_day_of_week: string;
 					call_start_time: string;
 					caller_state: string;
@@ -322,6 +325,7 @@ describe("Evidence Library", () => {
 		expect(stored).toEqual({
 			call_session_id:
 				"library-session-1",
+			protected_line_id: 120,
 			call_day_of_week:
 				"Monday",
 			call_start_time:

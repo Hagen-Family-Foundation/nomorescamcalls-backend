@@ -4,14 +4,16 @@ export async function recordCallEvent(
 	decision: string,
 	score: number,
 	reason: string,
-	userId: number | null = null
+	userId: number | null = null,
+	protectedLineId: number | null = null
 ): Promise<void> {
 	await db
 		.prepare(
-			"INSERT INTO call_events (user_id, caller_hash, decision, score, reason) VALUES (?, ?, ?, ?, ?)"
+			"INSERT INTO call_events (user_id, protected_line_id, caller_hash, decision, score, reason) VALUES (?, ?, ?, ?, ?, ?)"
 		)
 		.bind(
 			userId,
+			protectedLineId,
 			callerHash,
 			decision,
 			score,
@@ -24,6 +26,7 @@ export async function recordCallEvent(
 export interface CallEventRow {
 	id: number;
 	user_id: number | null;
+	protected_line_id: number | null;
 	caller_hash: string;
 	decision: string;
 	score: number;
@@ -43,6 +46,7 @@ export async function listRecentCallEventsForCaller(
 			SELECT
 				id,
 				user_id,
+				protected_line_id,
 				caller_hash,
 				decision,
 				score,

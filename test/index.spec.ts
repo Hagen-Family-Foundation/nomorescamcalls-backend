@@ -24,28 +24,48 @@ describe("NoMoreScamCalls Worker", () => {
 	});
 
 	it("handles a simulated Telnyx initiated call webhook without live execution", async () => {
-		await env.nomorescamcalls_db.prepare(`
+		await env.nomorescamcalls_db.batch([
+			env.nomorescamcalls_db.prepare(`
 			INSERT INTO users (
 				phone_number,
-				screening_number,
-				sip_username,
-				caller_facing_business_name,
-				status,
-				coverage_status
+				contact_phone_number,
+				status
 			)
-			VALUES (?, ?, ?, ?, 'active', 'active')
+			VALUES (?, ?, 'active')
 			ON CONFLICT(phone_number) DO UPDATE SET
-				screening_number = excluded.screening_number,
-				sip_username = excluded.sip_username,
-				caller_facing_business_name = excluded.caller_facing_business_name,
-				status = 'active',
-				coverage_status = 'active'
+				contact_phone_number = excluded.contact_phone_number,
+				status = 'active'
 		`).bind(
 			"+18005550100",
-			"+18005550001",
-			"test_user_18005550100",
-			"Acme Repair"
-		).run();
+			"+18005550100"
+		),
+			env.nomorescamcalls_db.prepare(`
+				INSERT INTO account_locations (user_id)
+				SELECT id FROM users WHERE contact_phone_number = ?
+			`).bind("+18005550100"),
+			env.nomorescamcalls_db.prepare(`
+				INSERT INTO protected_lines (
+					user_id,
+					location_id,
+					protected_phone_number,
+					caller_facing_business_name,
+					screening_number,
+					sip_username,
+					provisioning_status,
+					coverage_status
+				)
+				SELECT users.id, account_locations.id, ?, ?, ?, ?, 'provisioned', 'active'
+				FROM users
+				INNER JOIN account_locations ON account_locations.user_id = users.id
+				WHERE users.contact_phone_number = ?
+			`).bind(
+				"+18005550100",
+				"Acme Repair",
+				"+18005550001",
+				"test_user_18005550100",
+				"+18005550100"
+			)
+		]);
 
 		const response = await SELF.fetch("http://example.com/webhooks/telnyx", {
 			method: "POST",
@@ -415,34 +435,54 @@ describe("NoMoreScamCalls Worker", () => {
 			headers: {
 				"content-type": "application/json"
 			},
-			body: JSON.stringify({
-				phoneNumber: "+18005550302"
+				body: JSON.stringify({
+					contactPhoneNumber: "+18005550302"
 			})
 		});
 
 		expect(createResponse.status).toBe(201);
 
 		const createBody = await createResponse.json<{
-			user: {
-				id: number;
-				phoneNumber: string;
-				screeningNumber: string | null;
-				sipUsername: string | null;
+				user: {
+					id: number;
+					contactPhoneNumber: string;
 				setupStatus: string;
-				coverageStatus: string;
 				status: string;
 			};
 		}>();
 
-		expect(createBody.user.phoneNumber).toBe("+18005550302");
-		expect(createBody.user.screeningNumber).toBeNull();
-		expect(createBody.user.sipUsername).toBeNull();
+		expect(createBody.user.contactPhoneNumber).toBe("+18005550302");
+		expect(createBody.user).not.toHaveProperty("phoneNumber");
+		expect(createBody.user).not.toHaveProperty("screeningNumber");
+		expect(createBody.user).not.toHaveProperty("sipUsername");
+		expect(createBody.user).not.toHaveProperty("callerFacingBusinessName");
+		expect(createBody.user).not.toHaveProperty("coverageStatus");
 		expect(createBody.user.setupStatus).toBe("onboarding_incomplete");
-		expect(createBody.user.coverageStatus).toBe("inactive");
 		expect(createBody.user.status).toBe("active");
 
+		const locationResponse = await SELF.fetch(
+			`http://example.com/users/${createBody.user.id}/locations`,
+			{ method: "POST" }
+		);
+		const location = (await locationResponse.json<{
+			location: { id: number };
+		}>()).location;
+		const lineResponse = await SELF.fetch(
+			`http://example.com/users/${createBody.user.id}/locations/${location.id}/protected-lines`,
+			{
+				method: "POST",
+				headers: { "content-type": "application/json" },
+				body: JSON.stringify({
+					protectedPhoneNumber: "+18005551302",
+					callerFacingBusinessName: "Explicit Test Identity"
+				})
+			}
+		);
+		const line = (await lineResponse.json<{
+			protectedLine: { id: number };
+		}>()).protectedLine;
 		const provisionResponse = await SELF.fetch(
-			`http://example.com/users/${createBody.user.id}/provision`,
+			`http://example.com/protected-lines/${line.id}/provision`,
 			{ method: "POST" }
 		);
 		const provisionBody = await provisionResponse.json<{
@@ -454,53 +494,60 @@ describe("NoMoreScamCalls Worker", () => {
 		expect(provisionBody.code).toBe("onboarding_incomplete");
 		expect(provisionBody.missingRequirements).toEqual(
 			expect.arrayContaining([
-				"caller_facing_business_name",
+					"first_name",
 				"required_agreement"
 			])
 		);
 
 		const listResponse = await SELF.fetch("http://example.com/users?limit=10");
 
-		expect(listResponse.status).toBe(200);
-
-		const listBody = await listResponse.json<{
-			users: Array<{
-				phoneNumber: string;
-				screeningNumber: string | null;
-				sipUsername: string | null;
-				status: string;
-			}>;
-		}>();
-
-		expect(listBody.users.some((user) => user.phoneNumber === "+18005550302")).toBe(true);
+		expect(listResponse.status).toBe(404);
 	});
 
-	it("resolves protected user from Telnyx destination number", async () => {
-		await env.nomorescamcalls_db
-			.prepare(`
+	it("resolves the exact protected line from the Telnyx destination number", async () => {
+		await env.nomorescamcalls_db.batch([
+			env.nomorescamcalls_db.prepare(`
 				INSERT INTO users (
 					phone_number,
+					contact_phone_number,
+					status
+				)
+				VALUES (?, ?, 'active')
+				ON CONFLICT(phone_number) DO UPDATE SET
+					contact_phone_number = excluded.contact_phone_number,
+					status = 'active'
+			`)
+			.bind("+18005550101", "+18005550101"),
+			env.nomorescamcalls_db.prepare(`
+				INSERT INTO account_locations (user_id)
+				SELECT id FROM users WHERE contact_phone_number = ?
+			`).bind("+18005550101"),
+			env.nomorescamcalls_db.prepare(`
+				INSERT INTO protected_lines (
+					user_id,
+					location_id,
+					protected_phone_number,
+					caller_facing_business_name,
 					screening_number,
 					sip_username,
-					caller_facing_business_name,
-					status,
+					provisioning_status,
 					coverage_status
 				)
-				VALUES (?, ?, ?, ?, 'active', 'active')
-				ON CONFLICT(phone_number) DO UPDATE SET
-					screening_number = excluded.screening_number,
-					sip_username = excluded.sip_username,
-					caller_facing_business_name = excluded.caller_facing_business_name,
-					status = 'active',
-					coverage_status = 'active'
-			`)
-			.bind(
+				SELECT
+					users.id,
+					account_locations.id,
+					?, ?, ?, ?, 'provisioned', 'active'
+				FROM users
+				INNER JOIN account_locations ON account_locations.user_id = users.id
+				WHERE users.contact_phone_number = ?
+			`).bind(
 				"+18005550101",
+				"Protected Test Business",
 				"+18005550000",
 				"test_user_18005550101",
-				"Protected Test Business"
+				"+18005550101"
 			)
-			.run();
+		]);
 
 		const response = await SELF.fetch("http://example.com/webhooks/telnyx", {
 			method: "POST",
@@ -523,13 +570,14 @@ describe("NoMoreScamCalls Worker", () => {
 		expect(response.status).toBe(200);
 
 		const body = await response.json<{
-			protectedUser: {
+			protectedAccountId: number;
+			protectedLine: {
 				id: number;
-				phoneNumber: string;
+				protectedPhoneNumber: string;
 				screeningNumber: string;
 				sipUsername: string;
-				status: string;
-			} | null;
+				coverageStatus: string;
+			};
 			approvedDestination: {
 				destinationType: string;
 				destination: string | null;
@@ -546,11 +594,10 @@ describe("NoMoreScamCalls Worker", () => {
 			};
 		}>();
 
-		expect(body.protectedUser).not.toBeNull();
-		expect(body.protectedUser?.phoneNumber).toBe("+18005550101");
-		expect(body.protectedUser?.screeningNumber).toBe("+18005550000");
-		expect(body.protectedUser?.sipUsername).toBe("test_user_18005550101");
-		expect(body.protectedUser?.status).toBe("active");
+		expect(body.protectedLine.protectedPhoneNumber).toBe("+18005550101");
+		expect(body.protectedLine.screeningNumber).toBe("+18005550000");
+		expect(body.protectedLine.sipUsername).toBe("test_user_18005550101");
+		expect(body.protectedLine.coverageStatus).toBe("active");
 		expect(body.approvedDestination.destinationType).toBe("app");
 		expect(body.approvedDestination.destination).toBe(
 			"test_user_18005550101"
@@ -616,10 +663,8 @@ describe("NoMoreScamCalls Worker", () => {
 					code: "BETA-REGISTER-ONE",
 					firstName: "Kelly",
 					lastName: "Hagen",
-					callerFacingBusinessName: "Hagen Home Services",
 					email: "kelly.beta@example.com",
-					phoneNumber: "+15550001001",
-					carrier: "Example Carrier",
+					contactPhoneNumber: "+15550001001",
 					contactMethod: "email",
 					password: "beta-password"
 				})
@@ -635,32 +680,29 @@ describe("NoMoreScamCalls Worker", () => {
 				firstName: string;
 				lastName: string;
 				email: string;
-				phoneNumber: string;
-				carrier: string;
+				contactPhoneNumber: string;
 				contactMethod: string;
 				role: string;
 				accountStatus: string;
 				setupStatus: string;
-				coverageStatus: string;
 			};
 		}>();
 
 		expect(body.registered).toBe(true);
 		expect(body.user.firstName).toBe("Kelly");
 		expect(body.user.lastName).toBe("Hagen");
-		expect((body.user as any).callerFacingBusinessName).toBe("Hagen Home Services");
 		expect(body.user.email).toBe("kelly.beta@example.com");
-		expect(body.user.phoneNumber).toBe("+15550001001");
-		expect(body.user.carrier).toBe("Example Carrier");
+		expect(body.user.contactPhoneNumber).toBe("+15550001001");
 		expect(body.user.contactMethod).toBe("email");
 		expect(body.user.role).toBe("participant");
 		expect(body.user.accountStatus).toBe("active");
 		expect(body.user.setupStatus).toBe("onboarding_incomplete");
-		expect(body.user.coverageStatus).toBe("inactive");
+		expect(body.user).not.toHaveProperty("coverageStatus");
+		expect(body.user).not.toHaveProperty("phoneNumber");
 
 		const storedUser = await env.nomorescamcalls_db
 			.prepare(`
-				SELECT id, password_hash, caller_facing_business_name
+				SELECT id, password_hash, contact_phone_number
 				FROM users
 				WHERE phone_number = ?
 			`)
@@ -668,13 +710,13 @@ describe("NoMoreScamCalls Worker", () => {
 			.first<{
 				id: number;
 				password_hash: string;
-				caller_facing_business_name: string;
+				contact_phone_number: string;
 			}>();
 
 		expect(storedUser).not.toBeNull();
 		expect(storedUser?.password_hash).not.toBe("beta-password");
 		expect(storedUser?.password_hash.startsWith("pbkdf2_sha256$")).toBe(true);
-		expect(storedUser?.caller_facing_business_name).toBe("Hagen Home Services");
+		expect(storedUser?.contact_phone_number).toBe("+15550001001");
 
 		const storedInvite = await env.nomorescamcalls_db
 			.prepare(`
@@ -706,10 +748,8 @@ describe("NoMoreScamCalls Worker", () => {
 					code: "BETA-REGISTER-ONE",
 					firstName: "Second",
 					lastName: "Participant",
-					callerFacingBusinessName: "Second Services",
 					email: "second.beta@example.com",
-					phoneNumber: "+15550001002",
-					carrier: "Example Carrier",
+					contactPhoneNumber: "+15550001002",
 					contactMethod: "email",
 					password: "second-password"
 				})
@@ -765,10 +805,8 @@ describe("NoMoreScamCalls Worker", () => {
 					code: "BETA-REGISTER-EXPIRED",
 					firstName: "Expired",
 					lastName: "Participant",
-					callerFacingBusinessName: "Expired Services",
 					email: "expired.beta@example.com",
-					phoneNumber: "+15550001003",
-					carrier: "Example Carrier",
+					contactPhoneNumber: "+15550001003",
 					contactMethod: "email",
 					password: "expired-password"
 				})
@@ -799,7 +837,7 @@ describe("NoMoreScamCalls Worker", () => {
 		}>();
 
 		expect(body.error).toBe(
-			"code, firstName, lastName, callerFacingBusinessName, email, phoneNumber, carrier, contactMethod, and password are required"
+			"code, firstName, lastName, email, contactPhoneNumber, contactMethod, and password are required"
 		);
 	});
 
@@ -828,10 +866,8 @@ describe("NoMoreScamCalls Worker", () => {
 					code: "BETA-LOGIN-ONE",
 					firstName: "Kelly",
 					lastName: "Hagen",
-					callerFacingBusinessName: "Hagen Home Services",
 					email: "kelly.beta@example.com",
-					phoneNumber: "+15550001004",
-					carrier: "Example Carrier",
+					contactPhoneNumber: "+15550001004",
 					contactMethod: "email",
 					password: "beta-password"
 				})
@@ -1062,10 +1098,8 @@ describe("NoMoreScamCalls Worker", () => {
 					code: "BETA-LOGOUT-ONE",
 					firstName: "Logout",
 					lastName: "Participant",
-					callerFacingBusinessName: "Logout Services",
 					email: "logout.beta@example.com",
-					phoneNumber: "+15550001007",
-					carrier: "Example Carrier",
+					contactPhoneNumber: "+15550001007",
 					contactMethod: "email",
 					password: "beta-password"
 				})
@@ -1180,10 +1214,8 @@ describe("NoMoreScamCalls Worker", () => {
 					code: "BETA-DASHBOARD-SUMMARY",
 					firstName: "Dashboard",
 					lastName: "Summary",
-					callerFacingBusinessName: "Dashboard Services",
 					email: "dashboard.summary@example.com",
-					phoneNumber: "+15550002001",
-					carrier: "Example Carrier",
+					contactPhoneNumber: "+15550002001",
 					contactMethod: "email",
 					password: "beta-password"
 				})
@@ -1215,20 +1247,38 @@ describe("NoMoreScamCalls Worker", () => {
 			};
 		}>();
 
-		await env.nomorescamcalls_db
-			.prepare(`
-				UPDATE users
-				SET
-					screening_number = ?,
-					setup_status = ?
-				WHERE id = ?
-			`)
-			.bind(
+		await env.nomorescamcalls_db.batch([
+			env.nomorescamcalls_db.prepare(`
+				UPDATE users SET setup_status = ? WHERE id = ?
+			`).bind("forwarding_ready", loginBody.user.id),
+			env.nomorescamcalls_db.prepare(`
+				INSERT INTO account_locations (user_id) VALUES (?)
+			`).bind(loginBody.user.id),
+			env.nomorescamcalls_db.prepare(`
+				INSERT INTO protected_lines (
+					user_id,
+					location_id,
+					protected_phone_number,
+					caller_facing_business_name,
+					screening_number,
+					sip_username,
+					provisioning_status,
+					coverage_status
+				)
+				SELECT ?, id, ?, ?, ?, ?, 'provisioned', 'active'
+				FROM account_locations
+				WHERE user_id = ?
+				ORDER BY id DESC
+				LIMIT 1
+			`).bind(
+				loginBody.user.id,
+				"+15550003999",
+				"Dashboard Summary",
 				"+15550002999",
-				"forwarding_ready",
+				"test_dashboard_summary",
 				loginBody.user.id
 			)
-			.run();
+		]);
 
 		await env.nomorescamcalls_db
 			.prepare(`
@@ -1265,16 +1315,24 @@ describe("NoMoreScamCalls Worker", () => {
 
 		const body = await response.json<{
 			service_status: string;
-			screening_number: string | null;
+				locations: Array<{ id: number }>;
+				protected_lines: Array<{
+					protectedPhoneNumber: string;
+					screeningNumber: string | null;
+				}>;
 			total_calls: number;
 			successful_calls: number;
 			diverted_calls: number;
 			last_call_at: string | null;
 		}>();
 
-		expect(body).toEqual({
+		expect(body).toMatchObject({
 			service_status: "forwarding_ready",
-			screening_number: "+15550002999",
+			locations: expect.any(Array),
+			protected_lines: [{
+				protectedPhoneNumber: "+15550003999",
+				screeningNumber: "+15550002999"
+			}],
 			total_calls: 2,
 			successful_calls: 1,
 			diverted_calls: 1,
@@ -1307,10 +1365,8 @@ describe("NoMoreScamCalls Worker", () => {
 					code: "BETA-DASHBOARD-CALLS",
 					firstName: "Dashboard",
 					lastName: "Calls",
-					callerFacingBusinessName: "Dashboard Call Services",
 					email: "dashboard.calls@example.com",
-					phoneNumber: "+15550002002",
-					carrier: "Example Carrier",
+					contactPhoneNumber: "+15550002002",
 					contactMethod: "email",
 					password: "beta-password"
 				})

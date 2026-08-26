@@ -11,19 +11,14 @@ interface LoginUserRow {
 	id: number;
 	first_name: string | null;
 	last_name: string | null;
-	caller_facing_business_name: string | null;
 	email: string | null;
-	phone_number: string;
-	screening_number: string | null;
-	sip_username: string | null;
-	carrier: string | null;
+	contact_phone_number: string | null;
 	contact_method: string | null;
 	password_hash: string | null;
 	role: string;
 	account_status: string;
 	setup_status: string;
 	status: string;
-	coverage_status: string;
 }
 
 export interface BetaLoginResult {
@@ -37,18 +32,13 @@ function mapLoginUserRow(row: LoginUserRow): UserRecord {
 		id: row.id,
 		firstName: row.first_name,
 		lastName: row.last_name,
-		callerFacingBusinessName: row.caller_facing_business_name,
 		email: row.email,
-		phoneNumber: row.phone_number,
-		screeningNumber: row.screening_number,
-		sipUsername: row.sip_username,
-		carrier: row.carrier,
+		contactPhoneNumber: row.contact_phone_number,
 		contactMethod: row.contact_method,
 		role: row.role,
 		accountStatus: row.account_status,
 		setupStatus: row.setup_status,
-		status: row.status,
-		coverageStatus: row.coverage_status
+		status: row.status
 	};
 }
 
@@ -65,19 +55,14 @@ export async function loginBetaParticipant(
 				id,
 				first_name,
 				last_name,
-				caller_facing_business_name,
 				email,
-				phone_number,
-				screening_number,
-				sip_username,
-				carrier,
+				contact_phone_number,
 				contact_method,
 				password_hash,
 				role,
 				account_status,
 				setup_status,
-				status,
-				coverage_status
+				status
 			FROM users
 			WHERE email = ?
 				AND role IN ('subscriber', 'participant', 'admin', 'administrator')

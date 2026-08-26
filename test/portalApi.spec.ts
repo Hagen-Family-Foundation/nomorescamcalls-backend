@@ -56,10 +56,8 @@ describe('subscriber portal API', () => {
 				code: inviteCode,
 				firstName: 'Portal',
 				lastName: 'Participant',
-				callerFacingBusinessName: 'Portal Plumbing',
 				email: 'portal.integration@example.com',
-				phoneNumber: '+15550001020',
-				carrier: 'Example Carrier',
+				contactPhoneNumber: '+15550001020',
 				contactMethod: 'email',
 				password: 'portal-password',
 			}),
@@ -78,7 +76,7 @@ describe('subscriber portal API', () => {
 		expect(registerBody.token.length).toBeGreaterThan(20);
 
 		expect(registerBody.user.email).toBe('portal.integration@example.com');
-		expect((registerBody.user as any).callerFacingBusinessName).toBe('Portal Plumbing');
+		expect((registerBody.user as any).contactPhoneNumber).toBe('+15550001020');
 
 		const meResponse = await SELF.fetch('http://example.com/portal/me', {
 			headers: {
@@ -99,6 +97,46 @@ describe('subscriber portal API', () => {
 
 		expect(meBody.user.agreementAccepted).toBe(false);
 
+		const agreementResponse = await SELF.fetch('http://example.com/portal/agreement/accept', {
+			method: 'POST',
+			headers: {
+				authorization: `Bearer ${registerBody.token}`,
+				'content-type': 'application/json',
+			},
+			body: JSON.stringify({ version: 'v1' }),
+		});
+
+		expect(agreementResponse.status).toBe(200);
+		expect(await agreementResponse.json()).toMatchObject({
+			accepted: true,
+			onboarding: { complete: true },
+			provisioning: null,
+		});
+
+		const locationResponse = await SELF.fetch(
+			`http://example.com/users/${registerBody.user.id}/locations`,
+			{ method: 'POST' },
+		);
+		expect(locationResponse.status).toBe(201);
+		const location = (await locationResponse.json<{ location: { id: number } }>()).location;
+
+		const lineResponse = await SELF.fetch(
+			`http://example.com/users/${registerBody.user.id}/locations/${location.id}/protected-lines`,
+			{
+				method: 'POST',
+				headers: { 'content-type': 'application/json' },
+				body: JSON.stringify({
+					protectedPhoneNumber: '+15550003020',
+					callerFacingBusinessName: 'Portal Plumbing',
+					carrier: 'Example Landline Carrier',
+				}),
+			},
+		);
+		expect(lineResponse.status).toBe(201);
+		const protectedLine = (await lineResponse.json<{
+			protectedLine: { id: number };
+		}>()).protectedLine;
+
 		await env.nomorescamcalls_db
 			.prepare(
 				`
@@ -115,6 +153,7 @@ describe('subscriber portal API', () => {
 					ON CONFLICT(phone_number) DO UPDATE SET
 						status = 'available',
 						assigned_user_id = NULL,
+						assigned_protected_line_id = NULL,
 						assigned_at = NULL,
 						provider = excluded.provider,
 						provider_number_id = excluded.provider_number_id,
@@ -146,6 +185,7 @@ describe('subscriber portal API', () => {
 					ON CONFLICT(sip_username) DO UPDATE SET
 						status = 'available',
 						assigned_user_id = NULL,
+						assigned_protected_line_id = NULL,
 						assigned_at = NULL,
 						provider = excluded.provider,
 						provider_credential_id = excluded.provider_credential_id,
@@ -160,64 +200,54 @@ describe('subscriber portal API', () => {
 			)
 			.run();
 
-		const agreementResponse = await SELF.fetch('http://example.com/portal/agreement/accept', {
-			method: 'POST',
-			headers: {
-				authorization: `Bearer ${registerBody.token}`,
-				'content-type': 'application/json',
-			},
-			body: JSON.stringify({
-				version: 'v1',
-			}),
-		});
+		const provisioningResponse = await SELF.fetch(
+			`http://example.com/protected-lines/${protectedLine.id}/provision`,
+			{ method: 'POST' },
+		);
 
-		expect(agreementResponse.status).toBe(200);
+		expect(provisioningResponse.status).toBe(200);
 
-		const agreementBody = await agreementResponse.json<{
-			accepted: boolean;
-			agreement: {
-				version: string;
-			};
+		const provisioningBody = await provisioningResponse.json<{
 			provisioning: {
-				status: string;
+				provisioningStatus: string;
 				coverageStatus: string;
-				screeningNumber: string | null;
-				sipUsername: string | null;
+				protectedLine: {
+					screeningNumber: string | null;
+					sipUsername: string | null;
+				};
 			};
 		}>();
 
-		expect(agreementBody).toMatchObject({
-			accepted: true,
-			agreement: {
-				version: 'v1',
-			},
+		expect(provisioningBody).toMatchObject({
 			provisioning: {
-				status: 'active',
+				provisioningStatus: 'active',
 				coverageStatus: 'active',
-				screeningNumber: '+15550002020',
-				sipUsername: 'portal_integration_user',
+				protectedLine: {
+					screeningNumber: '+15550002020',
+					sipUsername: 'portal_integration_user',
+				},
 			},
 		});
 
-		const provisionedUser = await env.nomorescamcalls_db
+		const provisionedLine = await env.nomorescamcalls_db
 			.prepare(
 				`
 					SELECT
 						screening_number,
 						sip_username,
 						coverage_status
-					FROM users
+					FROM protected_lines
 					WHERE id = ?
 				`,
 			)
-			.bind(registerBody.user.id)
+			.bind(protectedLine.id)
 			.first<{
 				screening_number: string | null;
 				sip_username: string | null;
 				coverage_status: string;
 			}>();
 
-		expect(provisionedUser).toEqual({
+		expect(provisionedLine).toEqual({
 			screening_number: '+15550002020',
 			sip_username: 'portal_integration_user',
 			coverage_status: 'active',
@@ -241,12 +271,14 @@ describe('subscriber portal API', () => {
 			}),
 		});
 		const callBody = await callResponse.json<{
-			protectedUser: { id: number };
+			protectedAccountId: number;
+			protectedLine: { id: number };
 			firstRequest: { body: { payload: string } };
 		}>();
 
 		expect(callResponse.status).toBe(200);
-		expect(callBody.protectedUser.id).toBe(registerBody.user.id);
+		expect(callBody.protectedAccountId).toBe(registerBody.user.id);
+		expect(callBody.protectedLine.id).toBe(protectedLine.id);
 		expect(callBody.firstRequest.body.payload).toContain(
 			'Thank you for calling Portal Plumbing.'
 		);

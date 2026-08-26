@@ -11,6 +11,7 @@ async function ensureInventorySchema(): Promise<void> {
 				phone_number TEXT NOT NULL UNIQUE,
 				status TEXT NOT NULL DEFAULT 'available',
 				assigned_user_id INTEGER,
+				assigned_protected_line_id INTEGER,
 				assigned_at TEXT,
 				provider TEXT NOT NULL DEFAULT 'telnyx',
 				provider_number_id TEXT,
@@ -21,6 +22,15 @@ async function ensureInventorySchema(): Promise<void> {
 			)
 		`)
 		.run();
+
+	const columns = await env.nomorescamcalls_db
+		.prepare("PRAGMA table_info(screening_number_inventory)")
+		.all<{ name: string }>();
+	if (!columns.results.some((column) => column.name === "assigned_protected_line_id")) {
+		await env.nomorescamcalls_db
+			.prepare("ALTER TABLE screening_number_inventory ADD COLUMN assigned_protected_line_id INTEGER")
+			.run();
+	}
 }
 
 describe("telnyxInventorySync", () => {
@@ -76,13 +86,15 @@ describe("telnyxInventorySync", () => {
 					phone_number,
 					status,
 					assigned_user_id,
+					assigned_protected_line_id,
 					assigned_at,
 					provider
 				)
-				VALUES (?, 'assigned', 123, CURRENT_TIMESTAMP, 'telnyx')
+				VALUES (?, 'assigned', 123, 456, CURRENT_TIMESTAMP, 'telnyx')
 				ON CONFLICT(phone_number) DO UPDATE SET
 					status = 'assigned',
 					assigned_user_id = 123,
+					assigned_protected_line_id = 456,
 					assigned_at = CURRENT_TIMESTAMP
 			`)
 			.bind("+19139563333")
@@ -118,6 +130,7 @@ describe("telnyxInventorySync", () => {
 
 		expect(stored?.status).toBe("assigned");
 		expect(stored?.assignedUserId).toBe(123);
+		expect(stored?.assignedProtectedLineId).toBe(456);
 		expect(stored?.providerNumberId).toBe("telnyx-number-sync-assigned");
 		expect(stored?.voiceApplicationId).toBe("voice-app-default");
 		expect(stored?.connectionId).toBe("connection-default");
@@ -136,6 +149,7 @@ describe("telnyxInventorySync", () => {
 				ON CONFLICT(phone_number) DO UPDATE SET
 					status = 'available',
 					assigned_user_id = NULL,
+					assigned_protected_line_id = NULL,
 					assigned_at = NULL,
 					provider = 'telnyx'
 			`)

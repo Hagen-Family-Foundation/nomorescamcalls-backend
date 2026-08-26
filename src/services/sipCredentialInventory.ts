@@ -3,6 +3,7 @@ export interface SipCredentialInventoryRecord {
 	sipUsername: string;
 	status: string;
 	assignedUserId: number | null;
+	assignedProtectedLineId: number | null;
 	assignedAt: string | null;
 	provider: string;
 	providerCredentialId: string | null;
@@ -15,6 +16,7 @@ function mapSipCredentialInventoryRow(row: {
 	sip_username: string;
 	status: string;
 	assigned_user_id: number | null;
+	assigned_protected_line_id?: number | null;
 	assigned_at: string | null;
 	provider?: string | null;
 	provider_credential_id?: string | null;
@@ -26,6 +28,7 @@ function mapSipCredentialInventoryRow(row: {
 		sipUsername: row.sip_username,
 		status: row.status,
 		assignedUserId: row.assigned_user_id,
+		assignedProtectedLineId: row.assigned_protected_line_id ?? null,
 		assignedAt: row.assigned_at,
 		provider: row.provider ?? "telnyx",
 		providerCredentialId: row.provider_credential_id ?? null,
@@ -97,6 +100,7 @@ export async function findSipCredentialInInventory(
 				sip_username,
 				status,
 				assigned_user_id,
+				assigned_protected_line_id,
 				assigned_at,
 				provider,
 				provider_credential_id,
@@ -111,6 +115,7 @@ export async function findSipCredentialInInventory(
 			sip_username: string;
 			status: string;
 			assigned_user_id: number | null;
+			assigned_protected_line_id: number | null;
 			assigned_at: string | null;
 			provider: string | null;
 			provider_credential_id: string | null;
@@ -123,6 +128,7 @@ export async function findSipCredentialInInventory(
 
 export async function reserveAvailableSipCredential(
 	db: D1Database,
+	protectedLineId: number,
 	userId: number
 ): Promise<SipCredentialInventoryRecord> {
 	const available = await db
@@ -132,6 +138,7 @@ export async function reserveAvailableSipCredential(
 				sip_username,
 				status,
 				assigned_user_id,
+				assigned_protected_line_id,
 				assigned_at,
 				provider,
 				provider_credential_id,
@@ -147,6 +154,7 @@ export async function reserveAvailableSipCredential(
 			sip_username: string;
 			status: string;
 			assigned_user_id: number | null;
+			assigned_protected_line_id: number | null;
 			assigned_at: string | null;
 			provider: string | null;
 			provider_credential_id: string | null;
@@ -163,11 +171,12 @@ export async function reserveAvailableSipCredential(
 			UPDATE sip_credential_inventory
 			SET status = 'assigned',
 				assigned_user_id = ?,
+				assigned_protected_line_id = ?,
 				assigned_at = CURRENT_TIMESTAMP
 			WHERE id = ?
 				AND status = 'available'
 		`)
-		.bind(userId, available.id)
+		.bind(userId, protectedLineId, available.id)
 		.run();
 
 	const reserved = await findSipCredentialInInventory(
@@ -175,26 +184,32 @@ export async function reserveAvailableSipCredential(
 		available.sip_username
 	);
 
-	if (!reserved || reserved.status !== "assigned" || reserved.assignedUserId !== userId) {
+	if (
+		!reserved
+		|| reserved.status !== "assigned"
+		|| reserved.assignedUserId !== userId
+		|| reserved.assignedProtectedLineId !== protectedLineId
+	) {
 		throw new Error("Failed to reserve SIP credential");
 	}
 
 	return reserved;
 }
 
-export async function releaseSipCredentialForUser(
+export async function releaseSipCredentialForProtectedLine(
 	db: D1Database,
-	userId: number
+	protectedLineId: number
 ): Promise<void> {
 	await db
 		.prepare(`
 			UPDATE sip_credential_inventory
 			SET status = 'available',
 				assigned_user_id = NULL,
+				assigned_protected_line_id = NULL,
 				assigned_at = NULL
-			WHERE assigned_user_id = ?
+			WHERE assigned_protected_line_id = ?
 		`)
-		.bind(userId)
+		.bind(protectedLineId)
 		.run();
 }
 

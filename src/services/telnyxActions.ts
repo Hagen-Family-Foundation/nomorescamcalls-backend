@@ -15,7 +15,7 @@ export function planTelnyxAction(action: string): TelnyxPlannedAction {
 			action: "allow",
 			telnyxBehavior: "route_to_approved_app_endpoint",
 			reason: "Caller passed screening.",
-			nextStep: "Transfer approved call to the protected user app/WebRTC destination."
+			nextStep: "Transfer approved call to the exact protected line's app/WebRTC destination."
 		};
 	}
 

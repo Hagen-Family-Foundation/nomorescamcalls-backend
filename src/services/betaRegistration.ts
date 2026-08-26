@@ -1,14 +1,12 @@
-import { findUserByPhoneNumber, type UserRecord } from "./users";
+import { findUserByEmail, type UserRecord } from "./users";
 import { hashPassword } from "../utils/passwordHash";
 
 export interface RegisterBetaParticipantInput {
 	code: string;
 	firstName: string;
 	lastName: string;
-	callerFacingBusinessName: string;
 	email: string;
-	phoneNumber: string;
-	carrier: string;
+	contactPhoneNumber: string;
 	contactMethod: string;
 	password: string;
 }
@@ -25,11 +23,8 @@ export async function registerBetaParticipant(
 	const code = input.code.trim();
 	const firstName = input.firstName.trim();
 	const lastName = input.lastName.trim();
-	const callerFacingBusinessName =
-		input.callerFacingBusinessName.trim();
 	const email = input.email.trim().toLowerCase();
-	const phoneNumber = input.phoneNumber.trim();
-	const carrier = input.carrier.trim();
+	const contactPhoneNumber = input.contactPhoneNumber.trim();
 	const contactMethod = input.contactMethod.trim();
 	const now = new Date().toISOString();
 
@@ -37,10 +32,8 @@ export async function registerBetaParticipant(
 		!code
 		|| !firstName
 		|| !lastName
-		|| !callerFacingBusinessName
 		|| !email
-		|| !phoneNumber
-		|| !carrier
+		|| !contactPhoneNumber
 		|| !contactMethod
 		|| !input.password
 	) {
@@ -55,10 +48,9 @@ export async function registerBetaParticipant(
 				INSERT INTO users (
 					first_name,
 					last_name,
-					caller_facing_business_name,
 					email,
+					contact_phone_number,
 					phone_number,
-					carrier,
 					contact_method,
 					password_hash,
 					role,
@@ -68,7 +60,6 @@ export async function registerBetaParticipant(
 					coverage_status
 				)
 				SELECT
-					?,
 					?,
 					?,
 					?,
@@ -94,10 +85,9 @@ export async function registerBetaParticipant(
 			.bind(
 				firstName,
 				lastName,
-				callerFacingBusinessName,
 				email,
-				phoneNumber,
-				carrier,
+				contactPhoneNumber,
+				contactPhoneNumber,
 				contactMethod,
 				passwordHash,
 				code,
@@ -115,7 +105,7 @@ export async function registerBetaParticipant(
 						SELECT id
 						FROM users
 						WHERE email = ?
-							AND phone_number = ?
+							AND contact_phone_number = ?
 					),
 					updated_at = ?
 				WHERE code = ?
@@ -126,16 +116,16 @@ export async function registerBetaParticipant(
 						SELECT 1
 						FROM users
 						WHERE email = ?
-							AND phone_number = ?
+							AND contact_phone_number = ?
 					)
 			`)
 			.bind(
 				email,
-				phoneNumber,
+				contactPhoneNumber,
 				now,
 				code,
 				email,
-				phoneNumber
+				contactPhoneNumber
 			)
 	]);
 
@@ -146,7 +136,7 @@ export async function registerBetaParticipant(
 		return null;
 	}
 
-	const user = await findUserByPhoneNumber(db, phoneNumber);
+	const user = await findUserByEmail(db, email);
 
 	if (!user || user.email !== email) {
 		throw new Error("Failed to create beta participant account");

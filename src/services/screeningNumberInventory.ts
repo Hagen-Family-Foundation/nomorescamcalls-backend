@@ -3,6 +3,7 @@ export interface ScreeningNumberInventoryRecord {
 	phoneNumber: string;
 	status: string;
 	assignedUserId: number | null;
+	assignedProtectedLineId: number | null;
 	assignedAt: string | null;
 	provider: string;
 	providerNumberId: string | null;
@@ -16,6 +17,7 @@ function mapInventoryRow(row: {
 	phone_number: string;
 	status: string;
 	assigned_user_id: number | null;
+	assigned_protected_line_id?: number | null;
 	assigned_at: string | null;
 	provider?: string | null;
 	provider_number_id?: string | null;
@@ -28,6 +30,7 @@ function mapInventoryRow(row: {
 		phoneNumber: row.phone_number,
 		status: row.status,
 		assignedUserId: row.assigned_user_id,
+		assignedProtectedLineId: row.assigned_protected_line_id ?? null,
 		assignedAt: row.assigned_at,
 		provider: row.provider ?? "telnyx",
 		providerNumberId: row.provider_number_id ?? null,
@@ -101,6 +104,7 @@ export async function findScreeningNumberInInventory(
 				phone_number,
 				status,
 				assigned_user_id,
+				assigned_protected_line_id,
 				assigned_at,
 				provider,
 				provider_number_id,
@@ -116,6 +120,7 @@ export async function findScreeningNumberInInventory(
 			phone_number: string;
 			status: string;
 			assigned_user_id: number | null;
+			assigned_protected_line_id: number | null;
 			assigned_at: string | null;
 			provider: string | null;
 			provider_number_id: string | null;
@@ -129,6 +134,7 @@ export async function findScreeningNumberInInventory(
 
 export async function reserveAvailableScreeningNumber(
 	db: D1Database,
+	protectedLineId: number,
 	userId: number
 ): Promise<ScreeningNumberInventoryRecord> {
 	const available = await db
@@ -138,6 +144,7 @@ export async function reserveAvailableScreeningNumber(
 				phone_number,
 				status,
 				assigned_user_id,
+				assigned_protected_line_id,
 				assigned_at,
 				provider,
 				provider_number_id,
@@ -154,6 +161,7 @@ export async function reserveAvailableScreeningNumber(
 			phone_number: string;
 			status: string;
 			assigned_user_id: number | null;
+			assigned_protected_line_id: number | null;
 			assigned_at: string | null;
 			provider: string | null;
 			provider_number_id: string | null;
@@ -171,11 +179,12 @@ export async function reserveAvailableScreeningNumber(
 			UPDATE screening_number_inventory
 			SET status = 'assigned',
 				assigned_user_id = ?,
+				assigned_protected_line_id = ?,
 				assigned_at = CURRENT_TIMESTAMP
 			WHERE id = ?
 				AND status = 'available'
 		`)
-		.bind(userId, available.id)
+		.bind(userId, protectedLineId, available.id)
 		.run();
 
 	const reserved = await findScreeningNumberInInventory(
@@ -183,26 +192,32 @@ export async function reserveAvailableScreeningNumber(
 		available.phone_number
 	);
 
-	if (!reserved || reserved.status !== "assigned" || reserved.assignedUserId !== userId) {
+	if (
+		!reserved
+		|| reserved.status !== "assigned"
+		|| reserved.assignedUserId !== userId
+		|| reserved.assignedProtectedLineId !== protectedLineId
+	) {
 		throw new Error("Failed to reserve screening number");
 	}
 
 	return reserved;
 }
 
-export async function releaseScreeningNumberForUser(
+export async function releaseScreeningNumberForProtectedLine(
 	db: D1Database,
-	userId: number
+	protectedLineId: number
 ): Promise<void> {
 	await db
 		.prepare(`
 			UPDATE screening_number_inventory
 			SET status = 'available',
 				assigned_user_id = NULL,
+				assigned_protected_line_id = NULL,
 				assigned_at = NULL
-			WHERE assigned_user_id = ?
+			WHERE assigned_protected_line_id = ?
 		`)
-		.bind(userId)
+		.bind(protectedLineId)
 		.run();
 }
 

@@ -4,6 +4,7 @@ import type {
 
 export interface EvidenceLibrarySubscriber {
 	id: number | null;
+	protectedLineId: number | null;
 	name: string | null;
 	callerFacingBusinessName: string | null;
 	phoneNumber: string | null;
@@ -326,6 +327,7 @@ export async function receiveEvidenceBox(
 				caller_supporting_evidence,
 				caller_deductions,
 
+				protected_line_id,
 				subscriber_id,
 				subscriber_name,
 				subscriber_caller_facing_business_name,
@@ -349,7 +351,7 @@ export async function receiveEvidenceBox(
 				subscriber_supporting_evidence
 			)
 			VALUES (
-				?, ?, ?, ?, ?, ?, ?, ?, ?,
+				?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
 				?, ?, ?, ?, ?, ?, ?, ?,
 				?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
 				?, ?, ?, ?, ?, ?, ?,
@@ -467,6 +469,8 @@ export async function receiveEvidenceBox(
 				caller_deductions =
 					excluded.caller_deductions,
 
+				protected_line_id =
+					excluded.protected_line_id,
 				subscriber_id =
 					excluded.subscriber_id,
 				subscriber_name =
@@ -596,6 +600,7 @@ export async function receiveEvidenceBox(
 				evidenceBox.allDeductions
 			),
 
+			subscriber.protectedLineId,
 			subscriber.id,
 			subscriber.name,
 			subscriber.callerFacingBusinessName,

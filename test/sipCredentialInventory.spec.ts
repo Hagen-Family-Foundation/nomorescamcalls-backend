@@ -16,6 +16,7 @@ describe("SIP credential inventory", () => {
 					sip_username TEXT NOT NULL UNIQUE,
 					status TEXT NOT NULL DEFAULT 'available',
 					assigned_user_id INTEGER,
+					assigned_protected_line_id INTEGER,
 					assigned_at TEXT,
 					provider TEXT NOT NULL DEFAULT 'telnyx',
 					provider_credential_id TEXT,
@@ -25,6 +26,15 @@ describe("SIP credential inventory", () => {
 				)
 			`)
 			.run();
+
+		const columns = await env.nomorescamcalls_db
+			.prepare("PRAGMA table_info(sip_credential_inventory)")
+			.all<{ name: string }>();
+		if (!columns.results.some((column) => column.name === "assigned_protected_line_id")) {
+			await env.nomorescamcalls_db
+				.prepare("ALTER TABLE sip_credential_inventory ADD COLUMN assigned_protected_line_id INTEGER")
+				.run();
+		}
 
 		await env.nomorescamcalls_db
 			.prepare("DELETE FROM sip_credential_inventory")
@@ -63,12 +73,14 @@ describe("SIP credential inventory", () => {
 
 		const reserved = await reserveAvailableSipCredential(
 			env.nomorescamcalls_db,
+			7,
 			42
 		);
 
 		expect(reserved.sipUsername).toBe("test_user_support_15892");
 		expect(reserved.status).toBe("assigned");
 		expect(reserved.assignedUserId).toBe(42);
+		expect(reserved.assignedProtectedLineId).toBe(7);
 	});
 
 	it("reports SIP credential inventory health", async () => {

@@ -8,14 +8,21 @@ import { listConfirmedScamNumbers, removeConfirmedScamNumber } from "./services/
 import { promoteConfirmedScamNumber } from "./services/scamPromotion";
 import { getCallerIntelligence } from "./services/callerLookup";
 import { addCallerListEntry, listCallerListEntries, removeCallerListEntry } from "./services/callerLists";
-import { createUser, listUsers } from "./services/users";
+import { createUser } from "./services/users";
 import { getScreeningNumberInventoryHealth } from "./services/screeningNumberInventory";
 import { getSipCredentialInventoryHealth } from "./services/sipCredentialInventory";
 import { getTelnyxExecutionPolicy } from "./services/telnyxExecutionPolicy";
 import {
-	provisionSubscriber,
-	SubscriberProvisioningError
+	provisionProtectedLine,
+	ProtectedLineProvisioningError
 } from "./services/provisioning";
+import {
+	createAccountLocation,
+	createProtectedLine,
+	listAccountLocations,
+	listProtectedLinesForAccount,
+	ProtectedLineError
+} from "./services/protectedLines";
 import { syncTelnyxInventory } from "./services/telnyxInventorySync";
 import { syncTelnyxSipCredentials } from "./services/telnyxSipCredentialSync";
 import { fetchTelnyxVoiceApplication } from "./services/telnyxVoiceApplicationsClient";
@@ -24,6 +31,10 @@ import { validateBetaInviteCode } from "./services/betaInviteCodes";
 import { registerBetaParticipant } from "./services/betaRegistration";
 import { loginBetaParticipant } from "./services/betaLogin";
 import { authenticateBetaSession } from "./services/betaSession";
+import {
+	AdministrativeReviewError,
+	handleAdministrativeReviewGate
+} from "./services/administrativeReview";
 import { logoutBetaParticipant } from "./services/betaLogout";
 import {
 	acceptCurrentBetaAgreement,
@@ -96,6 +107,59 @@ export default {
 				status: "ok",
 				version: "0.1.0"
 			});
+		}
+
+		// The single administrative/support/compliance customer-review gate.
+		if (
+			request.method === "POST"
+			&& url.pathname === "/admin/review"
+		) {
+			const sessionToken = getBearerToken(request);
+
+			if (!sessionToken) {
+				return portalJson({
+					error: "Valid administrative portal session required",
+					code: "administrative_review_unauthenticated"
+				}, 401);
+			}
+
+			const portalSession = await authenticateBetaSession(
+				env.nomorescamcalls_db,
+				sessionToken
+			);
+
+			if (!portalSession) {
+				return portalJson({
+					error: "Valid administrative portal session required",
+					code: "administrative_review_unauthenticated"
+				}, 401);
+			}
+
+			try {
+				const result = await handleAdministrativeReviewGate(
+					env.nomorescamcalls_db,
+					portalSession.user,
+					await request.json() as Record<string, unknown>
+				);
+
+				return portalJson(result);
+			} catch (error) {
+				if (error instanceof AdministrativeReviewError) {
+					return portalJson({
+						error: error.message,
+						code: error.code
+					}, error.status);
+				}
+
+				console.error("Administrative review gate failed", {
+					error
+				});
+
+				return portalJson({
+					error: "Administrative review failed",
+					code: "administrative_review_failed"
+				}, 500);
+			}
 		}
 
 		// Hash Test Endpoint
@@ -210,19 +274,6 @@ export default {
 			});
 		}
 
-		// Users Endpoint
-		if (request.method === "GET" && url.pathname === "/users") {
-			const limit = Number(url.searchParams.get("limit") ?? "25");
-			const users = await listUsers(
-				env.nomorescamcalls_db,
-				limit
-			);
-
-			return Response.json({
-				users
-			});
-		}
-
 		// Screening Number Inventory Health Endpoint
 		if (request.method === "GET" && url.pathname === "/inventory/screening-numbers/health") {
 			const threshold = Number(url.searchParams.get("threshold") ?? "5");
@@ -291,19 +342,18 @@ export default {
 			const body = await request.json() as {
 				firstName?: string;
 				lastName?: string;
-				phoneNumber?: string;
-				callerFacingBusinessName?: string;
+				contactPhoneNumber?: string;
 				email?: string;
-				carrier?: string;
 				contactMethod?: string;
 				password?: string;
 			};
 
-			const phoneNumber = body.phoneNumber?.trim() ?? "";
+			const contactPhoneNumber =
+				body.contactPhoneNumber?.trim() ?? "";
 
-			if (!phoneNumber) {
+			if (!contactPhoneNumber) {
 				return Response.json({
-					error: "phoneNumber is required"
+					error: "contactPhoneNumber is required"
 				}, {
 					status: 400
 				});
@@ -316,11 +366,8 @@ export default {
 					{
 						firstName: body.firstName?.trim() || null,
 						lastName: body.lastName?.trim() || null,
-						phoneNumber,
-						callerFacingBusinessName:
-							body.callerFacingBusinessName?.trim() || null,
+						contactPhoneNumber,
 						email: body.email?.trim().toLowerCase() || null,
-						carrier: body.carrier?.trim() || null,
 						contactMethod: body.contactMethod?.trim() || null,
 						passwordHash: password
 							? await hashPassword(password)
@@ -350,10 +397,8 @@ export default {
 			const body = await request.json() as {
 				firstName?: string;
 				lastName?: string;
-				callerFacingBusinessName?: string;
 				email?: string;
-				phoneNumber?: string;
-				carrier?: string;
+				contactPhoneNumber?: string;
 				contactMethod?: string;
 				password?: string;
 			};
@@ -383,34 +428,78 @@ export default {
 			}
 		}
 
-		const provisioningUserMatch =
-			url.pathname.match(/^\/users\/(\d+)\/provision$/);
+		const accountLocationsMatch =
+			url.pathname.match(/^\/users\/(\d+)\/locations$/);
 
-		if (request.method === "POST" && provisioningUserMatch) {
-			const userId = Number(provisioningUserMatch[1]);
+		if (request.method === "POST" && accountLocationsMatch) {
+			try {
+				return Response.json({
+					location: await createAccountLocation(
+						env.nomorescamcalls_db,
+						Number(accountLocationsMatch[1])
+					)
+				}, { status: 201 });
+			} catch (error) {
+				return Response.json({
+					error: error instanceof Error ? error.message : "Location creation failed",
+					code: error instanceof ProtectedLineError ? error.code : "location_creation_failed"
+				}, { status: 409 });
+			}
+		}
+
+		const protectedLinesMatch = url.pathname.match(
+			/^\/users\/(\d+)\/locations\/(\d+)\/protected-lines$/
+		);
+
+		if (request.method === "POST" && protectedLinesMatch) {
+			const body = await request.json() as {
+				protectedPhoneNumber?: string;
+				callerFacingBusinessName?: string;
+				carrier?: string;
+			};
 
 			try {
 				return Response.json({
-					provisioning: await provisionSubscriber(
+					protectedLine: await createProtectedLine(
 						env.nomorescamcalls_db,
-						userId
+						Number(protectedLinesMatch[1]),
+						Number(protectedLinesMatch[2]),
+						{
+							protectedPhoneNumber: body.protectedPhoneNumber ?? "",
+							callerFacingBusinessName: body.callerFacingBusinessName ?? "",
+							carrier: body.carrier
+						}
+					)
+				}, { status: 201 });
+			} catch (error) {
+				return Response.json({
+					error: error instanceof Error ? error.message : "Protected-line creation failed",
+					code: error instanceof ProtectedLineError ? error.code : "protected_line_creation_failed"
+				}, { status: 409 });
+			}
+		}
+
+		const provisionLineMatch =
+			url.pathname.match(/^\/protected-lines\/(\d+)\/provision$/);
+
+		if (request.method === "POST" && provisionLineMatch) {
+			try {
+				return Response.json({
+					provisioning: await provisionProtectedLine(
+						env.nomorescamcalls_db,
+						Number(provisionLineMatch[1])
 					)
 				});
 			} catch (error) {
 				return Response.json({
-					error: error instanceof Error
-						? error.message
-						: "Subscriber provisioning failed",
-					code: error instanceof SubscriberProvisioningError
+					error: error instanceof Error ? error.message : "Protected-line provisioning failed",
+					code: error instanceof ProtectedLineProvisioningError
 						? error.code
-						: "subscriber_provisioning_failed",
-					missingRequirements:
-						error instanceof SubscriberProvisioningError
-							? error.missingRequirements
-							: []
-				}, {
-					status: 409
-				});
+						: "protected_line_provisioning_failed",
+					missingRequirements: error instanceof ProtectedLineProvisioningError
+						? error.missingRequirements
+						: []
+				}, { status: 409 });
 			}
 		}
 
@@ -480,10 +569,8 @@ export default {
 				code?: string;
 				firstName?: string;
 				lastName?: string;
-				callerFacingBusinessName?: string;
 				email?: string;
-				phoneNumber?: string;
-				carrier?: string;
+				contactPhoneNumber?: string;
 				contactMethod?: string;
 				password?: string;
 			};
@@ -494,14 +581,10 @@ export default {
 				body.firstName?.trim() ?? "";
 			const lastName =
 				body.lastName?.trim() ?? "";
-			const callerFacingBusinessName =
-				body.callerFacingBusinessName?.trim() ?? "";
 			const email =
 				body.email?.trim() ?? "";
-			const phoneNumber =
-				body.phoneNumber?.trim() ?? "";
-			const carrier =
-				body.carrier?.trim() ?? "";
+			const contactPhoneNumber =
+				body.contactPhoneNumber?.trim() ?? "";
 			const contactMethod =
 				body.contactMethod?.trim() ?? "";
 			const password =
@@ -511,17 +594,15 @@ export default {
 				!code
 				|| !firstName
 				|| !lastName
-				|| !callerFacingBusinessName
 				|| !email
-				|| !phoneNumber
-				|| !carrier
+				|| !contactPhoneNumber
 				|| !contactMethod
 				|| !password
 			) {
 				return portalJson(
 					{
 						error:
-							"code, firstName, lastName, callerFacingBusinessName, email, phoneNumber, carrier, contactMethod, and password are required"
+						"code, firstName, lastName, email, contactPhoneNumber, contactMethod, and password are required"
 					},
 					400
 				);
@@ -535,10 +616,8 @@ export default {
 							code,
 							firstName,
 							lastName,
-							callerFacingBusinessName,
 							email,
-							phoneNumber,
-							carrier,
+							contactPhoneNumber,
 							contactMethod,
 							password
 						}
@@ -701,8 +780,8 @@ export default {
 				last_call_at: string | null;
 			}
 
-			const callSummary =
-				await env.nomorescamcalls_db
+			const [callSummary, locations, protectedLines] = await Promise.all([
+				env.nomorescamcalls_db
 					.prepare(`
 						SELECT
 							COUNT(*) AS total_calls,
@@ -747,13 +826,16 @@ export default {
 						WHERE user_id = ?
 					`)
 					.bind(session.user.id)
-					.first<PortalCallSummaryRow>();
+					.first<PortalCallSummaryRow>(),
+				listAccountLocations(env.nomorescamcalls_db, session.user.id),
+				listProtectedLinesForAccount(env.nomorescamcalls_db, session.user.id)
+			]);
 
 			return portalJson({
 				service_status:
 					session.user.setupStatus,
-				screening_number:
-					session.user.screeningNumber,
+				locations,
+				protected_lines: protectedLines,
 				total_calls:
 					callSummary?.total_calls ?? 0,
 				successful_calls:
@@ -919,13 +1001,21 @@ export default {
 					env.nomorescamcalls_db
 				);
 
-			const agreementAccepted =
+			const [agreementAccepted, locations, protectedLines] =
 				agreement
-					? await hasAcceptedCurrentBetaAgreement(
+					? await Promise.all([
+						hasAcceptedCurrentBetaAgreement(
 							env.nomorescamcalls_db,
 							session.user.id
-						)
-					: false;
+						),
+						listAccountLocations(env.nomorescamcalls_db, session.user.id),
+						listProtectedLinesForAccount(env.nomorescamcalls_db, session.user.id)
+					])
+					: [
+						false,
+						await listAccountLocations(env.nomorescamcalls_db, session.user.id),
+						await listProtectedLinesForAccount(env.nomorescamcalls_db, session.user.id)
+					] as const;
 
 			return portalJson({
 				user: {
@@ -934,8 +1024,8 @@ export default {
 						session.user.accountStatus,
 					setup_status:
 						session.user.setupStatus,
-					screening_number:
-						session.user.screeningNumber,
+					contact_phone_number:
+						session.user.contactPhoneNumber,
 					agreementAccepted,
 					agreementVersion:
 						agreement?.version ?? null,
@@ -944,6 +1034,8 @@ export default {
 					agreement_version:
 						agreement?.version ?? null
 				},
+				locations,
+				protected_lines: protectedLines,
 				expiresAt:
 					session.expiresAt
 			});
@@ -978,10 +1070,8 @@ export default {
 			const body = await request.json() as {
 				firstName?: string;
 				lastName?: string;
-				callerFacingBusinessName?: string;
 				email?: string;
-				phoneNumber?: string;
-				carrier?: string;
+				contactPhoneNumber?: string;
 				contactMethod?: string;
 				password?: string;
 			};
@@ -1094,27 +1184,12 @@ export default {
 				);
 			}
 
-			let lifecycle;
+			const lifecycle = await advanceSubscriberLifecycle(
+				env.nomorescamcalls_db,
+				session.user.id
+			);
 
-			try {
-				lifecycle =
-					await advanceSubscriberLifecycle(
-						env.nomorescamcalls_db,
-						session.user.id
-					);
-			} catch (error) {
-				return portalJson(
-					{
-						error:
-							error instanceof Error
-								? error.message
-								: "Subscriber provisioning failed"
-					},
-					409
-				);
-			}
-
-			if (!lifecycle.provisioning) {
+			if (!lifecycle.onboarding.complete) {
 				return portalJson(
 					{
 						accepted: true,
@@ -1128,26 +1203,14 @@ export default {
 				);
 			}
 
-			const provisioning = lifecycle.provisioning;
-
 			return portalJson({
 				accepted: true,
 				agreement:
 					acceptance.agreement,
 				acceptedAt:
 					acceptance.acceptedAt,
-				provisioning: {
-					status:
-						provisioning.provisioningStatus,
-					coverageStatus:
-						provisioning.coverageStatus,
-					screeningNumber:
-						provisioning.user.screeningNumber,
-					sipUsername:
-						provisioning.user.sipUsername,
-					steps:
-						provisioning.steps
-				}
+				onboarding: lifecycle.onboarding,
+				provisioning: null
 			});
 		}
 

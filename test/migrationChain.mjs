@@ -43,6 +43,18 @@ function applyMigration0029(db) {
 	);
 }
 
+function applyMigration0030(db) {
+	db.exec(
+		readFileSync(
+			join(
+				migrationsDirectory,
+				"0030_add_account_locations_and_protected_lines.sql"
+			),
+			"utf8"
+		)
+	);
+}
+
 function foreignKeyReferencesToUsers(db) {
 	const tables = db
 		.prepare(`
@@ -79,11 +91,29 @@ function foreignKeyReferencesToUsers(db) {
 
 test("the complete migration chain applies with clean foreign keys", () => {
 	const db = createDatabaseThrough(
-		"0029_unify_subscriber_lifecycle_defaults.sql"
+		"0030_add_account_locations_and_protected_lines.sql"
 	);
 
 	assert.deepEqual(db.prepare("PRAGMA foreign_key_check").all(), []);
 	assert.deepEqual(foreignKeyReferencesToUsers(db), [
+		{
+			table: "account_locations",
+			from: "user_id",
+			to: "id",
+			onDelete: "CASCADE"
+		},
+		{
+			table: "administrative_review_sessions",
+			from: "account_user_id",
+			to: "id",
+			onDelete: "RESTRICT"
+		},
+		{
+			table: "administrative_review_sessions",
+			from: "reviewer_user_id",
+			to: "id",
+			onDelete: "RESTRICT"
+		},
 		{
 			table: "beta_agreement_acceptances",
 			from: "user_id",
@@ -113,8 +143,185 @@ test("the complete migration chain applies with clean foreign keys", () => {
 			from: "user_id",
 			to: "id",
 			onDelete: "CASCADE"
+		},
+		{
+			table: "protected_lines",
+			from: "user_id",
+			to: "id",
+			onDelete: "CASCADE"
 		}
 	]);
+
+	db.close();
+});
+
+test("0030 review audit foreign keys preserve reviewer, account, and line identity", () => {
+	const db = createDatabaseThrough(
+		"0030_add_account_locations_and_protected_lines.sql"
+	);
+
+	db.exec(`
+		INSERT INTO users (id, phone_number, role)
+		VALUES
+			(80, '+18005550080', 'administrator'),
+			(81, '+18005550081', 'subscriber'),
+			(82, '+18005550082', 'subscriber');
+
+		INSERT INTO account_locations (id, user_id)
+		VALUES (810, 81), (820, 82);
+
+		INSERT INTO protected_lines (
+			id,
+			user_id,
+			location_id,
+			protected_phone_number,
+			caller_facing_business_name
+		)
+		VALUES
+			(811, 81, 810, '+18005550811', 'Account 81 Line'),
+			(821, 82, 820, '+18005550821', 'Account 82 Line');
+
+		INSERT INTO administrative_review_sessions (
+			id,
+			reviewer_user_id,
+			reviewer_role,
+			account_user_id,
+			initial_protected_line_id,
+			started_at
+		)
+		VALUES (
+			'review-session-81',
+			80,
+			'administrator',
+			81,
+			811,
+			'2026-08-26T12:00:00.000Z'
+		);
+
+		INSERT INTO administrative_review_events (
+			review_session_id,
+			reviewer_user_id,
+			account_user_id,
+			protected_line_id,
+			event_type,
+			resource_section,
+			action,
+			created_at
+		)
+		VALUES (
+			'review-session-81',
+			80,
+			81,
+			811,
+			'read',
+			'account_family',
+			'review_started',
+			'2026-08-26T12:00:00.000Z'
+		);
+	`);
+
+	assert.throws(
+		() => db.exec(`
+			INSERT INTO administrative_review_events (
+				review_session_id,
+				reviewer_user_id,
+				account_user_id,
+				protected_line_id,
+				event_type,
+				resource_section,
+				action,
+				created_at
+			)
+			VALUES (
+				'review-session-81',
+				80,
+				81,
+				821,
+				'read',
+				'protected_line',
+				'section_viewed',
+				'2026-08-26T12:01:00.000Z'
+			)
+		`),
+		/FOREIGN KEY constraint failed/
+	);
+	assert.deepEqual(db.prepare("PRAGMA foreign_key_check").all(), []);
+
+	db.close();
+});
+
+test("0030 preserves legacy rows without guessing normalized line mappings", () => {
+	const db = createDatabaseThrough(
+		"0029_unify_subscriber_lifecycle_defaults.sql"
+	);
+
+	db.exec(`
+		INSERT INTO users (
+			id,
+			phone_number,
+			screening_number,
+			sip_username,
+			caller_facing_business_name,
+			carrier,
+			coverage_status
+		)
+		VALUES (
+			6,
+			'+18005550606',
+			'+18005551606',
+			'test_user_fixture_6',
+			'Synthetic Legacy Identity',
+			'Synthetic Carrier',
+			'active'
+		);
+
+		INSERT INTO screening_number_inventory (
+			phone_number,
+			status,
+			assigned_user_id
+		)
+		VALUES ('+18005551606', 'assigned', 6);
+
+		INSERT INTO sip_credential_inventory (
+			sip_username,
+			status,
+			assigned_user_id
+		)
+		VALUES ('test_user_fixture_6', 'assigned', 6);
+	`);
+
+	applyMigration0030(db);
+
+	assert.deepEqual(db.prepare("PRAGMA foreign_key_check").all(), []);
+	assert.equal(
+		db.prepare("SELECT contact_phone_number FROM users WHERE id = 6").get()
+			.contact_phone_number,
+		null
+	);
+	assert.equal(
+		db.prepare("SELECT COUNT(*) AS count FROM account_locations").get().count,
+		0
+	);
+	assert.equal(
+		db.prepare("SELECT COUNT(*) AS count FROM protected_lines").get().count,
+		0
+	);
+	assert.deepEqual(
+		{ ...db.prepare(`
+			SELECT assigned_user_id, assigned_protected_line_id
+			FROM screening_number_inventory
+			WHERE phone_number = '+18005551606'
+		`).get() },
+		{ assigned_user_id: 6, assigned_protected_line_id: null }
+	);
+	assert.deepEqual(
+		{ ...db.prepare(`
+			SELECT assigned_user_id, assigned_protected_line_id
+			FROM sip_credential_inventory
+			WHERE sip_username = 'test_user_fixture_6'
+		`).get() },
+		{ assigned_user_id: 6, assigned_protected_line_id: null }
+	);
 
 	db.close();
 });

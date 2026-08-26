@@ -127,6 +127,7 @@ function liveContext() {
 		},
 		subscriber: {
 			id: 1,
+			protectedLineId: 101,
 			name: "Test Subscriber",
 			callerFacingBusinessName: "Test Subscriber Services",
 			phoneNumber: "+18005559875",

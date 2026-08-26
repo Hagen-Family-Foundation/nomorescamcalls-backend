@@ -8,15 +8,70 @@ import {
 	handleTelnyxWebhook
 } from "../src/services/telnyxWebhookHandler";
 
-function database(user: Record<string, unknown> | null = null): D1Database {
+function database(
+	resolution: {
+		protectedLine: Record<string, unknown>;
+		account: Record<string, unknown>;
+	} | null = null
+): D1Database {
 	return {
-		prepare: vi.fn(() => ({
+		prepare: vi.fn((query: string) => ({
 			bind: vi.fn(() => ({
-				first: vi.fn(async () => user),
+				first: vi.fn(async () => {
+					if (query.includes("FROM protected_lines")) {
+						return resolution?.protectedLine ?? null;
+					}
+					if (query.includes("FROM users")) {
+						return resolution?.account ?? null;
+					}
+					return null;
+				}),
 				run: vi.fn(async () => ({}))
 			}))
 		}))
 	} as unknown as D1Database;
+}
+
+function protectedLineResolution(
+	callerFacingBusinessName: string | null,
+	lineId = 10,
+	accountId = 1,
+	screeningNumber = "+15550002001"
+) {
+	return {
+		protectedLine: {
+			id: lineId,
+			user_id: accountId,
+			location_id: 100,
+			protected_phone_number: "+15550003001",
+			caller_facing_business_name: callerFacingBusinessName,
+			carrier: null,
+			screening_number: screeningNumber,
+			sip_username: `protected_line_${lineId}`,
+			provisioning_status: "provisioned",
+			coverage_status: "active",
+			created_at: "2026-01-01T00:00:00Z",
+			updated_at: "2026-01-01T00:00:00Z"
+		},
+		account: {
+			id: accountId,
+			first_name: "Account",
+			last_name: "Owner",
+			caller_facing_business_name: null,
+			email: "owner@example.com",
+			contact_phone_number: "+15550004001",
+			phone_number: "+15550004001",
+			screening_number: null,
+			sip_username: null,
+			carrier: null,
+			contact_method: "email",
+			role: "participant",
+			account_status: "active",
+			setup_status: "onboarding_complete",
+			status: "active",
+			coverage_status: "inactive"
+		}
+	};
 }
 
 const disabledPolicy = {
@@ -43,23 +98,7 @@ function liveSessions() {
 describe("Telnyx webhook native transcription path", () => {
 	it("plans answer, native transcription, then the approved first request", async () => {
 		const sessions = liveSessions();
-		const protectedUser = {
-			id: 1,
-			first_name: "Account",
-			last_name: "Owner",
-			caller_facing_business_name: "Hagen & Son's Plumbing",
-			email: "owner@example.com",
-			phone_number: "+15550003001",
-			screening_number: "+15550002001",
-			sip_username: "subscriber_1",
-			carrier: null,
-			contact_method: null,
-			role: "participant",
-			account_status: "active",
-			setup_status: "provisioned",
-			status: "active",
-			coverage_status: "active"
-		};
+		const resolvedLine = protectedLineResolution("Hagen & Son's Plumbing");
 		const response =
 			await handleTelnyxWebhook(
 				{
@@ -78,7 +117,7 @@ describe("Telnyx webhook native transcription path", () => {
 						}
 					}
 				},
-				database(protectedUser),
+				database(resolvedLine),
 				disabledPolicy,
 				{},
 				sessions.namespace
@@ -141,13 +180,14 @@ describe("Telnyx webhook native transcription path", () => {
 		});
 		expect(initialization.subscriber).toMatchObject({
 			id: 1,
+			protectedLineId: 10,
 			name: "Account Owner",
 			callerFacingBusinessName: "Hagen & Son's Plumbing",
 			screeningNumber: "+15550002001"
 		});
 	});
 
-	it("uses each resolved customer's distinct caller-facing business name instead of the account-holder name", async () => {
+	it("uses each resolved protected line's distinct caller-facing phrase without adding account or location wording", async () => {
 		const call = async (businessName: string, sessionId: string) => {
 			const sessions = liveSessions();
 			const response = await handleTelnyxWebhook({
@@ -160,23 +200,12 @@ describe("Telnyx webhook native transcription path", () => {
 						to: `+1555${sessionId === "one" ? "0002001" : "0002002"}`
 					}
 				}
-			}, database({
-				id: sessionId === "one" ? 1 : 2,
-				first_name: "Legal",
-				last_name: "Account Name",
-				caller_facing_business_name: businessName,
-				email: null,
-				phone_number: "+15550003001",
-				screening_number: "+15550002001",
-				sip_username: "subscriber",
-				carrier: null,
-				contact_method: null,
-				role: "participant",
-				account_status: "active",
-				setup_status: "provisioned",
-				status: "active",
-				coverage_status: "active"
-			}), disabledPolicy, {}, sessions.namespace);
+		}, database(protectedLineResolution(
+			businessName,
+			sessionId === "one" ? 11 : 12,
+			1,
+			sessionId === "one" ? "+15550002001" : "+15550002002"
+		)), disabledPolicy, {}, sessions.namespace);
 			return (await response.json() as any).firstRequest.body.payload as string;
 		};
 
@@ -200,23 +229,7 @@ describe("Telnyx webhook native transcription path", () => {
 					to: "+15550002001"
 				}
 			}
-		}, database({
-			id: 3,
-			first_name: "Legal",
-			last_name: "Account Name",
-			caller_facing_business_name: null,
-			email: null,
-			phone_number: "+15550003001",
-			screening_number: "+15550002001",
-			sip_username: "subscriber",
-			carrier: null,
-			contact_method: null,
-			role: "participant",
-			account_status: "active",
-			setup_status: "provisioned",
-			status: "active",
-			coverage_status: "active"
-		}), disabledPolicy);
+		}, database(protectedLineResolution(null, 13, 3)), disabledPolicy);
 
 		expect(response.status).toBe(409);
 		expect(await response.json()).toMatchObject({

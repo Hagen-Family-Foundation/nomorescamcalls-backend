@@ -1,6 +1,5 @@
 import {
 	findUserById,
-	updateUserProvisioningAssignment,
 	type UserRecord
 } from "./users";
 import {
@@ -8,16 +7,23 @@ import {
 	type SubscriberOnboardingRequirement
 } from "./subscriberOnboarding";
 import {
-	releaseScreeningNumberForUser,
+	assignProtectedLineResources,
+	findProtectedLineById,
+	markProtectedLineProvisioningFailed,
+	type ProtectedLineRecord
+} from "./protectedLines";
+import {
+	releaseScreeningNumberForProtectedLine,
 	reserveAvailableScreeningNumber
 } from "./screeningNumberInventory";
 import {
-	releaseSipCredentialForUser,
+	releaseSipCredentialForProtectedLine,
 	reserveAvailableSipCredential
 } from "./sipCredentialInventory";
 
-export interface ProvisionSubscriberResult {
-	user: UserRecord;
+export interface ProvisionProtectedLineResult {
+	account: UserRecord;
+	protectedLine: ProtectedLineRecord;
 	coverageStatus: string;
 	provisioningStatus: "active" | "already_provisioned";
 	steps: Array<{
@@ -26,69 +32,85 @@ export interface ProvisionSubscriberResult {
 	}>;
 }
 
-export class SubscriberProvisioningError extends Error {
+export class ProtectedLineProvisioningError extends Error {
 	constructor(
 		message: string,
 		readonly code: string,
 		readonly missingRequirements: SubscriberOnboardingRequirement[] = []
 	) {
 		super(message);
-		this.name = "SubscriberProvisioningError";
+		this.name = "ProtectedLineProvisioningError";
 	}
 }
 
-export async function provisionSubscriber(
-	db: D1Database,
-	userId: number
-): Promise<ProvisionSubscriberResult> {
-	const existingUser = await findUserById(db, userId);
+function activeResult(
+	account: UserRecord,
+	protectedLine: ProtectedLineRecord,
+	provisioningStatus: "active" | "already_provisioned"
+): ProvisionProtectedLineResult {
+	return {
+		account,
+		protectedLine,
+		coverageStatus: protectedLine.coverageStatus,
+		provisioningStatus,
+		steps: [
+			{ name: "existing_account_found", status: "complete" },
+			{ name: "existing_location_found", status: "complete" },
+			{ name: "existing_protected_line_found", status: "complete" },
+			{ name: "screening_number_assigned", status: "complete" },
+			{ name: "sip_credential_assigned", status: "complete" },
+			{ name: "line_coverage_active", status: "complete" }
+		]
+	};
+}
 
-	if (!existingUser) {
-		throw new SubscriberProvisioningError(
-			"Subscriber not found",
-			"subscriber_not_found"
+export async function provisionProtectedLine(
+	db: D1Database,
+	lineId: number
+): Promise<ProvisionProtectedLineResult> {
+	const existingLine = await findProtectedLineById(db, lineId);
+
+	if (!existingLine) {
+		throw new ProtectedLineProvisioningError(
+			"Protected line not found",
+			"protected_line_not_found"
 		);
 	}
 
-	const onboarding =
-		await refreshSubscriberOnboardingStatus(db, userId);
+	const account = await findUserById(db, existingLine.userId);
+
+	if (!account || account.accountStatus !== "active") {
+		throw new ProtectedLineProvisioningError(
+			"Customer account not found",
+			"account_not_found"
+		);
+	}
+
+	const onboarding = await refreshSubscriberOnboardingStatus(
+		db,
+		account.id
+	);
 
 	if (!onboarding.complete) {
-		throw new SubscriberProvisioningError(
-			`Subscriber onboarding is incomplete: ${onboarding.missingRequirements.join(", ")}`,
+		throw new ProtectedLineProvisioningError(
+			`Customer account onboarding is incomplete: ${onboarding.missingRequirements.join(", ")}`,
 			"onboarding_incomplete",
 			onboarding.missingRequirements
 		);
 	}
 
 	if (
-		existingUser.screeningNumber
-		&& existingUser.sipUsername
-		&& existingUser.coverageStatus === "active"
+		existingLine.screeningNumber
+		&& existingLine.sipUsername
+		&& existingLine.provisioningStatus === "provisioned"
+		&& existingLine.coverageStatus === "active"
 	) {
-		return {
-			user: existingUser,
-			coverageStatus: existingUser.coverageStatus,
-			provisioningStatus: "already_provisioned",
-			steps: [
-				{
-					name: "existing_subscriber_found",
-					status: "complete"
-				},
-				{
-					name: "telephony_resources_already_assigned",
-					status: "complete"
-				}
-			]
-		};
+		return activeResult(account, existingLine, "already_provisioned");
 	}
 
-	if (
-		existingUser.screeningNumber
-		|| existingUser.sipUsername
-	) {
-		throw new SubscriberProvisioningError(
-			"Subscriber has incomplete provisioning state",
+	if (existingLine.screeningNumber || existingLine.sipUsername) {
+		throw new ProtectedLineProvisioningError(
+			"Protected line has incomplete provisioning state",
 			"incomplete_provisioning_state"
 		);
 	}
@@ -97,81 +119,40 @@ export async function provisionSubscriber(
 		const assignedScreeningNumber =
 			await reserveAvailableScreeningNumber(
 				db,
-				userId
+				existingLine.id,
+				existingLine.userId
 			);
 
 		const assignedSipCredential =
 			await reserveAvailableSipCredential(
 				db,
-				userId
+				existingLine.id,
+				existingLine.userId
 			);
 
-		const user =
-			await updateUserProvisioningAssignment(
-				db,
-				userId,
-				assignedScreeningNumber.phoneNumber,
-				assignedSipCredential.sipUsername
-			);
+		const protectedLine = await assignProtectedLineResources(
+			db,
+			existingLine.id,
+			assignedScreeningNumber.phoneNumber,
+			assignedSipCredential.sipUsername
+		);
 
-		return {
-			user,
-			coverageStatus: user.coverageStatus,
-			provisioningStatus: "active",
-			steps: [
-				{
-					name: "existing_subscriber_found",
-					status: "complete"
-				},
-				{
-					name: "screening_number_assigned",
-					status: "complete"
-				},
-				{
-					name: "sip_credential_assigned",
-					status: "complete"
-				},
-				{
-					name: "coverage_active",
-					status: "complete"
-				}
-			]
-		};
+		return activeResult(account, protectedLine, "active");
 	} catch (error) {
-		const currentUser = await findUserById(db, userId);
+		const currentLine = await findProtectedLineById(db, lineId);
 
 		if (
-			currentUser?.coverageStatus === "active"
-			&& currentUser.screeningNumber
-			&& currentUser.sipUsername
+			currentLine?.provisioningStatus === "provisioned"
+			&& currentLine.coverageStatus === "active"
+			&& currentLine.screeningNumber
+			&& currentLine.sipUsername
 		) {
-			return {
-				user: currentUser,
-				coverageStatus: currentUser.coverageStatus,
-				provisioningStatus: "active",
-				steps: [
-					{
-						name: "existing_subscriber_found",
-						status: "complete"
-					},
-					{
-						name: "screening_number_assigned",
-						status: "complete"
-					},
-					{
-						name: "sip_credential_assigned",
-						status: "complete"
-					},
-					{
-						name: "coverage_active",
-						status: "complete"
-					}
-				]
-			};
+			return activeResult(account, currentLine, "active");
 		}
 
-		await releaseScreeningNumberForUser(db, userId);
-		await releaseSipCredentialForUser(db, userId);
+		await releaseScreeningNumberForProtectedLine(db, lineId);
+		await releaseSipCredentialForProtectedLine(db, lineId);
+		await markProtectedLineProvisioningFailed(db, lineId);
 
 		throw error;
 	}

@@ -7,18 +7,13 @@ interface SessionUserRow {
 	id: number;
 	first_name: string | null;
 	last_name: string | null;
-	caller_facing_business_name: string | null;
 	email: string | null;
-	phone_number: string;
-	screening_number: string | null;
-	sip_username: string | null;
-	carrier: string | null;
+	contact_phone_number: string | null;
 	contact_method: string | null;
 	role: string;
 	account_status: string;
 	setup_status: string;
 	status: string;
-	coverage_status: string;
 }
 
 export interface BetaSessionResult {
@@ -31,18 +26,13 @@ function mapSessionUserRow(row: SessionUserRow): UserRecord {
 		id: row.id,
 		firstName: row.first_name,
 		lastName: row.last_name,
-		callerFacingBusinessName: row.caller_facing_business_name,
 		email: row.email,
-		phoneNumber: row.phone_number,
-		screeningNumber: row.screening_number,
-		sipUsername: row.sip_username,
-		carrier: row.carrier,
+		contactPhoneNumber: row.contact_phone_number,
 		contactMethod: row.contact_method,
 		role: row.role,
 		accountStatus: row.account_status,
 		setupStatus: row.setup_status,
-		status: row.status,
-		coverageStatus: row.coverage_status
+		status: row.status
 	};
 }
 
@@ -61,18 +51,13 @@ export async function authenticateBetaSession(
 				users.id,
 				users.first_name,
 				users.last_name,
-				users.caller_facing_business_name,
 				users.email,
-				users.phone_number,
-				users.screening_number,
-				users.sip_username,
-				users.carrier,
+				users.contact_phone_number,
 				users.contact_method,
 				users.role,
 				users.account_status,
 				users.setup_status,
-				users.status,
-				users.coverage_status
+				users.status
 			FROM portal_sessions
 			INNER JOIN users
 				ON users.id = portal_sessions.user_id

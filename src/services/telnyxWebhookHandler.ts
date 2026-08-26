@@ -35,8 +35,8 @@ import type {
 	TelnyxPlannedCommand
 } from "./telnyxCommands";
 import {
-	findUserByScreeningNumber
-} from "./users";
+	findProtectedLineByScreeningNumber
+} from "./protectedLines";
 import {
 	planApprovedCallDestination
 } from "./routing";
@@ -218,15 +218,25 @@ export async function handleTelnyxWebhook(
 		);
 	}
 
-	const protectedUser =
+	const resolvedProtectedLine =
 		telnyxEvent.to
-			? await findUserByScreeningNumber(
+			? await findProtectedLineByScreeningNumber(
 				db,
 				telnyxEvent.to
 			)
 			: null;
 
-	if (!protectedUser?.callerFacingBusinessName) {
+	if (!resolvedProtectedLine) {
+		return Response.json({
+			received: true,
+			screened: false,
+			reason: "protected_line_unavailable"
+		}, { status: 409 });
+	}
+
+	const { account, protectedLine } = resolvedProtectedLine;
+
+	if (!protectedLine.callerFacingBusinessName) {
 		return Response.json({
 			received: true,
 			screened: false,
@@ -236,7 +246,7 @@ export async function handleTelnyxWebhook(
 
 	const approvedDestination =
 		planApprovedCallDestination(
-			protectedUser
+			protectedLine
 		);
 
 	const callStartedAt =
@@ -289,24 +299,25 @@ export async function handleTelnyxWebhook(
 			diversionAt: null
 		};
 	const subscriber: EvidenceLibrarySubscriber = {
-		id: protectedUser?.id ?? null,
-		name: protectedUser
+		id: account.id,
+		protectedLineId: protectedLine.id,
+		name: account
 			? [
-				protectedUser.firstName,
-				protectedUser.lastName
+				account.firstName,
+				account.lastName
 			].filter(Boolean).join(" ") || null
 			: null,
 		callerFacingBusinessName:
-			protectedUser.callerFacingBusinessName,
-		phoneNumber: protectedUser?.phoneNumber ?? null,
+			protectedLine.callerFacingBusinessName,
+		phoneNumber: protectedLine.protectedPhoneNumber,
 		screeningNumber:
-			protectedUser?.screeningNumber ?? null,
-		sipUsername: protectedUser?.sipUsername ?? null,
-		carrier: protectedUser?.carrier ?? null,
+			protectedLine.screeningNumber,
+		sipUsername: protectedLine.sipUsername,
+		carrier: protectedLine.carrier,
 		accountStatus:
-			protectedUser?.accountStatus ?? null,
+			account.accountStatus,
 		coverageStatus:
-			protectedUser?.coverageStatus ?? null,
+			protectedLine.coverageStatus,
 		country: null,
 		state: null,
 		county: null,
@@ -396,7 +407,7 @@ export async function handleTelnyxWebhook(
 			firstRequestCommand,
 			{
 				prompt: buildFirstRequest(
-					protectedUser.callerFacingBusinessName
+					protectedLine.callerFacingBusinessName
 				),
 				timeoutSeconds:
 					FIRST_RESPONSE_SILENCE_SECONDS
@@ -488,7 +499,8 @@ export async function handleTelnyxWebhook(
 		received: true,
 		screened: true,
 		callerNumber: telnyxEvent.from,
-		protectedUser,
+		protectedAccountId: account.id,
+		protectedLine,
 		liveSession,
 		telnyxEvent,
 		approvedDestination,

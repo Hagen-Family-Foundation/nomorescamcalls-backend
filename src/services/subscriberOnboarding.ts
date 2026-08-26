@@ -10,10 +10,8 @@ import {
 export type SubscriberOnboardingRequirement =
 	| "first_name"
 	| "last_name"
-	| "caller_facing_business_name"
 	| "email"
-	| "phone_number"
-	| "carrier"
+	| "contact_phone_number"
 	| "contact_method"
 	| "password"
 	| "required_agreement";
@@ -34,10 +32,8 @@ export interface UpdateSubscriberOnboardingInput
 interface OnboardingRow {
 	first_name: string | null;
 	last_name: string | null;
-	caller_facing_business_name: string | null;
 	email: string | null;
-	phone_number: string;
-	carrier: string | null;
+	contact_phone_number: string | null;
 	contact_method: string | null;
 	password_hash: string | null;
 	agreement_version: string | null;
@@ -59,10 +55,8 @@ export async function getSubscriberOnboardingStatus(
 				SELECT
 					users.first_name,
 					users.last_name,
-					users.caller_facing_business_name,
 					users.email,
-					users.phone_number,
-					users.carrier,
+					users.contact_phone_number,
 					users.contact_method,
 					users.password_hash,
 					beta_agreements.version AS agreement_version,
@@ -93,10 +87,8 @@ export async function getSubscriberOnboardingStatus(
 	]> = [
 		["first_name", row.first_name],
 		["last_name", row.last_name],
-		["caller_facing_business_name", row.caller_facing_business_name],
 		["email", row.email],
-		["phone_number", row.phone_number],
-		["carrier", row.carrier],
+		["contact_phone_number", row.contact_phone_number],
 		["contact_method", row.contact_method],
 		["password", row.password_hash]
 	];
@@ -138,18 +130,13 @@ export async function refreshSubscriberOnboardingStatus(
 			: "onboarding_incomplete"
 	);
 
-	if (onboarding.user.coverageStatus === "active") {
-		return onboarding;
-	}
-
 	return {
 		...onboarding,
 		user: {
 			...onboarding.user,
 			setupStatus: onboarding.complete
 				? "onboarding_complete"
-				: "onboarding_incomplete",
-			coverageStatus: "inactive"
+				: "onboarding_incomplete"
 		}
 	};
 }
@@ -170,11 +157,8 @@ export async function updateSubscriberOnboarding(
 		{
 			firstName: input.firstName,
 			lastName: input.lastName,
-			callerFacingBusinessName:
-				input.callerFacingBusinessName,
 			email: input.email,
-			phoneNumber: input.phoneNumber,
-			carrier: input.carrier,
+			contactPhoneNumber: input.contactPhoneNumber,
 			contactMethod: input.contactMethod,
 			passwordHash
 		}

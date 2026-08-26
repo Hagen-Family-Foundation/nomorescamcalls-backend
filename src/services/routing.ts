@@ -1,4 +1,4 @@
-import type { UserRecord } from "./users";
+import type { ProtectedLineRecord } from "./protectedLines";
 
 export interface ApprovedCallDestination {
 	destinationType: "app" | "unavailable";
@@ -8,30 +8,30 @@ export interface ApprovedCallDestination {
 }
 
 export function planApprovedCallDestination(
-	user: UserRecord | null
+	protectedLine: ProtectedLineRecord | null
 ): ApprovedCallDestination {
-	if (!user) {
+	if (!protectedLine) {
 		return {
 			destinationType: "unavailable",
 			destination: null,
 			screeningNumber: null,
-			reason: "No active user was found for the incoming screening number."
+			reason: "No active protected line was found for the incoming screening number."
 		};
 	}
 
-	if (!user.sipUsername) {
+	if (!protectedLine.sipUsername) {
 		return {
 			destinationType: "unavailable",
 			destination: null,
-			screeningNumber: user.screeningNumber,
-			reason: "Protected user does not have a SIP username yet."
+			screeningNumber: protectedLine.screeningNumber,
+			reason: "Protected line does not have a SIP username yet."
 		};
 	}
 
 	return {
 		destinationType: "app",
-		destination: user.sipUsername,
-		screeningNumber: user.screeningNumber,
-		reason: "Approved caller should be routed to the protected user's SIP username."
+		destination: protectedLine.sipUsername,
+		screeningNumber: protectedLine.screeningNumber,
+		reason: "Approved caller should be routed to the exact protected line's SIP username."
 	};
 }

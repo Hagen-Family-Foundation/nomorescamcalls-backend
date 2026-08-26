@@ -120,11 +120,11 @@ Block 3 owns the caller-response process.
 
 NoMoreScamCalls is operationally present but invisible to callers. Caller-facing prompts present only the protected business's identity and never identify NoMoreScamCalls, screening, scoring, or evidence collection.
 
-Onboarding requires and stores an explicit customer-selected `caller_facing_business_name` for each protected subscriber account. The customer chooses the exact wording announced to callers. This value is distinct from legal, billing, invoice, account-holder, owner, and other formal names and is never inferred from them.
+Each Protected Line stores an explicit customer-selected `caller_facing_business_name`. The customer chooses the exact wording announced for that line. This value is distinct from legal, billing, invoice, account-holder, owner, location, department, and other formal names and is never inferred, rewritten, or decorated with them.
 
-An account cannot complete onboarding, activate protection, or be provisioned until this value has been explicitly supplied. Existing records created before this requirement may remain unset in storage, but they are incomplete and must receive a customer-selected value before activation. No generic, inferred, or unbranded fallback identity is permitted. If an incoming call resolves an account that lacks the value, live handling stops with HTTP `409` and reason `caller_facing_business_name_unavailable` before any caller-facing prompt is issued.
+A Protected Line cannot be provisioned or activate coverage until this value has been explicitly supplied. No generic, inferred, or unbranded fallback identity is permitted. If an incoming call resolves a line that lacks the value, live handling stops with HTTP `409` and reason `caller_facing_business_name_unavailable` before any caller-facing prompt is issued.
 
-The incoming screening number resolves the protected subscriber and carries the stored caller-facing business name into Block 3.
+The incoming screening number resolves the exact Protected Line, then its owning customer account, and carries that line's stored caller-facing business name into Block 3.
 
 The initial request is:
 
@@ -313,55 +313,82 @@ Operational failures do not alter standing or create caller deductions.
 
 ---
 
-## Subscriber Onboarding and Provisioning
+## Customer Account, Location, and Protected-Line Lifecycle
 
-NoMoreScamCalls has one subscriber lifecycle for beta participants, the
-first production businesses, and future subscribers. Beta invitation and
-participation are enrollment context; they do not create a separate kind of
-subscriber or a separate provisioning system.
+NoMoreScamCalls uses one permanent structure for beta participants, production
+businesses, residential customers, and future subscribers:
 
-The existing `users` row is the authoritative subscriber record throughout
-the lifecycle. Account creation happens before provisioning, and a subscriber
-may return to the same record to complete missing onboarding information.
-Provisioning never creates or transfers service to a duplicate user.
+`Customer Account → Location → Protected Line`
 
-The permanent setup states are:
+The existing `users` row is the authoritative customer account. It owns
+identity, email, account contact phone, preferred communication method,
+authentication, agreement acceptance, onboarding state, and account status.
+It is not itself a protected telephone line. Account contact information may
+differ from every protected number and must not be assumed to support SMS.
 
-1. `onboarding_incomplete` with `coverage_status = inactive`.
-2. `onboarding_complete` with `coverage_status = inactive`.
-3. `provisioned` with `coverage_status = active`.
+Completed account onboarding requires first name, last name, email address,
+account contact phone, preferred contact method, password credential, and
+acceptance of the current required agreement. It does not require a protected
+number, carrier, caller-facing phrase, screening DID, or SIP credential.
 
-Completed onboarding requires all established subscriber registration data:
+Each account may own multiple minimal administrative Locations. Each Location
+may contain at most six Protected Lines. The six-line technical capacity is
+uniform across customer and enrollment types and is unrelated to pricing.
+Locations do not imply geographic routing, branding, department labels, or a
+centralized multi-location call-distribution system.
 
-- first name;
-- last name;
-- email address;
-- protected phone number;
-- carrier;
-- preferred contact method;
-- password credential;
-- an explicitly customer-selected `caller_facing_business_name`;
-- acceptance of the current required agreement.
+Each Protected Line owns its protected phone number, exact caller-facing
+phrase, carrier information, screening DID, SIP credential, provisioning
+state, coverage state, Location relationship, and customer-account
+relationship. New lines start `unprovisioned` with inactive coverage.
 
-The caller-facing name is never inferred from personal, account, legal,
-billing, invoice, or other identity. An empty or missing value keeps
-onboarding incomplete.
+Provisioning rechecks account onboarding and the exact line's eligibility,
+then reserves one available Telnyx screening DID and one available SIP
+credential from the approved inventories for that Protected Line. Only that
+line becomes `provisioned` with active coverage. Other lines under the account
+are untouched. Partial reservations are released after failure, and retrying
+an already provisioned line is idempotent.
 
-Provisioning rechecks this single completion contract, reserves an available
-Telnyx screening DID and an available SIP credential from the approved
-inventories, and associates both with the same existing user ID. Only after
-both inventories confirm that ownership does the user transition to
-`setup_status = provisioned` and `coverage_status = active`.
+`account_status` controls account lifecycle and portal access. Account
+`setup_status` records account onboarding completion. Coverage claims are
+line-specific. A completed account may add and provision later lines without
+re-registering or repeating the agreement, except when the agreement system
+legitimately requires acceptance of a newer active version.
 
-`account_status` controls account lifecycle and portal access. `status`
-controls whether the operational subscriber record is enabled.
-`coverage_status` alone communicates whether protection is active. Neither an
-enabled account nor a completed registration is a coverage claim.
+Legacy one-line columns on `users` remain temporarily for safe production
+transition only. They are not authoritative in the permanent creation,
+provisioning, live-call, evidence, or dashboard paths. Existing production
+rows are not guessed into Locations or Protected Lines; their explicit
+transition requires a separate approved mapping decision.
 
-Missing information, missing agreement acceptance, unavailable inventory, or
-an assignment failure leaves the same subscriber recoverable and not covered.
-Partial inventory reservations are released. Retrying an already provisioned
-subscriber is idempotent and does not assign new resources.
+---
+
+## Administrative Account Review
+
+Administrative, support, and compliance customer review enters through one
+controlled `POST /admin/review` gate. The gate uses the existing authenticated
+portal bearer session and permits only the established `admin` and
+`administrator` roles. Reviewer user ID and role are preserved on the review
+session; no separate IAM or parallel support/compliance lookup road exists.
+
+The gate accepts exact account or Protected-Line identifiers already present
+in the permanent architecture and resolves them internally. A Protected-Line
+target always expands to its parent Customer Account, all account Locations,
+and every sibling Protected Line. The initial line remains marked in the
+family output. Family visibility does not combine line provisioning, coverage,
+screening DID, caller-facing phrase, SIP ownership, calls, or evidence.
+
+Each authorized entry creates or uses one `administrative_review_sessions`
+record. Meaningful family, section, and line views create
+`administrative_review_events` read records. Approved changes through the same
+gate create write records containing the target, field/action, prior value,
+and resulting value. Passwords, tokens, keys, credentials, and other secrets
+are not review-writable and are never copied into the audit trail.
+
+Session start and end timestamps provide review duration without scoring,
+inferring motive, or judging reviewer behavior. Customer self-service and
+non-review operational provisioning, telephony, evidence, and diagnostics
+remain separate from administrative customer review.
 
 ---
 

@@ -138,6 +138,7 @@ describe("Evidence Engine Call Flow", () => {
 				},
 				subscriber: {
 					id: 1,
+					protectedLineId: 101,
 					name:
 						"Test Subscriber",
 					callerFacingBusinessName:

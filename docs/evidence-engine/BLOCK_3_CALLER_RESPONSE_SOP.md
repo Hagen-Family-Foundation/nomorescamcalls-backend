@@ -23,9 +23,9 @@ Block 3 processes only evidence from the current call.
 
 Block 3 begins when it receives the completed Block 2 evidence.
 
-The Telnyx destination screening number resolves the protected subscriber account. Onboarding requires the customer to choose the exact `caller_facing_business_name` announced to callers and stores it as a dedicated value on that account. The value is distinct from legal, billing, invoice, account-holder, owner, and other formal names. It is never inferred from those fields and flows with the resolved subscriber identity into Block 3.
+The Telnyx destination screening number resolves the exact Protected Line and then its owning customer account. Line creation requires the customer to choose the exact `caller_facing_business_name` announced for that line and stores it on the Protected Line. The value is distinct from legal, billing, invoice, account-holder, owner, location, branch, department, and other names. It is never inferred, rewritten, or decorated and flows with the resolved line and account identity into Block 3.
 
-The field is mandatory for completed onboarding, account activation, and subscriber provisioning. Existing records may remain unset only while incomplete and must receive an explicitly customer-selected value before activation. No generic, inferred, or unbranded fallback is permitted. If live resolution finds the value missing, processing stops before caller-facing playback with HTTP `409` and reason `caller_facing_business_name_unavailable`.
+The field is mandatory for Protected-Line provisioning and coverage activation. No generic, inferred, or unbranded fallback is permitted. If live resolution finds the value missing, processing stops before caller-facing playback with HTTP `409` and reason `caller_facing_business_name_unavailable`.
 
 NoMoreScamCalls is operationally present but caller-facing invisible. Prompts identify only the protected business and do not disclose NoMoreScamCalls, a third-party provider, screening, scoring, or evidence collection.
 

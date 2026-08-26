@@ -27,20 +27,15 @@ Everything in the product should support one of these goals:
 2. Landing page explains the service.
 3. Grace, the guided video/AI assistant, explains the product and reassures the customer.
 4. Customer proceeds to onboarding and payment.
-5. Customer enters helpful starting information:
-   - trusted/good numbers,
-   - numbers they want diverted,
-   - relevant phone/carrier information.
-6. Backend provisions the already-created subscriber account:
-   - Telnyx screening number,
-   - SIP/routing identity,
-   - user-scoped lists.
-7. Customer receives confirmation by email or text.
-8. Grace/AI guides the customer through carrier call-forwarding setup.
-9. Customer forwards their existing phone number to the assigned Telnyx screening number.
-10. System verifies coverage is active.
-11. Customer continues using their normal phone experience.
-12. Customer may later view dashboard metrics and manage allowed callers.
+5. Customer completes account-level onboarding and the required agreement using email, a separate account contact phone, and the preferred contact method.
+6. Customer creates a minimal Location and adds one or more Protected Lines, each with its protected phone number, carrier information, and exact caller-facing phrase.
+7. Backend provisions each Protected Line independently with its own Telnyx screening number and SIP/routing identity.
+8. Customer receives setup communication through the account contact channel; email is the fallback when no suitable cell contact exists.
+9. Grace/AI guides the customer through carrier call-forwarding setup for each line.
+10. Customer forwards each protected phone number to that line's assigned Telnyx screening number.
+11. System verifies coverage independently for each line.
+12. Customer continues using their normal phone experience.
+13. Customer may later view dashboard metrics and manage allowed callers.
 
 ## Call Forwarding Reality
 
@@ -210,34 +205,47 @@ This information is operational and administrative only.
 
 It is not customer-facing.
 
+Customer-account review is available only through the authenticated
+`POST /admin/review` gate. An authorized administrator may start with an exact
+account or Protected-Line identifier, but the gate always resolves and returns
+the parent account, all Locations, and all sibling Protected Lines while
+marking the initial line. One review session records reviewer identity, start
+and end time, meaningful sections and lines viewed, and approved changes with
+before/after values. Secrets are neither review-writable nor stored in review
+audit records. Review duration is retained only as audit context and is not an
+employee score or inference of intent.
+
 ## Onboarding Strategy
 
 The onboarding process intentionally asks for useful starting data so protection begins with a stronger foundation.
 
-Completed onboarding requires the customer to supply the exact caller-facing business name they want announced to inbound callers. Account activation and subscriber provisioning cannot complete without that explicit value. It is never inferred from a personal, legal, billing, invoice, account, or other identity, and no generic or unbranded fallback is permitted.
+The permanent model is `Customer Account → Location → Protected Line`. The
+authoritative `users` record owns account identity, email, account contact
+phone, communication preference, authentication, agreement acceptance, and
+onboarding state. Account onboarding may be resumed and completes without
+creating or provisioning a telephone line.
 
-The permanent onboarding highway uses one authoritative `users` record for
-beta and post-launch subscribers. The record begins with inactive coverage and
-may be resumed as the customer supplies missing information. Completion
-requires first name, last name, email, protected phone number, carrier,
-preferred contact method, password credential, the explicit caller-facing
-business name, and acceptance of the current required agreement.
+A Location is a minimal administrative grouping. Each Location supports up to
+six Protected Lines, with the same capacity for every customer type. A
+Protected Line owns its protected phone number, carrier information, exact
+customer-selected caller-facing phrase, screening DID, SIP credential,
+provisioning state, and coverage state.
 
-The lifecycle is:
+The line lifecycle is:
 
-`onboarding_incomplete / coverage inactive`
+`unprovisioned / coverage inactive`
 
-→ `onboarding_complete / coverage inactive`
-
-→ screening DID and SIP credential assigned to the existing user
+→ screening DID and SIP credential assigned to the exact Protected Line
 
 → `provisioned / coverage active`
 
-Provisioning does not create a user. It uses the common screening-number and
-SIP-credential inventories for every enrollment source. Coverage becomes
-active only when both resources belong to the same subscriber. A failed
-attempt leaves the existing record inactive and recoverable; an already
-provisioned subscriber is not provisioned again.
+The caller-facing phrase is never inferred from account, legal, billing,
+location, branch, department, or other identity. Provisioning does not create
+a user or Location. It uses the common screening-number and SIP-credential
+inventories and marks only the selected line covered. A failed attempt leaves
+that line inactive and recoverable; an already provisioned line is not
+provisioned again. Later lines reuse the completed account onboarding and
+agreement.
 
 This may take time for seniors because of typing and phone-number entry.
 
