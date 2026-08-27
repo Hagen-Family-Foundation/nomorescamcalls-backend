@@ -39,6 +39,13 @@ export interface BetaOnboardingCredential {
 	expiresAt: string | null;
 }
 
+export interface BetaInvitationResponseResult {
+	accepted: boolean;
+	invitation: BetaInvitationRecord;
+	credential: BetaOnboardingCredential | null;
+	delivery: CustomerCommunicationRecord | null;
+}
+
 interface BetaInvitationRow {
 	id: number;
 	response_token: string;
@@ -121,6 +128,19 @@ function portalPath(code: string): string {
 	return `/portal/onboarding?invite=${encodeURIComponent(code)}`;
 }
 
+function portalUrl(path: string, origin?: string): string {
+	if (!origin?.trim()) {
+		return path;
+	}
+
+	const parsedOrigin = new URL(origin);
+	if (parsedOrigin.protocol !== "https:" && parsedOrigin.protocol !== "http:") {
+		throw new Error("PORTAL_ORIGIN must use HTTP or HTTPS");
+	}
+
+	return new URL(path, `${parsedOrigin.origin}/`).toString();
+}
+
 async function findInvitationByResponseToken(
 	db: D1Database,
 	responseToken: string
@@ -132,6 +152,27 @@ async function findInvitationByResponseToken(
 			WHERE response_token = ?
 		`)
 		.bind(responseToken)
+		.first<BetaInvitationRow>();
+
+	return row ? mapInvitationRow(row) : null;
+}
+
+async function findLatestInvitationBySmsContactNumber(
+	db: D1Database,
+	smsContactNumber: string
+): Promise<BetaInvitationRecord | null> {
+	const row = await db
+		.prepare(`
+			SELECT ${INVITATION_COLUMNS}
+			FROM beta_invitations
+			WHERE selected_channel = 'sms'
+				AND sms_capable = 1
+				AND sms_contact_number = ?
+				AND selected_destination = ?
+			ORDER BY id DESC
+			LIMIT 1
+		`)
+		.bind(smsContactNumber, smsContactNumber)
 		.first<BetaInvitationRow>();
 
 	return row ? mapInvitationRow(row) : null;
@@ -221,6 +262,25 @@ export async function issueBetaInvitation(
 			"Invitation expiration must be in the future",
 			"invalid_invitation_expiration",
 			400
+		);
+	}
+
+	const existingInvitation = await db
+		.prepare(`
+			SELECT id
+			FROM beta_invitations
+			WHERE selected_channel = ?
+				AND selected_destination = ?
+				AND status IN ('awaiting_response', 'credential_issued')
+			LIMIT 1
+		`)
+		.bind(selectedChannel, selectedDestination)
+		.first<{ id: number }>();
+	if (existingInvitation) {
+		throw new BetaInvitationError(
+			"An invitation is already active at this destination",
+			"invitation_already_active",
+			409
 		);
 	}
 
@@ -317,13 +377,9 @@ export async function respondToBetaInvitation(
 		now?: () => string;
 		createInvitationCode?: () => string;
 		provider?: CustomerCommunicationProvider;
+		portalOrigin?: string;
 	} = {}
-): Promise<{
-	accepted: boolean;
-	invitation: BetaInvitationRecord;
-	credential: BetaOnboardingCredential | null;
-	delivery: CustomerCommunicationRecord | null;
-}> {
+): Promise<BetaInvitationResponseResult> {
 	const responseToken = input.responseToken.trim();
 	const normalizedResponse = input.response.trim().toUpperCase();
 	const now = options.now?.() ?? new Date().toISOString();
@@ -455,7 +511,21 @@ export async function respondToBetaInvitation(
 		purpose: "onboarding_credential"
 	});
 
-	if (!delivery) {
+	const providerCanRetry = Boolean(
+		options.provider
+		&& !options.provider.unavailableReason
+		&& (
+			!options.provider.channel
+			|| options.provider.channel === invitation.selectedChannel
+		)
+	);
+	if (
+		!delivery
+		|| (
+			providerCanRetry
+			&& (delivery.status === "failed" || delivery.status === "provider_unavailable")
+		)
+	) {
 		delivery = await deliverCustomerCommunication(
 			db,
 			{
@@ -467,7 +537,7 @@ export async function respondToBetaInvitation(
 					subject: invitation.selectedChannel === "email"
 						? "Complete your NoMoreScamCalls beta setup"
 						: null,
-					body: `Tap ${credential.portalPath} to complete setup. Invitation key: ${credential.code}`
+					body: `Tap ${portalUrl(credential.portalPath, options.portalOrigin)} to complete setup. Invitation key: ${credential.code}`
 				}
 			},
 			options.provider
@@ -480,4 +550,48 @@ export async function respondToBetaInvitation(
 		credential,
 		delivery
 	};
+}
+
+export async function respondToBetaInvitationBySms(
+	db: D1Database,
+	input: {
+		smsContactNumber: string;
+		response: string;
+	},
+	options: {
+		now?: () => string;
+		createInvitationCode?: () => string;
+		provider?: CustomerCommunicationProvider;
+		portalOrigin?: string;
+	} = {}
+): Promise<BetaInvitationResponseResult> {
+	const smsContactNumber = input.smsContactNumber.trim();
+	if (!smsContactNumber) {
+		throw new BetaInvitationError(
+			"SMS invitation sender is required",
+			"beta_invitation_sms_sender_required",
+			400
+		);
+	}
+
+	const invitation = await findLatestInvitationBySmsContactNumber(
+		db,
+		smsContactNumber
+	);
+	if (!invitation) {
+		throw new BetaInvitationError(
+			"No beta invitation is associated with this SMS sender",
+			"beta_invitation_sms_sender_not_found",
+			404
+		);
+	}
+
+	return respondToBetaInvitation(
+		db,
+		{
+			responseToken: invitation.responseToken,
+			response: input.response
+		},
+		options
+	);
 }

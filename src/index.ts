@@ -4,6 +4,12 @@ import { hashPhoneNumber } from "./utils/hash";
 import { handleTelnyxWebhook } from "./services/telnyxWebhookHandler";
 import { listRecentTelnyxWebhookEvents } from "./services/telnyxAudit";
 import { verifyTelnyxWebhook } from "./services/telnyxSecurity";
+import {
+	createTelnyxSmsProvider,
+	handleTelnyxMessagingWebhook,
+	isTelnyxMessagingWebhook,
+	type TelnyxMessagingConfig
+} from "./services/telnyxMessaging";
 import { listConfirmedScamNumbers, removeConfirmedScamNumber } from "./services/confirmedScams";
 import { promoteConfirmedScamNumber } from "./services/scamPromotion";
 import { getCallerIntelligence } from "./services/callerLookup";
@@ -104,6 +110,17 @@ function getBearerToken(request: Request): string | null {
 	return token;
 }
 
+function telnyxMessagingConfig(env: Env): TelnyxMessagingConfig {
+	return {
+		apiKey: env.TELNYX_API_KEY,
+		baseUrl: env.TELNYX_API_BASE_URL,
+		liveExecution: env.TELNYX_LIVE_EXECUTION,
+		messagingProfileId: env.TELNYX_MESSAGING_PROFILE_ID,
+		fromNumber: env.TELNYX_MESSAGING_FROM_NUMBER,
+		portalOrigin: env.PORTAL_ORIGIN
+	};
+}
+
 export default {
 	async fetch(request: Request, env: Env): Promise<Response> {
 		const url = new URL(request.url);
@@ -198,10 +215,14 @@ export default {
 			};
 
 			try {
+				const messagingConfig = telnyxMessagingConfig(env);
 				return portalJson(await issueBetaInvitation(
 					env.nomorescamcalls_db,
 					session.user,
-					body
+					body,
+					{
+						provider: createTelnyxSmsProvider(messagingConfig)
+					}
 				), 201);
 			} catch (error) {
 				if (error instanceof BetaInvitationError) {
@@ -226,11 +247,16 @@ export default {
 			};
 
 			try {
+				const messagingConfig = telnyxMessagingConfig(env);
 				return portalJson(await respondToBetaInvitation(
 					env.nomorescamcalls_db,
 					{
 						responseToken: body.responseToken ?? "",
 						response: body.response ?? ""
+					},
+					{
+						provider: createTelnyxSmsProvider(messagingConfig),
+						portalOrigin: messagingConfig.portalOrigin
 					}
 				));
 			} catch (error) {
@@ -567,10 +593,14 @@ export default {
 
 		if (request.method === "POST" && provisionLineMatch) {
 			try {
+				const messagingConfig = telnyxMessagingConfig(env);
 				return Response.json({
 					provisioning: await provisionProtectedLine(
 						env.nomorescamcalls_db,
-						Number(provisionLineMatch[1])
+						Number(provisionLineMatch[1]),
+						{
+							provider: createTelnyxSmsProvider(messagingConfig)
+						}
 					)
 				});
 			} catch (error) {
@@ -691,10 +721,14 @@ export default {
 			}
 
 			try {
+				const messagingConfig = telnyxMessagingConfig(env);
 				return portalJson({
 					provisioning: await provisionProtectedLine(
 						env.nomorescamcalls_db,
-						line.id
+						line.id,
+						{
+							provider: createTelnyxSmsProvider(messagingConfig)
+						}
 					)
 				});
 			} catch (error) {
@@ -1949,6 +1983,13 @@ export default {
 			}
 
 			const payload = await request.json();
+			if (isTelnyxMessagingWebhook(payload)) {
+				return handleTelnyxMessagingWebhook(
+					payload,
+					env.nomorescamcalls_db,
+					telnyxMessagingConfig(env)
+				);
+			}
 			const executionPolicy = getTelnyxExecutionPolicy(env);
 
 			return handleTelnyxWebhook(

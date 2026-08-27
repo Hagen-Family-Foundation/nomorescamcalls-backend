@@ -321,14 +321,25 @@ businesses, residential customers, and future subscribers:
 `Customer Account → Location → Protected Line`
 
 Beta authorization begins with an invitation bound to an explicit contact
-destination. An explicitly supplied SMS-capable number is preferred; email is
-the supported fallback. SMS capability is never inferred from an account
-contact phone, Protected Line, carrier, or number format. The invitation first
+destination. An explicitly supplied SMS-capable number is preferred; the
+provider-neutral model retains email as a fallback channel, but the current
+live integration sends SMS only. SMS capability is never inferred from an
+account contact phone, Protected Line, carrier, or number format. The invitation first
 waits for a simple `Y`/`YES` response. Only an affirmative response issues the
 single onboarding credential and credential-bearing portal link. Registration
 validates that credential, binds the resulting account to the invitation
 destination, and redeems both exactly once. Delivery attempts are durable and
 must report provider absence or failure honestly.
+
+Live SMS is sent directly through Telnyx for the invitation, credential-bearing
+portal link, and exact-line forwarding instructions. Inbound Telnyx
+`message.received` events are correlated from their SMS sender to the latest
+active invitation bound to that exact destination; callers cannot supply an
+invitation identifier. The event must also target the configured sending number
+and Messaging Profile. Live delivery requires `TELNYX_API_KEY`,
+`TELNYX_API_BASE_URL`, `TELNYX_LIVE_EXECUTION=true`,
+`TELNYX_MESSAGING_PROFILE_ID`, `TELNYX_MESSAGING_FROM_NUMBER`, and
+`PORTAL_ORIGIN`. No live email provider is part of this integration.
 
 The existing `users` row is the authoritative customer account. It owns
 identity, email, account contact phone, preferred communication method,

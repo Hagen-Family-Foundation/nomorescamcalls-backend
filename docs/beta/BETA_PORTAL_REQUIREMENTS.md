@@ -14,11 +14,21 @@ It must also provide an administrative dashboard for monitoring every beta accou
 
 Each beta participant must receive an invitation bound to an explicit customer
 contact destination. An explicitly supplied SMS-capable destination is
-preferred and email is the supported fallback. SMS capability must not be
+preferred. Email remains the provider-neutral fallback channel, but this phase
+does not provide live email delivery. SMS capability must not be
 inferred from an account contact phone, Protected Line, carrier, or number
 format. The invitation waits for a simple case-insensitive `Y` or `YES`
 response before a unique beta access code and credential-bearing portal link
 are issued.
+
+The live SMS path uses Telnyx for the initial invitation, the full
+credential-bearing portal URL, and exact-line forwarding instructions. An
+inbound response is correlated from its actual SMS sender plus the configured
+Telnyx receiving number and Messaging Profile, without accepting an arbitrary
+invitation identifier from the message. Configuration is supplied through
+`TELNYX_API_KEY`, `TELNYX_API_BASE_URL`, `TELNYX_LIVE_EXECUTION`,
+`TELNYX_MESSAGING_PROFILE_ID`, `TELNYX_MESSAGING_FROM_NUMBER`, and
+`PORTAL_ORIGIN`; production values are not stored in source.
 
 The portal must:
 
@@ -103,7 +113,8 @@ Invitation, suspension, and closure remain enrollment/account context rather
 than a parallel provisioning workflow. Forwarding guidance exposes the
 line-specific screening number but never SIP credentials. Delivery uses the
 explicit SMS destination when available and email otherwise; provider absence
-or failure must not be presented as successful delivery.
+or failure must not be presented as successful delivery. In the present live
+scope, an email selection is recorded as provider-unavailable rather than sent.
 
 ---
 

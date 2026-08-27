@@ -124,6 +124,11 @@ Purpose:
 - Persist invitation, onboarding-link, and forwarding-instruction attempts.
 - Preserve exact channel, destination, payload, provider state, and timestamps.
 - Represent provider absence and delivery failure without claiming success.
+- Preserve the Telnyx message identifier after the Messaging API accepts an
+  SMS; rejected requests remain failed and configuration gaps remain
+  provider-unavailable.
+- Keep email delivery provider-neutral and unavailable until a separate live
+  provider is explicitly approved.
 
 ### portal_sessions
 

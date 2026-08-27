@@ -100,7 +100,7 @@ describe("beta invitation through Protected-Line activation", () => {
 			destination: "+18005558001",
 			status: "provider_unavailable"
 		});
-		expect(smsBody.delivery.failureReason).toContain("No approved outbound");
+		expect(smsBody.delivery.failureReason).toContain("TELNYX_API_KEY");
 
 		const emailResponse = await issueInvitation({
 			smsContactNumber: "+18005558002",

@@ -76,7 +76,18 @@ async function provisionedResult(
 		protectedLineId: protectedLine.id,
 		purpose: "forwarding_instructions"
 	});
-	if (!delivery) {
+	const providerCanRetry = Boolean(
+		provider
+		&& !provider.unavailableReason
+		&& (!provider.channel || provider.channel === destination.channel)
+	);
+	if (
+		!delivery
+		|| (
+			providerCanRetry
+			&& (delivery.status === "failed" || delivery.status === "provider_unavailable")
+		)
+	) {
 		delivery = await deliverCustomerCommunication(
 			db,
 			{

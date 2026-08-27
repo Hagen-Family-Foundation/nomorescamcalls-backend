@@ -20,6 +20,8 @@ export interface CustomerCommunicationMessage {
 
 export interface CustomerCommunicationProvider {
 	name: string;
+	channel?: CustomerCommunicationChannel;
+	unavailableReason?: string | null;
 	send(message: CustomerCommunicationMessage): Promise<{
 		providerMessageId?: string | null;
 	}>;
@@ -169,12 +171,22 @@ export async function deliverCustomerCommunication(
 	provider?: CustomerCommunicationProvider
 ): Promise<CustomerCommunicationRecord> {
 	const now = new Date().toISOString();
-	const status: CustomerCommunicationStatus = provider
+	const providerSupportsChannel = !provider?.channel
+		|| provider.channel === input.message.channel;
+	const usableProvider = provider
+		&& providerSupportsChannel
+		&& !provider.unavailableReason
+		? provider
+		: null;
+	const status: CustomerCommunicationStatus = usableProvider
 		? "pending"
 		: "provider_unavailable";
-	const failureReason = provider
+	const failureReason = usableProvider
 		? null
-		: "No approved outbound SMS/email provider is configured.";
+		: provider?.unavailableReason
+			?? (provider && !providerSupportsChannel
+				? `${provider.name} does not support ${input.message.channel} delivery.`
+				: "No approved outbound SMS/email provider is configured.");
 	const inserted = await db
 		.prepare(`
 			INSERT INTO customer_communication_deliveries (
@@ -207,16 +219,16 @@ export async function deliverCustomerCommunication(
 			status,
 			provider?.name ?? null,
 			failureReason,
-			provider ? now : null,
+			usableProvider ? now : null,
 			now,
 			now
 		)
 		.run();
 	const deliveryId = Number(inserted.meta.last_row_id);
 
-	if (provider) {
+	if (usableProvider) {
 		try {
-			const result = await provider.send(input.message);
+			const result = await usableProvider.send(input.message);
 			await db
 				.prepare(`
 					UPDATE customer_communication_deliveries

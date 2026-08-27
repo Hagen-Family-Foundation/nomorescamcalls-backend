@@ -30,7 +30,7 @@ Everything in the product should support one of these goals:
 5. Customer completes account-level onboarding and the required agreement using email, a separate account contact phone, and the preferred contact method.
 6. Customer creates a minimal Location and adds one or more Protected Lines, each with its protected phone number, carrier information, and exact caller-facing phrase.
 7. Backend provisions each Protected Line independently with its own Telnyx screening number and SIP/routing identity.
-8. Customer receives setup communication through the account contact channel; email is the fallback when no suitable cell contact exists.
+8. Customer receives setup communication through the explicitly approved account contact channel; the current live integration sends SMS through Telnyx, while email remains an unconnected provider-neutral fallback.
 9. Grace/AI guides the customer through carrier call-forwarding setup for each line.
 10. Customer forwards each protected phone number to that line's assigned Telnyx screening number.
 11. System verifies coverage independently for each line.
@@ -227,11 +227,21 @@ creating or provisioning a telephone line.
 
 For beta enrollment, an authorized invitation is bound to an explicit SMS
 destination or email destination. SMS is used only when capability was
-explicitly supplied; otherwise email is used. A simple case-insensitive
+explicitly supplied; otherwise the delivery model selects email and records
+the provider as unavailable until an email integration is separately approved.
+The current live path sends SMS directly through Telnyx. A simple case-insensitive
 `Y`/`YES` response issues one one-time onboarding credential and a portal link
 that carries it. The credential is validated and redeemed through registration
 and cannot authorize a second account. Invitation and delivery state remains
 durable even when no external communication provider is configured.
+
+Telnyx inbound SMS is accepted on the existing webhook route and passes through
+its current verification gate. It is correlated by the event's sender,
+configured receiving number, and configured Messaging Profile. The invitation
+lifecycle does not trust an inbound invitation ID. Live SMS requires
+`TELNYX_API_KEY`, `TELNYX_API_BASE_URL`, `TELNYX_LIVE_EXECUTION=true`,
+`TELNYX_MESSAGING_PROFILE_ID`, `TELNYX_MESSAGING_FROM_NUMBER`, and
+`PORTAL_ORIGIN`.
 
 A Location is a minimal administrative grouping. Each Location supports up to
 six Protected Lines, with the same capacity for every customer type. A

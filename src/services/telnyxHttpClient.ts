@@ -9,9 +9,10 @@ export interface TelnyxHttpJsonResult {
 	body: unknown;
 }
 
-export async function getTelnyxJson(
+async function requestTelnyxJson(
 	config: TelnyxHttpClientConfig,
-	endpoint: string
+	endpoint: string,
+	init: RequestInit
 ): Promise<TelnyxHttpJsonResult> {
 	if (!config.apiKey) {
 		throw new Error("TELNYX_API_KEY is required for Telnyx API requests");
@@ -19,10 +20,11 @@ export async function getTelnyxJson(
 
 	const baseUrl = config.baseUrl ?? "https://api.telnyx.com/v2";
 	const response = await fetch(`${baseUrl}${endpoint}`, {
-		method: "GET",
+		...init,
 		headers: {
 			"authorization": `Bearer ${config.apiKey}`,
-			"content-type": "application/json"
+			"content-type": "application/json",
+			...init.headers
 		}
 	});
 
@@ -40,4 +42,22 @@ export async function getTelnyxJson(
 		status: response.status,
 		body
 	};
+}
+
+export async function getTelnyxJson(
+	config: TelnyxHttpClientConfig,
+	endpoint: string
+): Promise<TelnyxHttpJsonResult> {
+	return requestTelnyxJson(config, endpoint, { method: "GET" });
+}
+
+export async function postTelnyxJson(
+	config: TelnyxHttpClientConfig,
+	endpoint: string,
+	body: Record<string, unknown>
+): Promise<TelnyxHttpJsonResult> {
+	return requestTelnyxJson(config, endpoint, {
+		method: "POST",
+		body: JSON.stringify(body)
+	});
 }
