@@ -45,6 +45,76 @@ describe("Telnyx event normalization", () => {
 		expect(
 			shouldScreenTelnyxEvent(event)
 		).toBe(true);
+		expect(event).not.toHaveProperty(
+			"callScreeningResult"
+		);
+		expect(event).not.toHaveProperty(
+			"shakenStirAttestation"
+		);
+		expect(event).not.toHaveProperty(
+			"shakenStirValidated"
+		);
+	});
+
+	it("preserves documented call screening and STIR/SHAKEN fields without interpreting them", () => {
+		const event = normalizeTelnyxEvent({
+			data: {
+				event_type: "call.initiated",
+				payload: {
+					call_control_id: "screened-control-id",
+					call_session_id: "screened-session-id",
+					from: "+18005550101",
+					to: "+18005550201",
+					direction: "incoming",
+					call_screening_result: "spam_likely",
+					shaken_stir_attestation: "C",
+					shaken_stir_validated: false
+				}
+			}
+		});
+
+		expect(event.callScreeningResult).toBe(
+			"spam_likely"
+		);
+		expect(event.shakenStirAttestation).toBe("C");
+		expect(event.shakenStirValidated).toBe(false);
+		expect(shouldScreenTelnyxEvent(event)).toBe(true);
+	});
+
+	it("preserves a richer structured call screening result exactly when supplied", () => {
+		const callScreeningResult = {
+			action: "flag",
+			result: "spam_likely",
+			reputation: {
+				classification: "spam_likely",
+				provider: "telnyx"
+			}
+		};
+		const event = normalizeTelnyxEvent({
+			data: {
+				event_type: "call.initiated",
+				payload: {
+					call_control_id: "structured-control-id",
+					call_session_id: "structured-session-id",
+					from: "+18005550102",
+					to: "+18005550202",
+					direction: "incoming",
+					call_screening_result: callScreeningResult
+				}
+			}
+		});
+
+		expect(event.callScreeningResult).toBe(
+			callScreeningResult
+		);
+		expect(event.callScreeningResult).toEqual({
+			action: "flag",
+			result: "spam_likely",
+			reputation: {
+				classification: "spam_likely",
+				provider: "telnyx"
+			}
+		});
 	});
 
 	it("does not screen an outbound transfer leg", () => {

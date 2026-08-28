@@ -32,6 +32,10 @@ describe("Evidence Engine Block 2", () => {
 				},
 				carrierLineLookupInformation: {
 					lineType: "mobile"
+				},
+				callScreeningResult: {
+					action: "flag",
+					reputation: "spam_likely"
 				}
 			}
 		});
@@ -50,6 +54,10 @@ describe("Evidence Engine Block 2", () => {
 			},
 			carrierLineLookupInformation: {
 				lineType: "mobile"
+			},
+			callScreeningResult: {
+				action: "flag",
+				reputation: "spam_likely"
 			},
 			deductions: []
 		});
@@ -85,5 +93,8 @@ describe("Evidence Engine Block 2", () => {
 			carrierLineLookupInformation: false,
 			deductions: []
 		});
+		expect(result).not.toHaveProperty(
+			"callScreeningResult"
+		);
 	});
 });

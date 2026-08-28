@@ -8,6 +8,9 @@ export interface TelnyxCallEvent {
 	flowDestination: string;
 	clientState: string | null;
 	transcription: TelnyxTranscriptionData | null;
+	callScreeningResult?: unknown;
+	shakenStirAttestation?: unknown;
+	shakenStirValidated?: unknown;
 }
 
 export interface TelnyxTranscriptionData {
@@ -30,6 +33,9 @@ export function normalizeTelnyxEvent(
 				direction?: string;
 				flow_destination?: string;
 				client_state?: string;
+				call_screening_result?: unknown;
+				shaken_stir_attestation?: unknown;
+				shaken_stir_validated?: unknown;
 				transcription_data?: {
 					transcript?: string;
 					is_final?: boolean;
@@ -38,6 +44,7 @@ export function normalizeTelnyxEvent(
 			};
 		};
 	};
+	const source = data.data?.payload;
 
 	return {
 		eventType:
@@ -69,19 +76,45 @@ export function normalizeTelnyxEvent(
 			data.data?.payload?.client_state ??
 			null,
 		transcription:
-			data.data?.payload
-				?.transcription_data
+			source?.transcription_data
 				? {
 					transcript:
-						data.data.payload.transcription_data.transcript ?? "",
+						source.transcription_data.transcript ?? "",
 					isFinal:
-						data.data.payload.transcription_data.is_final === true,
+						source.transcription_data.is_final === true,
 					confidence:
-						typeof data.data.payload.transcription_data.confidence === "number"
-							? data.data.payload.transcription_data.confidence
+						typeof source.transcription_data.confidence === "number"
+							? source.transcription_data.confidence
 							: null
 				}
-				: null
+				: null,
+		...(source && Object.hasOwn(
+			source,
+			"call_screening_result"
+		)
+			? {
+				callScreeningResult:
+					source.call_screening_result
+			}
+			: {}),
+		...(source && Object.hasOwn(
+			source,
+			"shaken_stir_attestation"
+		)
+			? {
+				shakenStirAttestation:
+					source.shaken_stir_attestation
+			}
+			: {}),
+		...(source && Object.hasOwn(
+			source,
+			"shaken_stir_validated"
+		)
+			? {
+				shakenStirValidated:
+					source.shaken_stir_validated
+			}
+			: {})
 	};
 }
 

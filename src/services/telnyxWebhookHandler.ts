@@ -251,6 +251,31 @@ export async function handleTelnyxWebhook(
 
 	const callStartedAt =
 		new Date().toISOString();
+	const hasStirAttestation = Object.hasOwn(
+		telnyxEvent,
+		"shakenStirAttestation"
+	);
+	const hasStirValidation = Object.hasOwn(
+		telnyxEvent,
+		"shakenStirValidated"
+	);
+	const stirShakenInformation =
+		hasStirAttestation || hasStirValidation
+			? {
+				...(hasStirAttestation
+					? {
+						attestation:
+							telnyxEvent.shakenStirAttestation
+					}
+					: {}),
+				...(hasStirValidation
+					? {
+						validated:
+							telnyxEvent.shakenStirValidated
+					}
+					: {})
+			}
+			: undefined;
 	const block1EvidenceBox = completeBlock1({
 		callInformation: {
 			from: telnyxEvent.from,
@@ -270,9 +295,18 @@ export async function handleTelnyxWebhook(
 			callingNumberInformation: {
 				phoneNumber: telnyxEvent.from
 			},
-			stirShakenInformation: null,
+			stirShakenInformation,
 			cnamInformation: null,
-			carrierLineLookupInformation: null
+			carrierLineLookupInformation: null,
+			...(Object.hasOwn(
+				telnyxEvent,
+				"callScreeningResult"
+			)
+				? {
+					callScreeningResult:
+						telnyxEvent.callScreeningResult
+				}
+				: {})
 		}
 	});
 	const callInformation:

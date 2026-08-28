@@ -10,6 +10,7 @@ export interface Block2ScreeningInformation {
 	stirShakenInformation: unknown;
 	cnamInformation: unknown;
 	carrierLineLookupInformation: unknown;
+	callScreeningResult?: unknown;
 }
 
 export interface Block2Deduction {
@@ -31,6 +32,7 @@ export interface Block2EvidenceBox {
 	stirShakenInformation: unknown;
 	cnamInformation: unknown;
 	carrierLineLookupInformation: unknown;
+	callScreeningResult?: unknown;
 	deductions: Block2Deduction[];
 }
 
@@ -48,6 +50,15 @@ export function completeBlock2(
 			input.screeningInformation.cnamInformation,
 		carrierLineLookupInformation:
 			input.screeningInformation.carrierLineLookupInformation,
+		...(Object.hasOwn(
+			input.screeningInformation,
+			"callScreeningResult"
+		)
+			? {
+				callScreeningResult:
+					input.screeningInformation.callScreeningResult
+			}
+			: {}),
 		deductions: input.deductions ?? []
 	};
 }

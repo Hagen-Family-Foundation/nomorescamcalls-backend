@@ -169,6 +169,12 @@ describe("Telnyx webhook native transcription path", () => {
 		expect(
 			initialization.block2EvidenceBox.startingStanding
 		).toBe(100);
+		expect(
+			initialization.block2EvidenceBox
+		).not.toHaveProperty("callScreeningResult");
+		expect(
+			initialization.block2EvidenceBox
+		).not.toHaveProperty("stirShakenInformation");
 		expect(initialization.callInformation).toMatchObject({
 			callSessionId: "live-session-id",
 			callControlId: "live-control-id",
@@ -185,6 +191,60 @@ describe("Telnyx webhook native transcription path", () => {
 			callerFacingBusinessName: "Hagen & Son's Plumbing",
 			screeningNumber: "+15550002001"
 		});
+	});
+
+	it("preserves a spam-likely result and STIR/SHAKEN as Block 2 evidence without diverting the call", async () => {
+		const sessions = liveSessions();
+		const response = await handleTelnyxWebhook(
+			{
+				data: {
+					event_type: "call.initiated",
+					payload: {
+						call_control_id: "screened-control-id",
+						call_session_id: "screened-session-id",
+						from: "+18005550103",
+						to: "+15550002001",
+						direction: "incoming",
+						call_screening_result: "spam_likely",
+						shaken_stir_attestation: "C",
+						shaken_stir_validated: false
+					}
+				}
+			},
+			database(protectedLineResolution("Test Business")),
+			disabledPolicy,
+			{},
+			sessions.namespace
+		);
+
+		expect(response.status).toBe(200);
+		const result = await response.json() as any;
+		expect(result.screened).toBe(true);
+		expect(result.answerRequest.endpoint).toBe(
+			"/calls/screened-control-id/actions/answer"
+		);
+		expect(result.firstRequest.endpoint).toBe(
+			"/calls/screened-control-id/actions/speak"
+		);
+
+		const initialization = JSON.parse(
+			await sessions.fetch.mock.calls[0][0].clone().text()
+		);
+		expect(
+			initialization.block2EvidenceBox.callScreeningResult
+		).toBe("spam_likely");
+		expect(
+			initialization.block2EvidenceBox.stirShakenInformation
+		).toEqual({
+			attestation: "C",
+			validated: false
+		});
+		expect(
+			initialization.block2EvidenceBox.deductions
+		).toEqual([]);
+		expect(
+			initialization.block2EvidenceBox.startingStanding
+		).toBe(100);
 	});
 
 	it("uses each resolved protected line's distinct caller-facing phrase without adding account or location wording", async () => {
