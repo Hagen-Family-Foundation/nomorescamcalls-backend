@@ -1,4 +1,5 @@
 import { hashPassword } from "../utils/passwordHash";
+import { CURRENT_BETA_AGREEMENT } from "./betaAgreement";
 import {
 	findUserById,
 	updateUserOnboardingInformation,
@@ -36,7 +37,6 @@ interface OnboardingRow {
 	contact_phone_number: string | null;
 	contact_method: string | null;
 	password_hash: string | null;
-	agreement_version: string | null;
 	agreement_acceptance_id: number | null;
 }
 
@@ -59,20 +59,16 @@ export async function getSubscriberOnboardingStatus(
 					users.contact_phone_number,
 					users.contact_method,
 					users.password_hash,
-					beta_agreements.version AS agreement_version,
 					beta_agreement_acceptances.id AS agreement_acceptance_id
 				FROM users
-				LEFT JOIN beta_agreements
-					ON beta_agreements.active = 1
 				LEFT JOIN beta_agreement_acceptances
 					ON beta_agreement_acceptances.user_id = users.id
-					AND beta_agreement_acceptances.agreement_version =
-						beta_agreements.version
+					AND beta_agreement_acceptances.agreement_version = ?
 				WHERE users.id = ?
 					AND users.status = 'active'
 				LIMIT 1
 			`)
-			.bind(userId)
+			.bind(CURRENT_BETA_AGREEMENT.version, userId)
 			.first<OnboardingRow>()
 	]);
 
@@ -99,9 +95,7 @@ export async function getSubscriberOnboardingStatus(
 		}
 	}
 
-	const agreementAccepted =
-		row.agreement_version !== null
-		&& row.agreement_acceptance_id !== null;
+	const agreementAccepted = row.agreement_acceptance_id !== null;
 
 	if (!agreementAccepted) {
 		missingRequirements.push("required_agreement");
@@ -111,7 +105,7 @@ export async function getSubscriberOnboardingStatus(
 		user,
 		complete: missingRequirements.length === 0,
 		missingRequirements,
-		agreementVersion: row.agreement_version,
+		agreementVersion: CURRENT_BETA_AGREEMENT.version,
 		agreementAccepted
 	};
 }

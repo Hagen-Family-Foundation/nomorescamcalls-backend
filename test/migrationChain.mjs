@@ -67,6 +67,18 @@ function applyMigration0031(db) {
 	);
 }
 
+function applyMigration0032(db) {
+	db.exec(
+		readFileSync(
+			join(
+				migrationsDirectory,
+				"0032_remove_obsolete_beta_agreement_authority.sql"
+			),
+			"utf8"
+		)
+	);
+}
+
 function foreignKeyReferencesToUsers(db) {
 	const tables = db
 		.prepare(`
@@ -103,7 +115,7 @@ function foreignKeyReferencesToUsers(db) {
 
 test("the complete migration chain applies with clean foreign keys", () => {
 	const db = createDatabaseThrough(
-		"0031_add_beta_invitation_and_forwarding_lifecycle.sql"
+		"0032_remove_obsolete_beta_agreement_authority.sql"
 	);
 
 	assert.deepEqual(db.prepare("PRAGMA foreign_key_check").all(), []);
@@ -175,6 +187,51 @@ test("the complete migration chain applies with clean foreign keys", () => {
 			onDelete: "CASCADE"
 		}
 	]);
+
+	db.close();
+});
+
+test("0032 removes the obsolete agreement authority and preserves acceptance history", () => {
+	const db = createDatabaseThrough(
+		"0031_add_beta_invitation_and_forwarding_lifecycle.sql"
+	);
+
+	db.exec(`
+		INSERT INTO users (id, phone_number, role)
+		VALUES (92, '+18005550092', 'subscriber');
+
+		INSERT INTO beta_agreement_acceptances (
+			user_id,
+			agreement_version,
+			accepted_at
+		)
+		VALUES (92, 'v1', '2026-07-19T12:00:00.000Z');
+	`);
+
+	applyMigration0032(db);
+
+	assert.equal(
+		db.prepare(`
+			SELECT COUNT(*) AS count
+			FROM sqlite_master
+			WHERE type = 'table'
+				AND name = 'beta_agreements'
+		`).get().count,
+		0
+	);
+	assert.deepEqual(
+		{ ...db.prepare(`
+			SELECT user_id, agreement_version, accepted_at
+			FROM beta_agreement_acceptances
+			WHERE user_id = 92
+		`).get() },
+		{
+			user_id: 92,
+			agreement_version: "v1",
+			accepted_at: "2026-07-19T12:00:00.000Z"
+		}
+	);
+	assert.deepEqual(db.prepare("PRAGMA foreign_key_check").all(), []);
 
 	db.close();
 });

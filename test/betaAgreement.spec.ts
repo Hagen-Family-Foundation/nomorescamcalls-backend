@@ -2,6 +2,7 @@ import { env } from "cloudflare:test";
 import { beforeAll, describe, expect, it } from "vitest";
 import {
 	acceptCurrentBetaAgreement,
+	CURRENT_BETA_AGREEMENT,
 	getCurrentBetaAgreement,
 	hasAcceptedCurrentBetaAgreement
 } from "../src/services/betaAgreement";
@@ -47,18 +48,18 @@ describe("beta agreement service", () => {
 		await ensureTestSchema();
 	});
 
-	it("loads the active beta agreement", async () => {
-		const agreement = await getCurrentBetaAgreement(
-			env.nomorescamcalls_db
-		);
+	it("exposes one complete current agreement authority", () => {
+		const agreement = getCurrentBetaAgreement();
 
-		expect(agreement).toEqual({
-			version: "v1",
-			title: "NoMoreScamCalls Beta Participant Agreement",
-			contentHash:
-				"2bfdc5f3f56f6b767d981bb6ed6dd2a14f8852704f0afaf20090b50320162c84",
-			effectiveAt: "2026-07-19T00:00:00Z"
-		});
+		expect(agreement).toBe(CURRENT_BETA_AGREEMENT);
+		expect(agreement.version).toBe("v1");
+		expect(agreement.title).toBe(
+			"NoMoreScamCalls Beta Participation Agreement"
+		);
+		expect(agreement.effectiveAt).toBe("2026-07-19T00:00:00Z");
+		expect(agreement.preamble.length).toBeGreaterThan(0);
+		expect(agreement.sections).toHaveLength(12);
+		expect(agreement.acceptance.length).toBeGreaterThan(0);
 	});
 
 	it("reports whether the participant accepted the current agreement", async () => {
@@ -123,7 +124,9 @@ describe("beta agreement service", () => {
 				acceptance_count: number;
 			}>();
 
-		expect(stored?.agreement_version).toBe("v1");
+		expect(stored?.agreement_version).toBe(
+			CURRENT_BETA_AGREEMENT.version
+		);
 		expect(stored?.accepted_at).toBe(firstAcceptance?.acceptedAt);
 		expect(stored?.acceptance_count).toBe(1);
 	});

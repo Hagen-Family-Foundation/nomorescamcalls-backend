@@ -1,6 +1,7 @@
 import { env, SELF } from "cloudflare:test";
 import { beforeAll, describe, expect, it } from "vitest";
 import { loginBetaParticipant } from "../src/services/betaLogin";
+import { CURRENT_BETA_AGREEMENT } from "../src/services/betaAgreement";
 import { issueBetaInvitation } from "../src/services/betaInvitations";
 import { createUser, type UserRecord } from "../src/services/users";
 import { hashPassword } from "../src/utils/passwordHash";
@@ -251,7 +252,9 @@ describe("beta invitation through Protected-Line activation", () => {
 					"content-type": "application/json",
 					authorization: `Bearer ${registrationBody.token}`
 				},
-				body: JSON.stringify({ version: "v1" })
+				body: JSON.stringify({
+					version: CURRENT_BETA_AGREEMENT.version
+				})
 			}
 		);
 		expect(agreement.status).toBe(200);
@@ -311,7 +314,9 @@ describe("beta invitation through Protected-Line activation", () => {
 				"content-type": "application/json",
 				authorization: `Bearer ${registered.token}`
 			},
-			body: JSON.stringify({ version: "v1" })
+			body: JSON.stringify({
+				version: CURRENT_BETA_AGREEMENT.version
+			})
 		});
 
 		const locations = [];

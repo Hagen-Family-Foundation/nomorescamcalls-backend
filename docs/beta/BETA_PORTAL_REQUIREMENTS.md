@@ -65,6 +65,12 @@ The portal must allow the administrator to review and update this information.
 
 The beta participant must accept the beta agreement before the account can be activated.
 
+The backend current-agreement endpoint is the sole active source for agreement
+content, effective date, and canonical version. The portal must render that
+response and submit the same version for acceptance. Administrative identities
+do not retrieve or accept the beta/customer agreement as a condition of using
+authorized administrative routes.
+
 The portal must record:
 
 * Agreement version.

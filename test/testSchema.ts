@@ -601,29 +601,6 @@ export async function ensureTestSchema(): Promise<void> {
 		`)
 		.run();
 
-
-	await env.nomorescamcalls_db
-		.prepare(`
-			CREATE TABLE IF NOT EXISTS beta_agreements (
-				id INTEGER PRIMARY KEY AUTOINCREMENT,
-				version TEXT NOT NULL UNIQUE,
-				title TEXT NOT NULL,
-				content_hash TEXT NOT NULL,
-				effective_at TEXT NOT NULL,
-				active INTEGER NOT NULL DEFAULT 1,
-				created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
-			)
-		`)
-		.run();
-
-	await env.nomorescamcalls_db
-		.prepare(`
-			CREATE UNIQUE INDEX IF NOT EXISTS idx_beta_agreements_one_active
-			ON beta_agreements(active)
-			WHERE active = 1
-		`)
-		.run();
-
 	await env.nomorescamcalls_db
 		.prepare(`
 			CREATE TABLE IF NOT EXISTS beta_agreement_acceptances (
@@ -644,24 +621,5 @@ export async function ensureTestSchema(): Promise<void> {
 			CREATE INDEX IF NOT EXISTS idx_beta_agreement_acceptances_user_id
 			ON beta_agreement_acceptances(user_id)
 		`)
-		.run();
-
-	await env.nomorescamcalls_db
-		.prepare(`
-			INSERT OR IGNORE INTO beta_agreements (
-				version,
-				title,
-				content_hash,
-				effective_at,
-				active
-			)
-			VALUES (?, ?, ?, ?, 1)
-		`)
-		.bind(
-			"v1",
-			"NoMoreScamCalls Beta Participant Agreement",
-			"2bfdc5f3f56f6b767d981bb6ed6dd2a14f8852704f0afaf20090b50320162c84",
-			"2026-07-19T00:00:00Z"
-		)
 		.run();
 }

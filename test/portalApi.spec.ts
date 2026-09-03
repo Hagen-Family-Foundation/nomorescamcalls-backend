@@ -1,5 +1,6 @@
 import { env, SELF } from 'cloudflare:test';
 import { beforeAll, describe, expect, it } from 'vitest';
+import { CURRENT_BETA_AGREEMENT } from '../src/services/betaAgreement';
 import { ensureTestSchema } from './testSchema';
 
 describe('subscriber portal API', () => {
@@ -150,13 +151,42 @@ describe('subscriber portal API', () => {
 
 		expect(meBody.user.agreementAccepted).toBe(false);
 
+		const currentAgreementResponse = await SELF.fetch(
+			'http://example.com/portal/agreement/current',
+			{
+				headers: {
+					authorization: `Bearer ${registerBody.token}`,
+				},
+			},
+		);
+		expect(currentAgreementResponse.status).toBe(200);
+		expect(await currentAgreementResponse.json()).toEqual({
+			agreement: CURRENT_BETA_AGREEMENT,
+		});
+
+		const staleAgreementResponse = await SELF.fetch(
+			'http://example.com/portal/agreement/accept',
+			{
+				method: 'POST',
+				headers: {
+					authorization: `Bearer ${registerBody.token}`,
+					'content-type': 'application/json',
+				},
+				body: JSON.stringify({ version: 'not-current' }),
+			},
+		);
+		expect(staleAgreementResponse.status).toBe(409);
+		expect(await staleAgreementResponse.json()).toMatchObject({
+			error: 'Agreement version is not current',
+		});
+
 		const agreementResponse = await SELF.fetch('http://example.com/portal/agreement/accept', {
 			method: 'POST',
 			headers: {
 				authorization: `Bearer ${registerBody.token}`,
 				'content-type': 'application/json',
 			},
-			body: JSON.stringify({ version: 'v1' }),
+			body: JSON.stringify({ version: CURRENT_BETA_AGREEMENT.version }),
 		});
 
 		expect(agreementResponse.status).toBe(200);

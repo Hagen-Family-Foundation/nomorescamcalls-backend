@@ -352,6 +352,12 @@ account contact phone, preferred contact method, password credential, and
 acceptance of the current required agreement. It does not require a protected
 number, carrier, caller-facing phrase, screening DID, or SIP credential.
 
+The backend current-agreement service is the sole active authority for the
+agreement version, effective date, and rendered content. Beta/customer clients
+retrieve that record and submit its exact version. Administrative identities
+authenticate directly into authorized administrative routes; agreement and
+customer-onboarding state are not part of administrative authorization.
+
 Each account may own multiple minimal administrative Locations. Each Location
 may contain at most six Protected Lines. The six-line technical capacity is
 uniform across customer and enrollment types and is unrelated to pricing.

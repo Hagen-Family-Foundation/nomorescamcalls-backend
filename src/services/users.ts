@@ -87,6 +87,10 @@ export async function createUser(
 ): Promise<UserRecord> {
 	const contactPhoneNumber = input.contactPhoneNumber.trim();
 	const smsContactNumber = input.smsContactNumber?.trim() || null;
+	const role = input.role ?? "subscriber";
+	const setupStatus = new Set(["admin", "administrator"]).has(role)
+		? "administratively_ready"
+		: "onboarding_incomplete";
 
 	if (!contactPhoneNumber) {
 		throw new Error("Account contact phone number is required");
@@ -131,9 +135,9 @@ export async function createUser(
 			smsContactNumber,
 			input.smsCapable ? 1 : 0,
 			input.passwordHash ?? null,
-			input.role ?? "subscriber",
+			role,
 			"active",
-			"onboarding_incomplete",
+			setupStatus,
 			"active",
 			"inactive"
 		)

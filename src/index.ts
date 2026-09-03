@@ -55,6 +55,11 @@ import {
 	getCurrentBetaAgreement,
 	hasAcceptedCurrentBetaAgreement
 } from "./services/betaAgreement";
+import {
+	authorizeAdministrativePortalSession,
+	authorizeBetaCustomerPortalSession,
+	isAdministrativeRole
+} from "./services/portalAuthorization";
 import { hashPassword } from "./utils/passwordHash";
 import {
 	updateSubscriberOnboarding
@@ -139,31 +144,27 @@ export default {
 			request.method === "POST"
 			&& url.pathname === "/admin/review"
 		) {
-			const sessionToken = getBearerToken(request);
+			const authorization =
+				await authorizeAdministrativePortalSession(
+					env.nomorescamcalls_db,
+					getBearerToken(request)
+				);
 
-			if (!sessionToken) {
+			if (!authorization.authorized) {
 				return portalJson({
-					error: "Valid administrative portal session required",
-					code: "administrative_review_unauthenticated"
-				}, 401);
-			}
-
-			const portalSession = await authenticateBetaSession(
-				env.nomorescamcalls_db,
-				sessionToken
-			);
-
-			if (!portalSession) {
-				return portalJson({
-					error: "Valid administrative portal session required",
-					code: "administrative_review_unauthenticated"
-				}, 401);
+					error: authorization.failure === "forbidden"
+						? "Administrative role required"
+						: "Valid administrative portal session required",
+					code: authorization.failure === "forbidden"
+						? "administrative_review_forbidden"
+						: "administrative_review_unauthenticated"
+				}, authorization.failure === "forbidden" ? 403 : 401);
 			}
 
 			try {
 				const result = await handleAdministrativeReviewGate(
 					env.nomorescamcalls_db,
-					portalSession.user,
+					authorization.session.user,
 					await request.json() as Record<string, unknown>
 				);
 
@@ -192,19 +193,21 @@ export default {
 			request.method === "POST"
 			&& url.pathname === "/beta/invitations"
 		) {
-			const sessionToken = getBearerToken(request);
-			const session = sessionToken
-				? await authenticateBetaSession(
+			const authorization =
+				await authorizeAdministrativePortalSession(
 					env.nomorescamcalls_db,
-					sessionToken
-				)
-				: null;
+					getBearerToken(request)
+				);
 
-			if (!session) {
+			if (!authorization.authorized) {
 				return portalJson({
-					error: "Valid administrative portal session required",
-					code: "beta_invitation_unauthenticated"
-				}, 401);
+					error: authorization.failure === "forbidden"
+						? "Administrative role required"
+						: "Valid administrative portal session required",
+					code: authorization.failure === "forbidden"
+						? "beta_invitation_forbidden"
+						: "beta_invitation_unauthenticated"
+				}, authorization.failure === "forbidden" ? 403 : 401);
 			}
 
 			const body = await request.json() as {
@@ -218,7 +221,7 @@ export default {
 				const messagingConfig = telnyxMessagingConfig(env);
 				return portalJson(await issueBetaInvitation(
 					env.nomorescamcalls_db,
-					session.user,
+					authorization.session.user,
 					body,
 					{
 						provider: createTelnyxSmsProvider(messagingConfig)
@@ -621,14 +624,18 @@ export default {
 			request.method === "POST"
 			&& url.pathname === "/portal/me/locations"
 		) {
-			const sessionToken = getBearerToken(request);
-			const session = sessionToken
-				? await authenticateBetaSession(env.nomorescamcalls_db, sessionToken)
-				: null;
-			if (!session) {
-				return portalJson({ error: "Valid portal session required" }, 401);
+			const authorization = await authorizeBetaCustomerPortalSession(
+				env.nomorescamcalls_db,
+				getBearerToken(request)
+			);
+			if (!authorization.authorized) {
+				return portalJson({
+					error: authorization.failure === "forbidden"
+						? "Beta customer role required"
+						: "Valid portal session required"
+				}, authorization.failure === "forbidden" ? 403 : 401);
 			}
-			if (session.user.setupStatus !== "onboarding_complete") {
+			if (authorization.session.user.setupStatus !== "onboarding_complete") {
 				return portalJson({
 					error: "Account onboarding and agreement must be complete",
 					code: "onboarding_incomplete"
@@ -639,7 +646,7 @@ export default {
 				return portalJson({
 					location: await createAccountLocation(
 						env.nomorescamcalls_db,
-						session.user.id
+						authorization.session.user.id
 					)
 				}, 201);
 			} catch (error) {
@@ -656,14 +663,18 @@ export default {
 			/^\/portal\/me\/locations\/(\d+)\/protected-lines$/
 		);
 		if (request.method === "POST" && portalProtectedLinesMatch) {
-			const sessionToken = getBearerToken(request);
-			const session = sessionToken
-				? await authenticateBetaSession(env.nomorescamcalls_db, sessionToken)
-				: null;
-			if (!session) {
-				return portalJson({ error: "Valid portal session required" }, 401);
+			const authorization = await authorizeBetaCustomerPortalSession(
+				env.nomorescamcalls_db,
+				getBearerToken(request)
+			);
+			if (!authorization.authorized) {
+				return portalJson({
+					error: authorization.failure === "forbidden"
+						? "Beta customer role required"
+						: "Valid portal session required"
+				}, authorization.failure === "forbidden" ? 403 : 401);
 			}
-			if (session.user.setupStatus !== "onboarding_complete") {
+			if (authorization.session.user.setupStatus !== "onboarding_complete") {
 				return portalJson({
 					error: "Account onboarding and agreement must be complete",
 					code: "onboarding_incomplete"
@@ -678,7 +689,7 @@ export default {
 			try {
 				const line = await createProtectedLine(
 					env.nomorescamcalls_db,
-					session.user.id,
+					authorization.session.user.id,
 					Number(portalProtectedLinesMatch[1]),
 					{
 						protectedPhoneNumber: body.protectedPhoneNumber ?? "",
@@ -703,17 +714,21 @@ export default {
 			/^\/portal\/me\/protected-lines\/(\d+)\/provision$/
 		);
 		if (request.method === "POST" && portalProvisionLineMatch) {
-			const sessionToken = getBearerToken(request);
-			const session = sessionToken
-				? await authenticateBetaSession(env.nomorescamcalls_db, sessionToken)
-				: null;
-			if (!session) {
-				return portalJson({ error: "Valid portal session required" }, 401);
+			const authorization = await authorizeBetaCustomerPortalSession(
+				env.nomorescamcalls_db,
+				getBearerToken(request)
+			);
+			if (!authorization.authorized) {
+				return portalJson({
+					error: authorization.failure === "forbidden"
+						? "Beta customer role required"
+						: "Valid portal session required"
+				}, authorization.failure === "forbidden" ? 403 : 401);
 			}
 
 			const lineId = Number(portalProvisionLineMatch[1]);
 			const line = await findProtectedLineById(env.nomorescamcalls_db, lineId);
-			if (!line || line.userId !== session.user.id) {
+			if (!line || line.userId !== authorization.session.user.id) {
 				return portalJson({
 					error: "Protected line not found",
 					code: "protected_line_not_found"
@@ -748,18 +763,22 @@ export default {
 			/^\/portal\/me\/protected-lines\/(\d+)\/forwarding-confirm$/
 		);
 		if (request.method === "POST" && portalForwardingConfirmationMatch) {
-			const sessionToken = getBearerToken(request);
-			const session = sessionToken
-				? await authenticateBetaSession(env.nomorescamcalls_db, sessionToken)
-				: null;
-			if (!session) {
-				return portalJson({ error: "Valid portal session required" }, 401);
+			const authorization = await authorizeBetaCustomerPortalSession(
+				env.nomorescamcalls_db,
+				getBearerToken(request)
+			);
+			if (!authorization.authorized) {
+				return portalJson({
+					error: authorization.failure === "forbidden"
+						? "Beta customer role required"
+						: "Valid portal session required"
+				}, authorization.failure === "forbidden" ? 403 : 401);
 			}
 
 			try {
 				const protectedLine = await confirmProtectedLineForwarding(
 					env.nomorescamcalls_db,
-					session.user.id,
+					authorization.session.user.id,
 					Number(portalForwardingConfirmationMatch[1])
 				);
 				return portalJson({
@@ -1020,33 +1039,16 @@ export default {
 			request.method === "GET"
 			&& url.pathname === "/portal/me/summary"
 		) {
-			const sessionToken =
-				getBearerToken(request);
-
-			if (!sessionToken) {
-				return portalJson(
-					{
-						error:
-							"Valid portal session required"
-					},
-					401
-				);
-			}
-
-			const session =
-				await authenticateBetaSession(
-					env.nomorescamcalls_db,
-					sessionToken
-				);
-
-			if (!session) {
-				return portalJson(
-					{
-						error:
-							"Valid portal session required"
-					},
-					401
-				);
+			const authorization = await authorizeBetaCustomerPortalSession(
+				env.nomorescamcalls_db,
+				getBearerToken(request)
+			);
+			if (!authorization.authorized) {
+				return portalJson({
+					error: authorization.failure === "forbidden"
+						? "Beta customer role required"
+						: "Valid portal session required"
+				}, authorization.failure === "forbidden" ? 403 : 401);
 			}
 
 			interface PortalCallSummaryRow {
@@ -1101,15 +1103,21 @@ export default {
 						FROM call_events
 						WHERE user_id = ?
 					`)
-					.bind(session.user.id)
+					.bind(authorization.session.user.id)
 					.first<PortalCallSummaryRow>(),
-				listAccountLocations(env.nomorescamcalls_db, session.user.id),
-				listCustomerProtectedLinesForAccount(env.nomorescamcalls_db, session.user.id)
+				listAccountLocations(
+					env.nomorescamcalls_db,
+					authorization.session.user.id
+				),
+				listCustomerProtectedLinesForAccount(
+					env.nomorescamcalls_db,
+					authorization.session.user.id
+				)
 			]);
 
 			return portalJson({
 				service_status:
-					session.user.setupStatus,
+					authorization.session.user.setupStatus,
 				locations,
 				protected_lines: protectedLines,
 				total_calls:
@@ -1128,33 +1136,16 @@ export default {
 			request.method === "GET"
 			&& url.pathname === "/portal/me/calls"
 		) {
-			const sessionToken =
-				getBearerToken(request);
-
-			if (!sessionToken) {
-				return portalJson(
-					{
-						error:
-							"Valid portal session required"
-					},
-					401
-				);
-			}
-
-			const session =
-				await authenticateBetaSession(
-					env.nomorescamcalls_db,
-					sessionToken
-				);
-
-			if (!session) {
-				return portalJson(
-					{
-						error:
-							"Valid portal session required"
-					},
-					401
-				);
+			const authorization = await authorizeBetaCustomerPortalSession(
+				env.nomorescamcalls_db,
+				getBearerToken(request)
+			);
+			if (!authorization.authorized) {
+				return portalJson({
+					error: authorization.failure === "forbidden"
+						? "Beta customer role required"
+						: "Valid portal session required"
+				}, authorization.failure === "forbidden" ? 403 : 401);
 			}
 
 			const requestedLimit =
@@ -1194,7 +1185,7 @@ export default {
 						LIMIT ?
 					`)
 					.bind(
-						session.user.id,
+							authorization.session.user.id,
 						limit
 					)
 					.all<PortalCallRow>();
@@ -1272,26 +1263,31 @@ export default {
 				);
 			}
 
-			const agreement =
-				await getCurrentBetaAgreement(
-					env.nomorescamcalls_db
-				);
+			if (isAdministrativeRole(session.user.role)) {
+				return portalJson({
+					user: {
+						...session.user,
+						account_status: session.user.accountStatus,
+						setup_status: session.user.setupStatus,
+						contact_phone_number: session.user.contactPhoneNumber
+					},
+					locations: [],
+					protected_lines: [],
+					expiresAt: session.expiresAt
+				});
+			}
+
+			const agreement = getCurrentBetaAgreement();
 
 			const [agreementAccepted, locations, protectedLines] =
-				agreement
-					? await Promise.all([
-						hasAcceptedCurrentBetaAgreement(
-							env.nomorescamcalls_db,
-							session.user.id
-						),
-						listAccountLocations(env.nomorescamcalls_db, session.user.id),
-						listCustomerProtectedLinesForAccount(env.nomorescamcalls_db, session.user.id)
-					])
-					: [
-						false,
-						await listAccountLocations(env.nomorescamcalls_db, session.user.id),
-						await listCustomerProtectedLinesForAccount(env.nomorescamcalls_db, session.user.id)
-					] as const;
+				await Promise.all([
+					hasAcceptedCurrentBetaAgreement(
+						env.nomorescamcalls_db,
+						session.user.id
+					),
+					listAccountLocations(env.nomorescamcalls_db, session.user.id),
+					listCustomerProtectedLinesForAccount(env.nomorescamcalls_db, session.user.id)
+				]);
 
 			return portalJson({
 				user: {
@@ -1303,12 +1299,10 @@ export default {
 					contact_phone_number:
 						session.user.contactPhoneNumber,
 					agreementAccepted,
-					agreementVersion:
-						agreement?.version ?? null,
+					agreementVersion: agreement.version,
 					agreement_accepted:
 						agreementAccepted,
-					agreement_version:
-						agreement?.version ?? null
+					agreement_version: agreement.version
 				},
 				locations,
 				protected_lines: protectedLines,
@@ -1322,25 +1316,18 @@ export default {
 			request.method === "PATCH"
 			&& url.pathname === "/portal/me/onboarding"
 		) {
-			const sessionToken = getBearerToken(request);
-
-			if (!sessionToken) {
-				return portalJson(
-					{ error: "Valid portal session required" },
-					401
+			const authorization =
+				await authorizeBetaCustomerPortalSession(
+					env.nomorescamcalls_db,
+					getBearerToken(request)
 				);
-			}
 
-			const session = await authenticateBetaSession(
-				env.nomorescamcalls_db,
-				sessionToken
-			);
-
-			if (!session) {
-				return portalJson(
-					{ error: "Valid portal session required" },
-					401
-				);
+			if (!authorization.authorized) {
+				return portalJson({
+					error: authorization.failure === "forbidden"
+						? "Beta customer role required"
+						: "Valid portal session required"
+				}, authorization.failure === "forbidden" ? 403 : 401);
 			}
 
 			const body = await request.json() as {
@@ -1355,13 +1342,13 @@ export default {
 			try {
 				const onboarding = await updateSubscriberOnboarding(
 					env.nomorescamcalls_db,
-					session.user.id,
+					authorization.session.user.id,
 					body
 				);
 				const lifecycle = onboarding.complete
 					? await advanceSubscriberLifecycle(
 						env.nomorescamcalls_db,
-						session.user.id
+						authorization.session.user.id
 					)
 					: { onboarding, provisioning: null };
 
@@ -1378,63 +1365,56 @@ export default {
 			}
 		}
 
+		// Subscriber Portal Current Agreement
+		if (
+			request.method === "GET"
+			&& url.pathname === "/portal/agreement/current"
+		) {
+			const authorization =
+				await authorizeBetaCustomerPortalSession(
+					env.nomorescamcalls_db,
+					getBearerToken(request)
+				);
+
+			if (!authorization.authorized) {
+				return portalJson({
+					error: authorization.failure === "forbidden"
+						? "Beta customer role required"
+						: "Valid portal session required"
+				}, authorization.failure === "forbidden" ? 403 : 401);
+			}
+
+			return portalJson({
+				agreement: getCurrentBetaAgreement()
+			});
+		}
+
 		// Subscriber Portal Agreement Acceptance
 		if (
 			request.method === "POST"
 			&& url.pathname === "/portal/agreement/accept"
 		) {
-			const sessionToken =
-				getBearerToken(request);
-
-			if (!sessionToken) {
-				return portalJson(
-					{
-						error:
-							"Valid portal session required"
-					},
-					401
-				);
-			}
-
-			const session =
-				await authenticateBetaSession(
+			const authorization =
+				await authorizeBetaCustomerPortalSession(
 					env.nomorescamcalls_db,
-					sessionToken
+					getBearerToken(request)
 				);
 
-			if (!session) {
-				return portalJson(
-					{
-						error:
-							"Valid portal session required"
-					},
-					401
-				);
+			if (!authorization.authorized) {
+				return portalJson({
+					error: authorization.failure === "forbidden"
+						? "Beta customer role required"
+						: "Valid portal session required"
+				}, authorization.failure === "forbidden" ? 403 : 401);
 			}
 
 			const body = await request.json() as {
 				version?: string;
 			};
 
-			const agreement =
-				await getCurrentBetaAgreement(
-					env.nomorescamcalls_db
-				);
+			const agreement = getCurrentBetaAgreement();
 
-			if (!agreement) {
-				return portalJson(
-					{
-						error:
-							"No active beta agreement"
-					},
-					404
-				);
-			}
-
-			if (
-				body.version
-				&& body.version !== agreement.version
-			) {
+			if (body.version !== agreement.version) {
 				return portalJson(
 					{
 						error:
@@ -1447,22 +1427,12 @@ export default {
 			const acceptance =
 				await acceptCurrentBetaAgreement(
 					env.nomorescamcalls_db,
-					session.user.id
+					authorization.session.user.id
 				);
-
-			if (!acceptance) {
-				return portalJson(
-					{
-						error:
-							"No active beta agreement"
-					},
-					404
-				);
-			}
 
 			const lifecycle = await advanceSubscriberLifecycle(
 				env.nomorescamcalls_db,
-				session.user.id
+				authorization.session.user.id
 			);
 
 			if (!lifecycle.onboarding.complete) {
