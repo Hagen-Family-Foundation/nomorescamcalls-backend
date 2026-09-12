@@ -9,6 +9,12 @@ import {
 	isTelnyxMessagingWebhook,
 	type TelnyxMessagingConfig
 } from "./services/telnyxMessaging";
+import {
+	handlePostActivationConfirmationWebhook,
+	initiatePostActivationConfirmation,
+	isPostActivationConfirmationWebhook,
+	type PostActivationConfirmationConfig
+} from "./services/postActivationConfirmation";
 import { listConfirmedScamNumbers, removeConfirmedScamNumber } from "./services/confirmedScams";
 import { promoteConfirmedScamNumber } from "./services/scamPromotion";
 import { getCallerIntelligence } from "./services/callerLookup";
@@ -118,6 +124,17 @@ function telnyxMessagingConfig(env: Env): TelnyxMessagingConfig {
 		liveExecution: env.TELNYX_LIVE_EXECUTION,
 		messagingProfileId: env.TELNYX_MESSAGING_PROFILE_ID,
 		fromNumber: env.TELNYX_MESSAGING_FROM_NUMBER
+	};
+}
+
+function postActivationConfirmationConfig(
+	env: Env
+): PostActivationConfirmationConfig {
+	return {
+		apiKey: env.TELNYX_API_KEY,
+		baseUrl: env.TELNYX_API_BASE_URL,
+		liveExecution: env.TELNYX_LIVE_EXECUTION,
+		connectionId: env.TELNYX_CONNECTION_ID
 	};
 }
 
@@ -690,10 +707,30 @@ export default {
 					authorization.session.user.id,
 					Number(portalForwardingConfirmationMatch[1])
 				);
+				let confirmationCall;
+				try {
+					confirmationCall = await initiatePostActivationConfirmation(
+						env.nomorescamcalls_db,
+						authorization.session.user.id,
+						protectedLine.id,
+						postActivationConfirmationConfig(env)
+					);
+				} catch (error) {
+					console.error("Post-activation confirmation could not be initiated", {
+						protectedLineId: protectedLine.id,
+						reason: error instanceof Error ? error.message : "unknown"
+					});
+					confirmationCall = {
+						status: "failed" as const,
+						initiatedAt: null,
+						completedAt: null
+					};
+				}
 				return portalJson({
 					forwardingConfirmed: true,
 					coverageActive: true,
-					protectedLine
+					protectedLine,
+					confirmationCall
 				});
 			} catch (error) {
 				return portalJson({
@@ -1819,6 +1856,13 @@ export default {
 					processed: false,
 					reason: "unsupported_telnyx_messaging_event"
 				});
+			}
+			if (isPostActivationConfirmationWebhook(payload)) {
+				return handlePostActivationConfirmationWebhook(
+					payload,
+					env.nomorescamcalls_db,
+					postActivationConfirmationConfig(env)
+				);
 			}
 			const executionPolicy = getTelnyxExecutionPolicy(env);
 

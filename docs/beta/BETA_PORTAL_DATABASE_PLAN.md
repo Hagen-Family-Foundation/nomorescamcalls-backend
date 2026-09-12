@@ -22,6 +22,8 @@ Purpose:
 - Line-specific provisioning and coverage state.
 - Line-specific forwarding state and provisioning, instruction, confirmation,
   and activation timestamps.
+- Line-owned post-activation confirmation-call status and timestamps, with the
+  provider call-control identifier and failure reason kept backend-internal.
 - Explicit account and Location ownership.
 
 ### call_events

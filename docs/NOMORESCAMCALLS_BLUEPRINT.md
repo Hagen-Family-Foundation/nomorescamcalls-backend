@@ -257,6 +257,9 @@ The line lifecycle is:
 
 → `provisioned / forwarding confirmed / coverage active`
 
+→ one backend-owned confirmation call to the account contact phone announces
+that setup is complete and protection is active
+
 The caller-facing phrase is never inferred from account, legal, billing,
 location, branch, department, or other identity. Provisioning does not create
 a user or Location. It uses the common screening-number and SIP-credential
@@ -266,6 +269,11 @@ attempt leaves that line inactive and recoverable; an already provisioned line
 is not provisioned again. Only confirmation activates the selected line, and
 sibling lines remain independent. Later lines reuse the completed account
 onboarding and agreement.
+
+The post-activation call is a customer setup communication, not forwarding
+verification and not Evidence Engine work. It uses the account contact phone,
+not an inferred Protected-Line destination, and line-owned state makes the
+single call idempotent. A failed confirmation call leaves the line active.
 
 This may take time for seniors because of typing and phone-number entry.
 

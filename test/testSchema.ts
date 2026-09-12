@@ -98,6 +98,11 @@ export async function ensureTestSchema(): Promise<void> {
 				forwarding_instructions_created_at TEXT,
 				forwarding_confirmed_at TEXT,
 				activated_at TEXT,
+				activation_confirmation_call_status TEXT NOT NULL DEFAULT 'not_started',
+				activation_confirmation_call_control_id TEXT,
+				activation_confirmation_call_initiated_at TEXT,
+				activation_confirmation_call_completed_at TEXT,
+				activation_confirmation_call_failure_reason TEXT,
 				created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
 				updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
 				FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
@@ -116,7 +121,12 @@ export async function ensureTestSchema(): Promise<void> {
 		["resources_provisioned_at", "TEXT"],
 		["forwarding_instructions_created_at", "TEXT"],
 		["forwarding_confirmed_at", "TEXT"],
-		["activated_at", "TEXT"]
+		["activated_at", "TEXT"],
+		["activation_confirmation_call_status", "TEXT NOT NULL DEFAULT 'not_started'"],
+		["activation_confirmation_call_control_id", "TEXT"],
+		["activation_confirmation_call_initiated_at", "TEXT"],
+		["activation_confirmation_call_completed_at", "TEXT"],
+		["activation_confirmation_call_failure_reason", "TEXT"]
 	] as const) {
 		if (!protectedLineColumns.results.some((entry) => entry.name === column)) {
 			await env.nomorescamcalls_db

@@ -5,6 +5,14 @@ import {
 
 export const MAX_PROTECTED_LINES_PER_LOCATION = 6;
 
+export type ActivationConfirmationCallStatus =
+	| "not_started"
+	| "initiating"
+	| "initiated"
+	| "speaking"
+	| "completed"
+	| "failed";
+
 export interface AccountLocationRecord {
 	id: number;
 	userId: number;
@@ -27,6 +35,11 @@ export interface ProtectedLineRecord {
 	forwardingInstructionsCreatedAt: string | null;
 	forwardingConfirmedAt: string | null;
 	activatedAt: string | null;
+	activationConfirmationCallStatus: ActivationConfirmationCallStatus;
+	activationConfirmationCallControlId: string | null;
+	activationConfirmationCallInitiatedAt: string | null;
+	activationConfirmationCallCompletedAt: string | null;
+	activationConfirmationCallFailureReason: string | null;
 	createdAt: string;
 	updatedAt: string;
 }
@@ -38,7 +51,9 @@ export interface ProtectedLineWithAccount {
 
 export type CustomerProtectedLineRecord = Omit<
 	ProtectedLineRecord,
-	"sipUsername"
+	| "sipUsername"
+	| "activationConfirmationCallControlId"
+	| "activationConfirmationCallFailureReason"
 >;
 
 export interface CreateProtectedLineInput {
@@ -69,6 +84,11 @@ interface ProtectedLineRow {
 	forwarding_instructions_created_at: string | null;
 	forwarding_confirmed_at: string | null;
 	activated_at: string | null;
+	activation_confirmation_call_status: ActivationConfirmationCallStatus;
+	activation_confirmation_call_control_id: string | null;
+	activation_confirmation_call_initiated_at: string | null;
+	activation_confirmation_call_completed_at: string | null;
+	activation_confirmation_call_failure_reason: string | null;
 	created_at: string;
 	updated_at: string;
 }
@@ -89,6 +109,11 @@ const PROTECTED_LINE_COLUMNS = `
 	forwarding_instructions_created_at,
 	forwarding_confirmed_at,
 	activated_at,
+	activation_confirmation_call_status,
+	activation_confirmation_call_control_id,
+	activation_confirmation_call_initiated_at,
+	activation_confirmation_call_completed_at,
+	activation_confirmation_call_failure_reason,
 	created_at,
 	updated_at
 `;
@@ -118,6 +143,16 @@ function mapProtectedLineRow(row: ProtectedLineRow): ProtectedLineRecord {
 		forwardingInstructionsCreatedAt: row.forwarding_instructions_created_at,
 		forwardingConfirmedAt: row.forwarding_confirmed_at,
 		activatedAt: row.activated_at,
+		activationConfirmationCallStatus:
+			row.activation_confirmation_call_status,
+		activationConfirmationCallControlId:
+			row.activation_confirmation_call_control_id,
+		activationConfirmationCallInitiatedAt:
+			row.activation_confirmation_call_initiated_at,
+		activationConfirmationCallCompletedAt:
+			row.activation_confirmation_call_completed_at,
+		activationConfirmationCallFailureReason:
+			row.activation_confirmation_call_failure_reason,
 		createdAt: row.created_at,
 		updatedAt: row.updated_at
 	};
@@ -126,7 +161,12 @@ function mapProtectedLineRow(row: ProtectedLineRow): ProtectedLineRecord {
 export function toCustomerProtectedLine(
 	line: ProtectedLineRecord
 ): CustomerProtectedLineRecord {
-	const { sipUsername: _sipUsername, ...customerLine } = line;
+	const {
+		sipUsername: _sipUsername,
+		activationConfirmationCallControlId: _callControlId,
+		activationConfirmationCallFailureReason: _failureReason,
+		...customerLine
+	} = line;
 	return customerLine;
 }
 

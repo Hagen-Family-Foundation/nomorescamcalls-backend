@@ -91,6 +91,18 @@ function applyMigration0033(db) {
 	);
 }
 
+function applyMigration0034(db) {
+	db.exec(
+		readFileSync(
+			join(
+				migrationsDirectory,
+				"0034_add_activation_confirmation_call_state.sql"
+			),
+			"utf8"
+		)
+	);
+}
+
 function foreignKeyReferencesToUsers(db) {
 	const tables = db
 		.prepare(`
@@ -127,7 +139,7 @@ function foreignKeyReferencesToUsers(db) {
 
 test("the complete migration chain applies with clean foreign keys", () => {
 	const db = createDatabaseThrough(
-		"0033_retire_beta_invitation_architecture.sql"
+		"0034_add_activation_confirmation_call_state.sql"
 	);
 
 	assert.deepEqual(db.prepare("PRAGMA foreign_key_check").all(), []);
@@ -182,6 +194,81 @@ test("the complete migration chain applies with clean foreign keys", () => {
 		}
 	]);
 
+	db.close();
+});
+
+test("0034 adds line-owned confirmation-call state without changing activation", () => {
+	const db = createDatabaseThrough(
+		"0033_retire_beta_invitation_architecture.sql"
+	);
+
+	db.exec(`
+		INSERT INTO users (
+			id,
+			phone_number,
+			contact_phone_number,
+			account_status,
+			setup_status
+		)
+		VALUES (
+			94,
+			'+18005550094',
+			'+18005550194',
+			'active',
+			'onboarding_complete'
+		);
+
+		INSERT INTO account_locations (id, user_id)
+		VALUES (940, 94);
+
+		INSERT INTO protected_lines (
+			id,
+			user_id,
+			location_id,
+			protected_phone_number,
+			caller_facing_business_name,
+			screening_number,
+			sip_username,
+			provisioning_status,
+			forwarding_status,
+			coverage_status,
+			activated_at
+		)
+		VALUES (
+			941,
+			94,
+			940,
+			'+18005550941',
+			'Migration Confirmation Line',
+			'+18005551941',
+			'migration_confirmation_941',
+			'provisioned',
+			'confirmed',
+			'active',
+			'2026-09-12T12:00:00.000Z'
+		);
+	`);
+
+	applyMigration0034(db);
+
+	assert.deepEqual(
+		{ ...db.prepare(`
+			SELECT
+				coverage_status,
+				forwarding_status,
+				activation_confirmation_call_status,
+				activation_confirmation_call_control_id
+			FROM protected_lines
+			WHERE id = 941
+		`).get() },
+		{
+			coverage_status: "active",
+			forwarding_status: "confirmed",
+			activation_confirmation_call_status: "not_started",
+			activation_confirmation_call_control_id: null
+		}
+	);
+	assert.deepEqual(db.prepare("PRAGMA foreign_key_check").all(), []);
 	db.close();
 });
 

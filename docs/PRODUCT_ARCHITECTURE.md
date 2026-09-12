@@ -371,6 +371,17 @@ line changes forwarding to `confirmed` and coverage to `active`; sibling lines
 remain untouched. Partial reservations are released after failure, and
 retrying an already provisioned line is idempotent.
 
+After that exact-line activation succeeds, the backend initiates one
+non-interactive onboarding-confirmation call to the account contact phone,
+which is the authoritative setup-communication destination and is not assumed
+to be the Protected Line. The activated line's screening DID is used as caller
+ID. Telnyx dials through the existing Call Control connection and, after the
+tagged outbound leg is answered, speaks: “Your NoMoreScamCalls setup is
+complete and your protection is now active. Thank you.” Line-owned call state
+prevents page reads or repeated forwarding-confirmation requests from
+initiating another call. Call failure does not reverse forwarding confirmation
+or active coverage.
+
 `account_status` controls account lifecycle and portal access. Account
 `setup_status` records account onboarding completion. Coverage claims are
 line-specific. A completed account may add and provision later lines without

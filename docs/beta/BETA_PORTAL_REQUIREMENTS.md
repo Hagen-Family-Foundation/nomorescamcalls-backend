@@ -105,6 +105,13 @@ resource assignment makes the exact line provisioned and forwarding-pending,
 but coverage remains inactive. Coverage becomes active only after the customer
 confirms forwarding for that exact line. Sibling lines are unaffected.
 
+After the exact line becomes active, the backend initiates one short
+non-interactive setup-confirmation call to the account contact phone. That
+account destination is distinct from the Protected Line. The call announces
+successful setup and active protection; it does not verify forwarding or
+participate in Evidence Engine scoring. Backend line-owned state prevents
+repeat calls, and call failure does not undo activation.
+
 Suspension and closure remain account context rather than a parallel
 provisioning workflow. Forwarding guidance exposes the
 line-specific screening number but never SIP credentials. Delivery uses the
@@ -121,6 +128,7 @@ The participant dashboard must display:
 * Account onboarding and service status.
 * Locations and Protected Lines, identifiable primarily by protected telephone number.
 * Per-line assigned screening number and coverage state.
+* Per-line forwarding and provisioning state.
 * Total calls handled.
 * Successful calls.
 * Diverted calls.

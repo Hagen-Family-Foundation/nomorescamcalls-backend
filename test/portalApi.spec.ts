@@ -231,6 +231,9 @@ describe('subscriber portal API', () => {
 		expect(confirmationResponse.status).toBe(200);
 		expect(await confirmationResponse.json()).toMatchObject({
 			coverageActive: true,
+			confirmationCall: {
+				status: 'failed',
+			},
 			protectedLine: {
 				id: protectedLine.id,
 				forwardingStatus: 'confirmed',
