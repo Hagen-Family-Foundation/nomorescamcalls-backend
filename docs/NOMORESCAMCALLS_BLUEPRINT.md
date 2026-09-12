@@ -225,23 +225,19 @@ phone, communication preference, authentication, agreement acceptance, and
 onboarding state. Account onboarding may be resumed and completes without
 creating or provisioning a telephone line.
 
-For beta enrollment, an authorized invitation is bound to an explicit SMS
-destination or email destination. SMS is used only when capability was
-explicitly supplied; otherwise the delivery model selects email and records
-the provider as unavailable until an email integration is separately approved.
-The current live path sends SMS directly through Telnyx. A simple case-insensitive
-`Y`/`YES` response issues one one-time onboarding credential and a portal link
-that carries it. The credential is validated and redeemed through registration
-and cannot authorize a second account. Invitation and delivery state remains
-durable even when no external communication provider is configured.
+For beta enrollment, participants receive the private registration link and
+the shared four-digit beta access code. The registration page submits the code
+with account contact information to the backend. The backend validates the
+server-only `BETA_ACCESS_CODE`, creates the normal customer account, and does
+not persist or return the submitted code. There is no individual invitation,
+inbound SMS response, one-time credential, redemption, or code-management
+lifecycle.
 
-Telnyx inbound SMS is accepted on the existing webhook route and passes through
-its current verification gate. It is correlated by the event's sender,
-configured receiving number, and configured Messaging Profile. The invitation
-lifecycle does not trust an inbound invitation ID. Live SMS requires
-`TELNYX_API_KEY`, `TELNYX_API_BASE_URL`, `TELNYX_LIVE_EXECUTION=true`,
-`TELNYX_MESSAGING_PROFILE_ID`, `TELNYX_MESSAGING_FROM_NUMBER`, and
-`PORTAL_ORIGIN`.
+The current live Telnyx SMS path remains available only for exact-line
+forwarding instructions after a Protected Line is created and provisioned.
+Live SMS requires `TELNYX_API_KEY`, `TELNYX_API_BASE_URL`,
+`TELNYX_LIVE_EXECUTION=true`, `TELNYX_MESSAGING_PROFILE_ID`, and
+`TELNYX_MESSAGING_FROM_NUMBER`.
 
 A Location is a minimal administrative grouping. Each Location supports up to
 six Protected Lines, with the same capacity for every customer type. A

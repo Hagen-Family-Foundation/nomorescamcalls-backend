@@ -2,82 +2,6 @@ import { env, SELF } from "cloudflare:test";
 import { beforeAll, describe, it, expect } from "vitest";
 import { ensureTestSchema } from "./testSchema";
 
-async function seedAcceptedBetaInvite(
-	code: string,
-	email: string,
-	expiresAt: string | null = null
-): Promise<void> {
-	const responseToken = `response-${code.toLowerCase()}`;
-	await env.nomorescamcalls_db.batch([
-		env.nomorescamcalls_db.prepare(`
-			INSERT OR IGNORE INTO users (
-				phone_number,
-				email,
-				role,
-				account_status,
-				setup_status,
-				status,
-				coverage_status
-			)
-			VALUES (
-				'+18005559999',
-				'index-invite-admin@example.com',
-				'administrator',
-				'active',
-				'onboarding_complete',
-				'active',
-				'inactive'
-			)
-		`),
-		env.nomorescamcalls_db.prepare(`
-			INSERT INTO beta_invitations (
-				response_token,
-				sms_capable,
-				email_contact,
-				selected_channel,
-				selected_destination,
-				status,
-				created_by_user_id,
-				issued_at,
-				awaiting_response_at,
-				response_received_at,
-				accepted_at,
-				credential_issued_at,
-				expires_at
-			)
-			SELECT
-				?,
-				0,
-				?,
-				'email',
-				?,
-				'credential_issued',
-				id,
-				CURRENT_TIMESTAMP,
-				CURRENT_TIMESTAMP,
-				CURRENT_TIMESTAMP,
-				CURRENT_TIMESTAMP,
-				CURRENT_TIMESTAMP,
-				?
-			FROM users
-			WHERE email = 'index-invite-admin@example.com'
-		`).bind(responseToken, email, email, expiresAt),
-		env.nomorescamcalls_db.prepare(`
-			INSERT INTO beta_invite_codes (
-				code,
-				status,
-				expires_at,
-				max_uses,
-				use_count,
-				invitation_id
-			)
-			SELECT ?, 'active', ?, 1, 0, id
-			FROM beta_invitations
-			WHERE response_token = ?
-		`).bind(code, expiresAt, responseToken)
-	]);
-}
-
 describe("NoMoreScamCalls Worker", () => {
 	beforeAll(async () => {
 		await ensureTestSchema();
@@ -708,12 +632,7 @@ describe("NoMoreScamCalls Worker", () => {
 		expect(Array.isArray(body.events)).toBe(true);
 	});
 
-	it("registers a beta participant and associates the invite", async () => {
-		await seedAcceptedBetaInvite(
-			"BETA-REGISTER-ONE",
-			"kelly.beta@example.com"
-		);
-
+	it("registers a beta participant through the shared access gate", async () => {
 		const response = await SELF.fetch(
 			"http://example.com/portal/auth/register",
 			{
@@ -722,7 +641,7 @@ describe("NoMoreScamCalls Worker", () => {
 					"content-type": "application/json"
 				},
 				body: JSON.stringify({
-					code: "BETA-REGISTER-ONE",
+					betaAccessCode: "2468",
 					firstName: "Kelly",
 					lastName: "Hagen",
 					email: "kelly.beta@example.com",
@@ -780,25 +699,10 @@ describe("NoMoreScamCalls Worker", () => {
 		expect(storedUser?.password_hash.startsWith("pbkdf2_sha256$")).toBe(true);
 		expect(storedUser?.contact_phone_number).toBe("+15550001001");
 
-		const storedInvite = await env.nomorescamcalls_db
-			.prepare(`
-				SELECT status, use_count, redeemed_by_user_id
-				FROM beta_invite_codes
-				WHERE code = ?
-			`)
-			.bind("BETA-REGISTER-ONE")
-			.first<{
-				status: string;
-				use_count: number;
-				redeemed_by_user_id: number | null;
-			}>();
-
-		expect(storedInvite?.status).toBe("used");
-		expect(storedInvite?.use_count).toBe(1);
-		expect(storedInvite?.redeemed_by_user_id).toBe(storedUser?.id);
+		expect(JSON.stringify(body)).not.toContain("2468");
 	});
 
-	it("rejects reuse of a registered beta invite", async () => {
+	it("rejects an incorrect shared beta access code", async () => {
 		const response = await SELF.fetch(
 			"http://example.com/portal/auth/register",
 			{
@@ -807,7 +711,7 @@ describe("NoMoreScamCalls Worker", () => {
 					"content-type": "application/json"
 				},
 				body: JSON.stringify({
-					code: "BETA-REGISTER-ONE",
+					betaAccessCode: "1357",
 					firstName: "Second",
 					lastName: "Participant",
 					email: "second.beta@example.com",
@@ -818,7 +722,7 @@ describe("NoMoreScamCalls Worker", () => {
 			}
 		);
 
-		expect(response.status).toBe(409);
+		expect(response.status).toBe(403);
 
 		const secondUser = await env.nomorescamcalls_db
 			.prepare(`
@@ -832,35 +736,6 @@ describe("NoMoreScamCalls Worker", () => {
 		expect(secondUser).toBeNull();
 	});
 
-	it("rejects an expired beta invite during registration", async () => {
-		await seedAcceptedBetaInvite(
-			"BETA-REGISTER-EXPIRED",
-			"expired.beta@example.com",
-			"2020-01-01T00:00:00.000Z"
-		);
-
-		const response = await SELF.fetch(
-			"http://example.com/portal/auth/register",
-			{
-				method: "POST",
-				headers: {
-					"content-type": "application/json"
-				},
-				body: JSON.stringify({
-					code: "BETA-REGISTER-EXPIRED",
-					firstName: "Expired",
-					lastName: "Participant",
-					email: "expired.beta@example.com",
-					contactPhoneNumber: "+15550001003",
-					contactMethod: "email",
-					password: "expired-password"
-				})
-			}
-		);
-
-		expect(response.status).toBe(409);
-	});
-
 	it("requires all beta registration fields", async () => {
 		const response = await SELF.fetch(
 			"http://example.com/portal/auth/register",
@@ -869,9 +744,7 @@ describe("NoMoreScamCalls Worker", () => {
 				headers: {
 					"content-type": "application/json"
 				},
-				body: JSON.stringify({
-					code: "BETA-INCOMPLETE"
-				})
+				body: JSON.stringify({ betaAccessCode: "2468" })
 			}
 		);
 
@@ -882,16 +755,11 @@ describe("NoMoreScamCalls Worker", () => {
 		}>();
 
 		expect(body.error).toBe(
-			"code, firstName, lastName, email, contactPhoneNumber, contactMethod, and password are required"
+			"betaAccessCode, firstName, lastName, email, contactPhoneNumber, contactMethod, and password are required"
 		);
 	});
 
 	it("logs in a registered beta participant and creates a session", async () => {
-		await seedAcceptedBetaInvite(
-			"BETA-LOGIN-ONE",
-			"kelly.beta@example.com"
-		);
-
 		const registrationResponse = await SELF.fetch(
 			"http://example.com/portal/auth/register",
 			{
@@ -900,7 +768,7 @@ describe("NoMoreScamCalls Worker", () => {
 					"content-type": "application/json"
 				},
 				body: JSON.stringify({
-					code: "BETA-LOGIN-ONE",
+					betaAccessCode: "2468",
 					firstName: "Kelly",
 					lastName: "Hagen",
 					email: "kelly.beta@example.com",
@@ -1111,11 +979,6 @@ describe("NoMoreScamCalls Worker", () => {
 
 
 	it("logs out an authenticated beta participant", async () => {
-		await seedAcceptedBetaInvite(
-			"BETA-LOGOUT-ONE",
-			"logout.beta@example.com"
-		);
-
 		const registrationResponse = await SELF.fetch(
 			"http://example.com/portal/auth/register",
 			{
@@ -1124,7 +987,7 @@ describe("NoMoreScamCalls Worker", () => {
 					"content-type": "application/json"
 				},
 				body: JSON.stringify({
-					code: "BETA-LOGOUT-ONE",
+					betaAccessCode: "2468",
 					firstName: "Logout",
 					lastName: "Participant",
 					email: "logout.beta@example.com",
@@ -1219,11 +1082,6 @@ describe("NoMoreScamCalls Worker", () => {
 	});
 
 	it("returns the authenticated participant dashboard summary", async () => {
-		await seedAcceptedBetaInvite(
-			"BETA-DASHBOARD-SUMMARY",
-			"dashboard.summary@example.com"
-		);
-
 		const registrationResponse = await SELF.fetch(
 			"http://example.com/portal/auth/register",
 			{
@@ -1232,7 +1090,7 @@ describe("NoMoreScamCalls Worker", () => {
 					"content-type": "application/json"
 				},
 				body: JSON.stringify({
-					code: "BETA-DASHBOARD-SUMMARY",
+					betaAccessCode: "2468",
 					firstName: "Dashboard",
 					lastName: "Summary",
 					email: "dashboard.summary@example.com",
@@ -1362,11 +1220,6 @@ describe("NoMoreScamCalls Worker", () => {
 	});
 
 	it("returns only the authenticated participant recent calls", async () => {
-		await seedAcceptedBetaInvite(
-			"BETA-DASHBOARD-CALLS",
-			"dashboard.calls@example.com"
-		);
-
 		const registrationResponse = await SELF.fetch(
 			"http://example.com/portal/auth/register",
 			{
@@ -1375,7 +1228,7 @@ describe("NoMoreScamCalls Worker", () => {
 					"content-type": "application/json"
 				},
 				body: JSON.stringify({
-					code: "BETA-DASHBOARD-CALLS",
+					betaAccessCode: "2468",
 					firstName: "Dashboard",
 					lastName: "Calls",
 					email: "dashboard.calls@example.com",

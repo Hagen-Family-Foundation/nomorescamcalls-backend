@@ -6,7 +6,6 @@ import { listRecentTelnyxWebhookEvents } from "./services/telnyxAudit";
 import { verifyTelnyxWebhook } from "./services/telnyxSecurity";
 import {
 	createTelnyxSmsProvider,
-	handleTelnyxMessagingWebhook,
 	isTelnyxMessagingWebhook,
 	type TelnyxMessagingConfig
 } from "./services/telnyxMessaging";
@@ -36,13 +35,10 @@ import { syncTelnyxInventory } from "./services/telnyxInventorySync";
 import { syncTelnyxSipCredentials } from "./services/telnyxSipCredentialSync";
 import { fetchTelnyxVoiceApplication } from "./services/telnyxVoiceApplicationsClient";
 import { fetchTelnyxRecordings } from "./services/telnyxRecordingsClient";
-import { validateBetaInviteCode } from "./services/betaInviteCodes";
 import {
-	BetaInvitationError,
-	issueBetaInvitation,
-	respondToBetaInvitation
-} from "./services/betaInvitations";
-import { registerBetaParticipant } from "./services/betaRegistration";
+	BetaRegistrationError,
+	registerBetaParticipant
+} from "./services/betaRegistration";
 import { loginBetaParticipant } from "./services/betaLogin";
 import { authenticateBetaSession } from "./services/betaSession";
 import {
@@ -121,8 +117,7 @@ function telnyxMessagingConfig(env: Env): TelnyxMessagingConfig {
 		baseUrl: env.TELNYX_API_BASE_URL,
 		liveExecution: env.TELNYX_LIVE_EXECUTION,
 		messagingProfileId: env.TELNYX_MESSAGING_PROFILE_ID,
-		fromNumber: env.TELNYX_MESSAGING_FROM_NUMBER,
-		portalOrigin: env.PORTAL_ORIGIN
+		fromNumber: env.TELNYX_MESSAGING_FROM_NUMBER
 	};
 }
 
@@ -185,92 +180,6 @@ export default {
 					error: "Administrative review failed",
 					code: "administrative_review_failed"
 				}, 500);
-			}
-		}
-
-		// Authorized operational beta-invitation issuance.
-		if (
-			request.method === "POST"
-			&& url.pathname === "/beta/invitations"
-		) {
-			const authorization =
-				await authorizeAdministrativePortalSession(
-					env.nomorescamcalls_db,
-					getBearerToken(request)
-				);
-
-			if (!authorization.authorized) {
-				return portalJson({
-					error: authorization.failure === "forbidden"
-						? "Administrative role required"
-						: "Valid administrative portal session required",
-					code: authorization.failure === "forbidden"
-						? "beta_invitation_forbidden"
-						: "beta_invitation_unauthenticated"
-				}, authorization.failure === "forbidden" ? 403 : 401);
-			}
-
-			const body = await request.json() as {
-				smsContactNumber?: string;
-				smsCapable?: boolean;
-				email?: string;
-				expiresAt?: string;
-			};
-
-			try {
-				const messagingConfig = telnyxMessagingConfig(env);
-				return portalJson(await issueBetaInvitation(
-					env.nomorescamcalls_db,
-					authorization.session.user,
-					body,
-					{
-						provider: createTelnyxSmsProvider(messagingConfig)
-					}
-				), 201);
-			} catch (error) {
-				if (error instanceof BetaInvitationError) {
-					return portalJson({
-						error: error.message,
-						code: error.code
-					}, error.status);
-				}
-
-				throw error;
-			}
-		}
-
-		// Provider-neutral boundary for an affirmative invitation response.
-		if (
-			request.method === "POST"
-			&& url.pathname === "/beta/invitations/respond"
-		) {
-			const body = await request.json() as {
-				responseToken?: string;
-				response?: string;
-			};
-
-			try {
-				const messagingConfig = telnyxMessagingConfig(env);
-				return portalJson(await respondToBetaInvitation(
-					env.nomorescamcalls_db,
-					{
-						responseToken: body.responseToken ?? "",
-						response: body.response ?? ""
-					},
-					{
-						provider: createTelnyxSmsProvider(messagingConfig),
-						portalOrigin: messagingConfig.portalOrigin
-					}
-				));
-			} catch (error) {
-				if (error instanceof BetaInvitationError) {
-					return portalJson({
-						error: error.message,
-						code: error.code
-					}, error.status);
-				}
-
-				throw error;
 			}
 		}
 
@@ -808,60 +717,13 @@ export default {
 			});
 		}
 
-		// Subscriber Portal Invite Validation
-		if (
-			request.method === "POST"
-			&& url.pathname === "/portal/invite-codes/validate"
-		) {
-			const body = await request.json() as {
-				code?: string;
-				invite?: string;
-			};
-
-			const code =
-				(body.invite ?? body.code)?.trim().toUpperCase() ?? "";
-
-			if (!code) {
-				return portalJson(
-					{
-						valid: false,
-						error: "Invitation code is required"
-					},
-					400
-				);
-			}
-
-			const invite = await validateBetaInviteCode(
-				env.nomorescamcalls_db,
-				code
-			);
-
-			if (!invite) {
-				return portalJson(
-					{
-						valid: false,
-						message:
-							"This invitation code is not valid or is no longer available."
-					},
-					404
-				);
-			}
-
-			return portalJson({
-				valid: true,
-				code: invite.code,
-				expiresAt: invite.expiresAt
-			});
-		}
-
 		// Subscriber Portal Registration
 		if (
 			request.method === "POST"
 			&& url.pathname === "/portal/auth/register"
 		) {
 			const body = await request.json() as {
-				code?: string;
-				invite?: string;
+				betaAccessCode?: string;
 				firstName?: string;
 				lastName?: string;
 				email?: string;
@@ -870,8 +732,8 @@ export default {
 				password?: string;
 			};
 
-			const code =
-				(body.invite ?? body.code)?.trim().toUpperCase() ?? "";
+			const betaAccessCode =
+				body.betaAccessCode?.trim() ?? "";
 			const firstName =
 				body.firstName?.trim() ?? "";
 			const lastName =
@@ -886,7 +748,7 @@ export default {
 				body.password ?? "";
 
 			if (
-				!code
+				!betaAccessCode
 				|| !firstName
 				|| !lastName
 				|| !email
@@ -897,7 +759,7 @@ export default {
 				return portalJson(
 					{
 						error:
-						"code, firstName, lastName, email, contactPhoneNumber, contactMethod, and password are required"
+						"betaAccessCode, firstName, lastName, email, contactPhoneNumber, contactMethod, and password are required"
 					},
 					400
 				);
@@ -908,25 +770,16 @@ export default {
 					await registerBetaParticipant(
 						env.nomorescamcalls_db,
 						{
-							code,
+							betaAccessCode,
 							firstName,
 							lastName,
 							email,
 							contactPhoneNumber,
 							contactMethod,
 							password
-						}
-					);
-
-				if (!registration) {
-					return portalJson(
-						{
-							error:
-								"Invitation code is invalid or unavailable"
 						},
-						409
+						env.BETA_ACCESS_CODE
 					);
-				}
 
 				const login =
 					await loginBetaParticipant(
@@ -953,12 +806,19 @@ export default {
 							login.sessionToken,
 						expiresAt:
 							login.expiresAt,
-						user:
-							login.user
-					},
-					201
-				);
+							user:
+								login.user
+						},
+						201
+					);
 			} catch (error) {
+				if (error instanceof BetaRegistrationError) {
+					return portalJson({
+						error: error.message,
+						code: error.code
+					}, error.status);
+				}
+
 				const reason =
 					error instanceof Error
 						? error.message
@@ -1954,11 +1814,11 @@ export default {
 
 			const payload = await request.json();
 			if (isTelnyxMessagingWebhook(payload)) {
-				return handleTelnyxMessagingWebhook(
-					payload,
-					env.nomorescamcalls_db,
-					telnyxMessagingConfig(env)
-				);
+				return Response.json({
+					received: true,
+					processed: false,
+					reason: "unsupported_telnyx_messaging_event"
+				});
 			}
 			const executionPolicy = getTelnyxExecutionPolicy(env);
 

@@ -1,248 +1,137 @@
 import { env, SELF } from "cloudflare:test";
 import { beforeAll, describe, expect, it } from "vitest";
-import { loginBetaParticipant } from "../src/services/betaLogin";
+import worker from "../src/index";
 import { CURRENT_BETA_AGREEMENT } from "../src/services/betaAgreement";
-import { issueBetaInvitation } from "../src/services/betaInvitations";
-import { createUser, type UserRecord } from "../src/services/users";
-import { hashPassword } from "../src/utils/passwordHash";
 import { ensureTestSchema } from "./testSchema";
 
-interface IssuedInvitationBody {
-	invitation: {
-		id: number;
-		responseToken: string;
-		selectedChannel: "sms" | "email";
-		selectedDestination: string;
-		status: string;
-		issuedAt: string;
-		awaitingResponseAt: string;
-		responseReceivedAt: string | null;
-		acceptedAt: string | null;
-		credentialIssuedAt: string | null;
-	};
-	delivery: {
-		channel: "sms" | "email";
-		destination: string;
-		status: string;
-		failureReason: string | null;
+const TEST_BETA_ACCESS_CODE = "2468";
+let sequence = 0;
+
+function registrationBody(overrides: Record<string, unknown> = {}) {
+	sequence += 1;
+	return {
+		betaAccessCode: TEST_BETA_ACCESS_CODE,
+		firstName: "Beta",
+		lastName: `Participant ${sequence}`,
+		email: `shared-registration-${sequence}@example.com`,
+		contactPhoneNumber: `+18005558${sequence.toString().padStart(3, "0")}`,
+		contactMethod: "email",
+		password: "shared-beta-password",
+		...overrides
 	};
 }
 
-interface AcceptedInvitationBody extends IssuedInvitationBody {
-	accepted: boolean;
-	credential: {
-		code: string;
-		portalPath: string;
-	};
+function registrationRequest(body: Record<string, unknown>): Request {
+	return new Request("http://example.com/portal/auth/register", {
+		method: "POST",
+		headers: { "content-type": "application/json" },
+		body: JSON.stringify(body)
+	});
 }
 
-describe("beta invitation through Protected-Line activation", () => {
-	let administrator: UserRecord;
-	let administratorToken: string;
+async function register(overrides: Record<string, unknown> = {}) {
+	return SELF.fetch(registrationRequest(registrationBody(overrides)));
+}
 
+describe("shared beta registration through Protected-Line activation", () => {
 	beforeAll(async () => {
 		await ensureTestSchema();
-		administrator = await createUser(env.nomorescamcalls_db, {
-			firstName: "Beta",
-			lastName: "Administrator",
-			email: "beta-flow-administrator@example.com",
-			contactPhoneNumber: "+18005558000",
-			contactMethod: "email",
-			passwordHash: await hashPassword("beta-flow-admin-password"),
-			role: "administrator"
-		});
-		const login = await loginBetaParticipant(
-			env.nomorescamcalls_db,
-			administrator.email ?? "",
-			"beta-flow-admin-password"
-		);
-		if (!login) {
-			throw new Error("Failed to authenticate beta invitation administrator");
-		}
-		administratorToken = login.sessionToken;
 	});
 
-	async function issueInvitation(input: Record<string, unknown>) {
-		return SELF.fetch("http://example.com/beta/invitations", {
-			method: "POST",
-			headers: {
-				"content-type": "application/json",
-				authorization: `Bearer ${administratorToken}`
-			},
-			body: JSON.stringify(input)
-		});
-	}
+	it("allows multiple accounts through the configured shared code without persisting or returning it", async () => {
+		for (let index = 0; index < 2; index += 1) {
+			const body = registrationBody();
+			const response = await SELF.fetch(registrationRequest(body));
+			expect(response.status).toBe(201);
+			const result = await response.json<{
+				registered: boolean;
+				token: string;
+				user: Record<string, unknown>;
+			}>();
 
-	async function respond(responseToken: string, response: string) {
-		return SELF.fetch("http://example.com/beta/invitations/respond", {
-			method: "POST",
-			headers: { "content-type": "application/json" },
-			body: JSON.stringify({ responseToken, response })
-		});
-	}
-
-	it("prefers only explicitly approved SMS and otherwise uses email without pretending delivery succeeded", async () => {
-		const smsResponse = await issueInvitation({
-			smsContactNumber: "+18005558001",
-			smsCapable: true,
-			email: "sms-fallback@example.com"
-		});
-		expect(smsResponse.status).toBe(201);
-		const smsBody = await smsResponse.json<IssuedInvitationBody>();
-		expect(smsBody.invitation).toMatchObject({
-			selectedChannel: "sms",
-			selectedDestination: "+18005558001",
-			status: "awaiting_response",
-			acceptedAt: null,
-			credentialIssuedAt: null
-		});
-		expect(smsBody.delivery).toMatchObject({
-			channel: "sms",
-			destination: "+18005558001",
-			status: "provider_unavailable"
-		});
-		expect(smsBody.delivery.failureReason).toContain("TELNYX_API_KEY");
-
-		const emailResponse = await issueInvitation({
-			smsContactNumber: "+18005558002",
-			smsCapable: false,
-			email: "email-invitation@example.com"
-		});
-		expect(emailResponse.status).toBe(201);
-		const emailBody = await emailResponse.json<IssuedInvitationBody>();
-		expect(emailBody.invitation).toMatchObject({
-			selectedChannel: "email",
-			selectedDestination: "email-invitation@example.com"
-		});
-		expect(emailBody.delivery.destination).not.toBe("+18005558002");
-
-		const issuedCodeCount = await env.nomorescamcalls_db
-			.prepare(`
-				SELECT COUNT(*) AS count
-				FROM beta_invite_codes
-				WHERE invitation_id IN (?, ?)
-			`)
-			.bind(smsBody.invitation.id, emailBody.invitation.id)
-			.first<{ count: number }>();
-		expect(issuedCodeCount?.count).toBe(0);
-	});
-
-	it("accepts Y or YES case-insensitively, rejects other responses, and issues only one credential", async () => {
-		for (const [index, affirmative] of ["Y", "YES", "y", "yes"].entries()) {
-			const issueResponse = await issueInvitation({
-				email: `affirmative-${index}@example.com`
+			expect(result.registered).toBe(true);
+			expect(result.token.length).toBeGreaterThan(20);
+			expect(result.user).toMatchObject({
+				firstName: "Beta",
+				email: body.email,
+				contactPhoneNumber: body.contactPhoneNumber,
+				role: "participant",
+				accountStatus: "active",
+				setupStatus: "onboarding_incomplete"
 			});
-			const issued = await issueResponse.json<IssuedInvitationBody>();
-			const acceptedResponse = await respond(
-				issued.invitation.responseToken,
-				affirmative
-			);
-			expect(acceptedResponse.status).toBe(200);
-			const accepted = await acceptedResponse.json<AcceptedInvitationBody>();
-			expect(accepted.accepted).toBe(true);
-			expect(accepted.credential.code).toBeTruthy();
-			expect(accepted.credential.portalPath).toContain(
-				`invite=${accepted.credential.code}`
-			);
-			expect(accepted.invitation.acceptedAt).toBeTruthy();
-			expect(accepted.invitation.credentialIssuedAt).toBeTruthy();
+			expect(JSON.stringify(result)).not.toContain(TEST_BETA_ACCESS_CODE);
 
-			const repeated = await respond(
-				issued.invitation.responseToken,
-				"YES"
-			);
-			const repeatedBody = await repeated.json<AcceptedInvitationBody>();
-			expect(repeatedBody.credential.code).toBe(accepted.credential.code);
-			expect((await env.nomorescamcalls_db
-				.prepare("SELECT COUNT(*) AS count FROM beta_invite_codes WHERE invitation_id = ?")
-				.bind(issued.invitation.id)
-				.first<{ count: number }>())?.count).toBe(1);
+			const stored = await env.nomorescamcalls_db
+				.prepare("SELECT * FROM users WHERE email = ?")
+				.bind(body.email)
+				.first<Record<string, unknown>>();
+			expect(stored?.password_hash).not.toBe(body.password);
+			expect(String(stored?.password_hash)).toMatch(/^pbkdf2_sha256\$/);
+			expect(JSON.stringify(stored)).not.toContain(TEST_BETA_ACCESS_CODE);
 		}
 
-		const nonAffirmativeIssue = await issueInvitation({
-			email: "not-affirmative@example.com"
-		});
-		const nonAffirmativeInvitation = await nonAffirmativeIssue
-			.json<IssuedInvitationBody>();
-		const nonAffirmativeResponse = await respond(
-			nonAffirmativeInvitation.invitation.responseToken,
-			"Maybe"
-		);
-		expect(await nonAffirmativeResponse.json()).toMatchObject({
-			accepted: false,
-			credential: null,
-			invitation: { status: "awaiting_response" }
-		});
-		expect((await env.nomorescamcalls_db
-			.prepare("SELECT COUNT(*) AS count FROM beta_invite_codes WHERE invitation_id = ?")
-			.bind(nonAffirmativeInvitation.invitation.id)
-			.first<{ count: number }>())?.count).toBe(0);
-
-		const nonexistent = await respond("nonexistent-response-token", "YES");
-		expect(nonexistent.status).toBe(404);
+		const retiredTables = await env.nomorescamcalls_db
+			.prepare(`
+				SELECT name
+				FROM sqlite_master
+				WHERE type = 'table'
+					AND name IN ('beta_invitations', 'beta_invite_codes')
+			`)
+			.all<{ name: string }>();
+		expect(retiredTables.results).toEqual([]);
 	});
 
-	it("binds registration to the accepted destination and redeems the credential once", async () => {
-		const issueResponse = await issueInvitation({
-			email: "bound-invitation@example.com"
+	it("rejects a wrong code without creating an account", async () => {
+		const email = `wrong-code-${sequence + 1}@example.com`;
+		const response = await register({
+			betaAccessCode: "1357",
+			email
 		});
-		const issued = await issueResponse.json<IssuedInvitationBody>();
-		const acceptedResponse = await respond(issued.invitation.responseToken, "YES");
-		const accepted = await acceptedResponse.json<AcceptedInvitationBody>();
-
-		const validation = await SELF.fetch(
-			"http://example.com/portal/invite-codes/validate",
-			{
-				method: "POST",
-				headers: { "content-type": "application/json" },
-				body: JSON.stringify({ invite: accepted.credential.code })
-			}
-		);
-		expect(validation.status).toBe(200);
-
-		const wrongOwner = await SELF.fetch("http://example.com/portal/auth/register", {
-			method: "POST",
-			headers: { "content-type": "application/json" },
-			body: JSON.stringify({
-				invite: accepted.credential.code,
-				firstName: "Wrong",
-				lastName: "Owner",
-				email: "wrong-owner@example.com",
-				contactPhoneNumber: "+18005558020",
-				contactMethod: "email",
-				password: "wrong-owner-password"
-			})
+		expect(response.status).toBe(403);
+		expect(await response.json()).toMatchObject({
+			error: "Beta access code is invalid",
+			code: "invalid_beta_access_code"
 		});
-		expect(wrongOwner.status).toBe(409);
+		expect(await env.nomorescamcalls_db
+			.prepare("SELECT id FROM users WHERE email = ?")
+			.bind(email)
+			.first()).toBeNull();
+	});
 
-		const registration = await SELF.fetch("http://example.com/portal/auth/register", {
-			method: "POST",
-			headers: { "content-type": "application/json" },
-			body: JSON.stringify({
-				invite: accepted.credential.code,
-				firstName: "Bound",
-				lastName: "Customer",
-				email: "bound-invitation@example.com",
-				contactPhoneNumber: "+18005558021",
-				contactMethod: "email",
-				password: "bound-customer-password"
-			})
-		});
+	it.each([undefined, "", "123", "12a4", "12345", " 2468 "])(
+		"fails closed when server configuration is %j",
+		async (configuredCode) => {
+			const response = await worker.fetch(
+				registrationRequest(registrationBody()),
+				{
+					...env,
+					BETA_ACCESS_CODE: configuredCode
+				} as Env
+			);
+			expect(response.status).toBe(503);
+			expect(await response.json()).toMatchObject({
+				error: "Beta registration is temporarily unavailable",
+				code: "beta_access_configuration_unavailable"
+			});
+		}
+	);
+
+	it("keeps agreement, protected-line provisioning, and forwarding independent of beta admission", async () => {
+		const registration = await register();
 		expect(registration.status).toBe(201);
-		const registrationBody = await registration.json<{
+		const registered = await registration.json<{
 			token: string;
-			user: { id: number; setupStatus: string };
+			user: { id: number };
 		}>();
-		expect(registrationBody.user.setupStatus).toBe("onboarding_incomplete");
 
-		const beforeAgreementLocation = await SELF.fetch(
+		const beforeAgreement = await SELF.fetch(
 			"http://example.com/portal/me/locations",
 			{
 				method: "POST",
-				headers: { authorization: `Bearer ${registrationBody.token}` }
+				headers: { authorization: `Bearer ${registered.token}` }
 			}
 		);
-		expect(beforeAgreementLocation.status).toBe(409);
+		expect(beforeAgreement.status).toBe(409);
 
 		const agreement = await SELF.fetch(
 			"http://example.com/portal/agreement/accept",
@@ -250,230 +139,73 @@ describe("beta invitation through Protected-Line activation", () => {
 				method: "POST",
 				headers: {
 					"content-type": "application/json",
-					authorization: `Bearer ${registrationBody.token}`
+					authorization: `Bearer ${registered.token}`
 				},
-				body: JSON.stringify({
-					version: CURRENT_BETA_AGREEMENT.version
-				})
+				body: JSON.stringify({ version: CURRENT_BETA_AGREEMENT.version })
 			}
 		);
 		expect(agreement.status).toBe(200);
 
-		const reused = await SELF.fetch("http://example.com/portal/auth/register", {
-			method: "POST",
-			headers: { "content-type": "application/json" },
-			body: JSON.stringify({
-				invite: accepted.credential.code,
-				firstName: "Second",
-				lastName: "Customer",
-				email: "bound-invitation@example.com",
-				contactPhoneNumber: "+18005558022",
-				contactMethod: "email",
-				password: "second-customer-password"
-			})
-		});
-		expect(reused.status).toBe(409);
-		expect(await env.nomorescamcalls_db
-			.prepare("SELECT status, redeemed_at FROM beta_invitations WHERE id = ?")
-			.bind(issued.invitation.id)
-			.first()).toMatchObject({
-			status: "redeemed",
-			redeemed_at: expect.any(String)
-		});
-	});
-
-	it("provisions resources without coverage and activates only the confirmed exact line", async () => {
-		const issueResponse = await issueInvitation({
-			smsContactNumber: "+18005558030",
-			smsCapable: true,
-			email: "multi-line-fallback@example.com"
-		});
-		const issued = await issueResponse.json<IssuedInvitationBody>();
-		const accepted = await (await respond(issued.invitation.responseToken, "Y"))
-			.json<AcceptedInvitationBody>();
-		const registration = await SELF.fetch("http://example.com/portal/auth/register", {
-			method: "POST",
-			headers: { "content-type": "application/json" },
-			body: JSON.stringify({
-				invite: accepted.credential.code,
-				firstName: "Multi",
-				lastName: "Line",
-				email: "multi-line-fallback@example.com",
-				contactPhoneNumber: "+18005558030",
-				contactMethod: "sms",
-				password: "multi-line-password"
-			})
-		});
-		const registered = await registration.json<{
-			token: string;
-			user: { id: number };
-		}>();
-		await SELF.fetch("http://example.com/portal/agreement/accept", {
-			method: "POST",
-			headers: {
-				"content-type": "application/json",
-				authorization: `Bearer ${registered.token}`
-			},
-			body: JSON.stringify({
-				version: CURRENT_BETA_AGREEMENT.version
-			})
-		});
-
-		const locations = [];
-		for (let index = 0; index < 2; index += 1) {
-			const response = await SELF.fetch("http://example.com/portal/me/locations", {
+		const locationResponse = await SELF.fetch(
+			"http://example.com/portal/me/locations",
+			{
 				method: "POST",
 				headers: { authorization: `Bearer ${registered.token}` }
-			});
-			locations.push((await response.json<{ location: { id: number } }>()).location);
-		}
+			}
+		);
+		const location = (await locationResponse.json<{
+			location: { id: number };
+		}>()).location;
 
-		const lines = [];
-		for (const [index, location] of locations.entries()) {
-			const response = await SELF.fetch(
-				`http://example.com/portal/me/locations/${location.id}/protected-lines`,
-				{
-					method: "POST",
-					headers: {
-						"content-type": "application/json",
-						authorization: `Bearer ${registered.token}`
-					},
-					body: JSON.stringify({
-						protectedPhoneNumber: `+1800555810${index}`,
-						callerFacingBusinessName: `Exact Phrase ${index + 1}`,
-						carrier: `Carrier ${index + 1}`
-					})
-				}
-			);
-			lines.push((await response.json<{ protectedLine: { id: number } }>()).protectedLine);
-		}
+		const protectedPhoneNumber = `+1800666${sequence.toString().padStart(4, "0")}`;
+		const lineResponse = await SELF.fetch(
+			`http://example.com/portal/me/locations/${location.id}/protected-lines`,
+			{
+				method: "POST",
+				headers: {
+					"content-type": "application/json",
+					authorization: `Bearer ${registered.token}`
+				},
+				body: JSON.stringify({
+					protectedPhoneNumber,
+					callerFacingBusinessName: "Shared Gate Plumbing",
+					carrier: "Synthetic Landline Carrier"
+				})
+			}
+		);
+		expect(lineResponse.status).toBe(201);
+		const line = (await lineResponse.json<{
+			protectedLine: { id: number; protectedPhoneNumber: string };
+		}>()).protectedLine;
 
-		for (let index = 0; index < 2; index += 1) {
-			await env.nomorescamcalls_db.prepare(`
+		await env.nomorescamcalls_db.batch([
+			env.nomorescamcalls_db.prepare(`
 				INSERT INTO screening_number_inventory (phone_number, status)
 				VALUES (?, 'available')
-			`).bind(`+1800555820${index}`).run();
-			await env.nomorescamcalls_db.prepare(`
+			`).bind(`+1800777${sequence.toString().padStart(4, "0")}`),
+			env.nomorescamcalls_db.prepare(`
 				INSERT INTO sip_credential_inventory (sip_username, status)
 				VALUES (?, 'available')
-			`).bind(`test_user_beta_flow_${index}`).run();
-		}
+			`).bind(`test_shared_gate_${sequence}`)
+		]);
 
-		const provisioningResults = [];
-		for (const line of lines) {
-			const response = await SELF.fetch(
-				`http://example.com/portal/me/protected-lines/${line.id}/provision`,
-				{
-					method: "POST",
-					headers: { authorization: `Bearer ${registered.token}` }
-				}
-			);
-			expect(response.status).toBe(200);
-			const body = await response.json<any>();
-			expect(JSON.stringify(body)).not.toContain("sipUsername");
-			expect(body.provisioning).toMatchObject({
-				provisioningStatus: "provisioned",
-				coverageStatus: "inactive",
-				protectedLine: {
-					forwardingStatus: "awaiting_confirmation",
-					coverageStatus: "inactive"
-				},
-				delivery: {
-					channel: "sms",
-					destination: "+18005558030",
-					status: "provider_unavailable"
-				}
-			});
-			expect(body.provisioning.forwardingInstructions.instructions)
-				.toContain(body.provisioning.protectedLine.protectedPhoneNumber);
-			expect(body.provisioning.forwardingInstructions.instructions)
-				.toContain(body.provisioning.protectedLine.screeningNumber);
-			provisioningResults.push(body.provisioning);
-		}
-		expect(provisioningResults[0].protectedLine.screeningNumber)
-			.not.toBe(provisioningResults[1].protectedLine.screeningNumber);
-		const provisionedResources = await env.nomorescamcalls_db
-			.prepare(`
-				SELECT id, screening_number, sip_username
-				FROM protected_lines
-				WHERE id IN (?, ?)
-				ORDER BY id ASC
-			`)
-			.bind(lines[0].id, lines[1].id)
-			.all<{
-				id: number;
-				screening_number: string;
-				sip_username: string;
-			}>();
-		expect(provisionedResources.results).toHaveLength(2);
-		expect(provisionedResources.results[0].screening_number)
-			.not.toBe(provisionedResources.results[1].screening_number);
-		expect(provisionedResources.results[0].sip_username)
-			.not.toBe(provisionedResources.results[1].sip_username);
-
-		const idempotent = await SELF.fetch(
-			`http://example.com/portal/me/protected-lines/${lines[0].id}/provision`,
+		const provisioning = await SELF.fetch(
+			`http://example.com/portal/me/protected-lines/${line.id}/provision`,
 			{
 				method: "POST",
 				headers: { authorization: `Bearer ${registered.token}` }
 			}
 		);
-		expect(await idempotent.json()).toMatchObject({
-			provisioning: {
-				provisioningStatus: "already_provisioned",
-				coverageStatus: "inactive"
+		expect(provisioning.status).toBe(200);
+		const provisioningBody = await provisioning.json<any>();
+		expect(provisioningBody.provisioning).toMatchObject({
+			coverageStatus: "inactive",
+			forwardingInstructions: { protectedPhoneNumber },
+			delivery: {
+				purpose: "forwarding_instructions",
+				status: "provider_unavailable"
 			}
 		});
-
-		const confirmation = await SELF.fetch(
-			`http://example.com/portal/me/protected-lines/${lines[0].id}/forwarding-confirm`,
-			{
-				method: "POST",
-				headers: { authorization: `Bearer ${registered.token}` }
-			}
-		);
-		expect(await confirmation.json()).toMatchObject({
-			forwardingConfirmed: true,
-			coverageActive: true,
-			protectedLine: {
-				id: lines[0].id,
-				forwardingStatus: "confirmed",
-				coverageStatus: "active",
-				activatedAt: expect.any(String)
-			}
-		});
-		expect(await env.nomorescamcalls_db
-			.prepare(`
-				SELECT forwarding_status, coverage_status
-				FROM protected_lines
-				WHERE id = ?
-			`)
-			.bind(lines[1].id)
-			.first()).toEqual({
-			forwarding_status: "awaiting_confirmation",
-			coverage_status: "inactive"
-		});
-	});
-
-	it("records provider failure rather than claiming successful delivery", async () => {
-		const result = await issueBetaInvitation(
-			env.nomorescamcalls_db,
-			administrator,
-			{ email: "provider-failure@example.com" },
-			{
-				provider: {
-					name: "test-failing-provider",
-					async send() {
-						throw new Error("Synthetic provider failure");
-					}
-				}
-			}
-		);
-		expect(result.delivery).toMatchObject({
-			status: "failed",
-			provider: "test-failing-provider",
-			failureReason: "Synthetic provider failure",
-			sentAt: null
-		});
+		expect(JSON.stringify(provisioningBody)).not.toContain(TEST_BETA_ACCESS_CODE);
 	});
 });

@@ -119,22 +119,6 @@ describe("user creation lifecycle", () => {
 			expect(customerOnlyResponse.status).toBe(403);
 		}
 
-		const invitationAuthorization = await SELF.fetch(
-			"http://example.com/beta/invitations",
-			{
-				method: "POST",
-				headers: {
-					"content-type": "application/json",
-					authorization: `Bearer ${login?.sessionToken}`
-				},
-				body: JSON.stringify({})
-			}
-		);
-		expect(invitationAuthorization.status).toBe(400);
-		expect(await invitationAuthorization.json()).toMatchObject({
-			code: "email_destination_required"
-		});
-
 		const agreementAcceptanceCount = await env.nomorescamcalls_db
 			.prepare(`
 				SELECT COUNT(*) AS count

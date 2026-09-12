@@ -79,6 +79,18 @@ function applyMigration0032(db) {
 	);
 }
 
+function applyMigration0033(db) {
+	db.exec(
+		readFileSync(
+			join(
+				migrationsDirectory,
+				"0033_retire_beta_invitation_architecture.sql"
+			),
+			"utf8"
+		)
+	);
+}
+
 function foreignKeyReferencesToUsers(db) {
 	const tables = db
 		.prepare(`
@@ -115,7 +127,7 @@ function foreignKeyReferencesToUsers(db) {
 
 test("the complete migration chain applies with clean foreign keys", () => {
 	const db = createDatabaseThrough(
-		"0032_remove_obsolete_beta_agreement_authority.sql"
+		"0033_retire_beta_invitation_architecture.sql"
 	);
 
 	assert.deepEqual(db.prepare("PRAGMA foreign_key_check").all(), []);
@@ -151,24 +163,6 @@ test("the complete migration chain applies with clean foreign keys", () => {
 			onDelete: "RESTRICT"
 		},
 		{
-			table: "beta_invitations",
-			from: "created_by_user_id",
-			to: "id",
-			onDelete: "RESTRICT"
-		},
-		{
-			table: "beta_invite_codes",
-			from: "created_by_user_id",
-			to: "id",
-			onDelete: "SET NULL"
-		},
-		{
-			table: "beta_invite_codes",
-			from: "redeemed_by_user_id",
-			to: "id",
-			onDelete: "SET NULL"
-		},
-		{
 			table: "customer_communication_deliveries",
 			from: "user_id",
 			to: "id",
@@ -187,6 +181,169 @@ test("the complete migration chain applies with clean foreign keys", () => {
 			onDelete: "CASCADE"
 		}
 	]);
+
+	db.close();
+});
+
+test("0033 removes invitation state and preserves forwarding delivery history", () => {
+	const db = createDatabaseThrough(
+		"0032_remove_obsolete_beta_agreement_authority.sql"
+	);
+
+	db.exec(`
+		INSERT INTO users (
+			id,
+			phone_number,
+			contact_phone_number,
+			email,
+			role
+		)
+		VALUES
+			(92, '+18005550092', '+18005550092', 'admin-92@example.com', 'administrator'),
+			(93, '+18005550093', '+18005550093', 'customer-93@example.com', 'participant');
+
+		INSERT INTO account_locations (id, user_id)
+		VALUES (930, 93);
+
+		INSERT INTO protected_lines (
+			id,
+			user_id,
+			location_id,
+			protected_phone_number,
+			caller_facing_business_name
+		)
+		VALUES (931, 93, 930, '+18005550931', 'Migration Test Line');
+
+		INSERT INTO beta_invitations (
+			id,
+			response_token,
+			email_contact,
+			selected_channel,
+			selected_destination,
+			created_by_user_id,
+			issued_at,
+			awaiting_response_at
+		)
+		VALUES (
+			940,
+			'synthetic-response-token',
+			'customer-93@example.com',
+			'email',
+			'customer-93@example.com',
+			92,
+			'2026-08-01T00:00:00.000Z',
+			'2026-08-01T00:00:00.000Z'
+		);
+
+		INSERT INTO beta_invite_codes (
+			code,
+			invitation_id,
+			created_by_user_id
+		)
+		VALUES ('SYNTHETIC-RETIRED-CODE', 940, 92);
+
+		INSERT INTO customer_communication_deliveries (
+			id,
+			invitation_id,
+			purpose,
+			channel,
+			destination,
+			message_body,
+			status,
+			created_at,
+			updated_at
+		)
+		VALUES (
+			950,
+			940,
+			'beta_invitation',
+			'email',
+			'customer-93@example.com',
+			'Synthetic retired message',
+			'provider_unavailable',
+			'2026-08-01T00:00:00.000Z',
+			'2026-08-01T00:00:00.000Z'
+		);
+
+		INSERT INTO customer_communication_deliveries (
+			id,
+			user_id,
+			protected_line_id,
+			purpose,
+			channel,
+			destination,
+			message_body,
+			status,
+			provider,
+			provider_message_id,
+			created_at,
+			updated_at
+		)
+		VALUES (
+			951,
+			93,
+			931,
+			'forwarding_instructions',
+			'sms',
+			'+18005550093',
+			'Synthetic exact-line instructions',
+			'sent',
+			'telnyx',
+			'synthetic-provider-id',
+			'2026-08-01T00:01:00.000Z',
+			'2026-08-01T00:01:00.000Z'
+		);
+
+		INSERT INTO beta_agreement_acceptances (
+			user_id,
+			agreement_version,
+			accepted_at
+		)
+		VALUES (93, 'v1', '2026-08-01T00:02:00.000Z');
+	`);
+
+	applyMigration0033(db);
+
+	const remainingTables = db.prepare(`
+		SELECT name
+		FROM sqlite_master
+		WHERE type = 'table'
+			AND name IN ('beta_invitations', 'beta_invite_codes')
+	`).all();
+	assert.deepEqual(remainingTables, []);
+	assert.equal(
+		db.prepare("SELECT COUNT(*) AS count FROM customer_communication_deliveries").get().count,
+		1
+	);
+	assert.deepEqual(
+		{ ...db.prepare(`
+			SELECT
+				user_id,
+				protected_line_id,
+				purpose,
+				provider_message_id
+			FROM customer_communication_deliveries
+		`).get() },
+		{
+			user_id: 93,
+			protected_line_id: 931,
+			purpose: "forwarding_instructions",
+			provider_message_id: "synthetic-provider-id"
+		}
+	);
+	assert.equal(
+		db.prepare("SELECT COUNT(*) AS count FROM users WHERE id = 93").get().count,
+		1
+	);
+	assert.equal(
+		db.prepare("SELECT COUNT(*) AS count FROM protected_lines WHERE id = 931").get().count,
+		1
+	);
+	assert.equal(
+		db.prepare("SELECT COUNT(*) AS count FROM beta_agreement_acceptances WHERE user_id = 93").get().count,
+		1
+	);
+	assert.deepEqual(db.prepare("PRAGMA foreign_key_check").all(), []);
 
 	db.close();
 });
@@ -273,8 +430,6 @@ test("0031 preserves existing rows without inferring SMS capability or forwardin
 			'active'
 		);
 
-		INSERT INTO beta_invite_codes (code, status)
-		VALUES ('EXISTING-UNMAPPED-CODE', 'active');
 	`);
 
 	applyMigration0031(db);
@@ -303,19 +458,6 @@ test("0031 preserves existing rows without inferring SMS capability or forwardin
 			coverage_status: "active"
 		}
 	);
-	assert.equal(
-		db.prepare(`
-			SELECT invitation_id
-			FROM beta_invite_codes
-			WHERE code = 'EXISTING-UNMAPPED-CODE'
-		`).get().invitation_id,
-		null
-	);
-	assert.equal(
-		db.prepare("SELECT COUNT(*) AS count FROM beta_invitations").get().count,
-		0
-	);
-
 	db.close();
 });
 
@@ -547,13 +689,6 @@ test("0029 preserves production-like users, child rows, and inventory ownership"
 		)
 		VALUES (600, 7, 'synthetic-caller-hash', 'divert', 60, 'test');
 
-		INSERT INTO beta_invite_codes (
-			code,
-			created_by_user_id,
-			redeemed_by_user_id
-		)
-		VALUES ('MIGRATION-REFERENCE', 6, 7);
-
 		INSERT INTO portal_sessions (
 			user_id,
 			token_hash,
@@ -633,15 +768,6 @@ test("0029 preserves production-like users, child rows, and inventory ownership"
 		usersBefore
 	);
 	assert.deepEqual(db.prepare("PRAGMA foreign_key_check").all(), []);
-	assert.equal(
-		db.prepare(`
-			SELECT COUNT(*) AS count
-			FROM beta_invite_codes
-			WHERE created_by_user_id = 6
-				AND redeemed_by_user_id = 7
-		`).get().count,
-		1
-	);
 	assert.equal(
 		db.prepare(`
 			SELECT COUNT(*) AS count

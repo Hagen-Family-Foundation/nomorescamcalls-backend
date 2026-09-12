@@ -11,7 +11,7 @@ interface __BaseEnv_Env {
 	TELNYX_API_KEY?: string;
 	TELNYX_MESSAGING_PROFILE_ID?: string;
 	TELNYX_MESSAGING_FROM_NUMBER?: string;
-	PORTAL_ORIGIN?: string;
+	BETA_ACCESS_CODE?: string;
 	OPENAI_API_KEY?: string;
 	OPENAI_CALLER_RESPONSE_MODEL?: string;
 	OPENAI_API_BASE_URL?: string;

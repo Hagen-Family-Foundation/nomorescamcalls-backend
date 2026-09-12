@@ -4,7 +4,7 @@
 
 The beta portal provides controlled access to the NoMoreScamCalls beta program.
 
-It must allow invited beta participants to create an account, provide required information, accept the beta agreement, complete service setup, and view basic call activity.
+It must allow personally recruited beta participants to create an account, provide required information, accept the beta agreement, complete service setup, and view basic call activity.
 
 It must also provide an administrative dashboard for monitoring every beta account and the overall performance of the service.
 
@@ -12,31 +12,22 @@ It must also provide an administrative dashboard for monitoring every beta accou
 
 ## Beta Access
 
-Each beta participant must receive an invitation bound to an explicit customer
-contact destination. An explicitly supplied SMS-capable destination is
-preferred. Email remains the provider-neutral fallback channel, but this phase
-does not provide live email delivery. SMS capability must not be
-inferred from an account contact phone, Protected Line, carrier, or number
-format. The invitation waits for a simple case-insensitive `Y` or `YES`
-response before a unique beta access code and credential-bearing portal link
-are issued.
+Each beta participant receives the private registration link and the shared
+four-digit beta access code. The same code is used by all personally recruited
+participants. The backend validates it from the server-only
+`BETA_ACCESS_CODE` configuration during registration. The code is not stored
+on the account or returned by the API.
 
-The live SMS path uses Telnyx for the initial invitation, the full
-credential-bearing portal URL, and exact-line forwarding instructions. An
-inbound response is correlated from its actual SMS sender plus the configured
-Telnyx receiving number and Messaging Profile, without accepting an arbitrary
-invitation identifier from the message. Configuration is supplied through
+The live SMS path is not part of beta admission. Telnyx outbound SMS remains
+available for exact-line forwarding instructions through
 `TELNYX_API_KEY`, `TELNYX_API_BASE_URL`, `TELNYX_LIVE_EXECUTION`,
-`TELNYX_MESSAGING_PROFILE_ID`, `TELNYX_MESSAGING_FROM_NUMBER`, and
-`PORTAL_ORIGIN`; production values are not stored in source.
+`TELNYX_MESSAGING_PROFILE_ID`, and `TELNYX_MESSAGING_FROM_NUMBER`.
 
 The portal must:
 
-* Require a valid beta access code before account creation.
-* Prevent the same beta access code from being reused.
-* Associate the beta access code with the created account.
-* Validate the credential carried by the portal link before registration.
-* Bind registration to the accepted invitation destination.
+* Require the valid shared beta access code during account creation.
+* Fail closed when the server code is missing or invalid.
+* Avoid persisting or returning the access code.
 * Allow the beta participant to create login credentials.
 * Allow the beta participant to log in and return to the portal.
 * Allow an administrator to activate, suspend, or close the beta account.
@@ -50,8 +41,7 @@ The portal must collect:
 * First name.
 * Last name.
 * Email address.
-* Telephone number being protected.
-* Mobile carrier.
+* Account contact phone number.
 * Preferred contact method.
 * Beta access code.
 * Date the account was created.
@@ -115,8 +105,8 @@ resource assignment makes the exact line provisioned and forwarding-pending,
 but coverage remains inactive. Coverage becomes active only after the customer
 confirms forwarding for that exact line. Sibling lines are unaffected.
 
-Invitation, suspension, and closure remain enrollment/account context rather
-than a parallel provisioning workflow. Forwarding guidance exposes the
+Suspension and closure remain account context rather than a parallel
+provisioning workflow. Forwarding guidance exposes the
 line-specific screening number but never SIP credentials. Delivery uses the
 explicit SMS destination when available and email otherwise; provider absence
 or failure must not be presented as successful delivery. In the present live
@@ -164,7 +154,6 @@ For each beta account, it must display:
 * Account contact information and onboarding status.
 * Each Location and its Protected Lines.
 * Per-line protected number, assigned screening number, carrier, provisioning state, and coverage state.
-* Beta access code.
 * Account status.
 * Setup status.
 * Activation date.

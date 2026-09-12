@@ -100,28 +100,11 @@ that transition requires a separately approved explicit mapping.
 
 ## New Portal Tables
 
-### beta_invitations
-
-Purpose:
-
-- Bind one beta invitation to an explicit SMS or email destination.
-- Preserve issuance, response, acceptance, credential issuance, redemption,
-  expiration, cancellation, and audit timestamps.
-- Ensure repeated affirmative responses reuse the one issued credential.
-
-### beta_invite_codes
-
-Purpose:
-
-- Control access to beta registration.
-- Record code status, expiration, and use.
-- Link the one-time code to its accepted parent invitation.
-
 ### customer_communication_deliveries
 
 Purpose:
 
-- Persist invitation, onboarding-link, and forwarding-instruction attempts.
+- Persist forwarding-instruction attempts.
 - Preserve exact channel, destination, payload, provider state, and timestamps.
 - Represent provider absence and delivery failure without claiming success.
 - Preserve the Telnyx message identifier after the Messaging API accepts an
@@ -129,6 +112,9 @@ Purpose:
   provider-unavailable.
 - Keep email delivery provider-neutral and unavailable until a separate live
   provider is explicitly approved.
+
+The shared beta admission code is server configuration only. It has no table,
+row, issuance, redemption, creator, or customer relationship.
 
 ### portal_sessions
 

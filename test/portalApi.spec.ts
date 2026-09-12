@@ -8,106 +8,14 @@ describe('subscriber portal API', () => {
 		await ensureTestSchema();
 	});
 
-	it('completes invite, registration, session, agreement, and logout', async () => {
-		const inviteCode = 'PORTAL-INTEGRATION-ONE';
-		await env.nomorescamcalls_db.prepare(`
-			INSERT OR IGNORE INTO users (
-				phone_number,
-				email,
-				role,
-				account_status,
-				setup_status,
-				status,
-				coverage_status
-			)
-			VALUES (
-				'+18005559980',
-				'portal-invite-admin@example.com',
-				'administrator',
-				'active',
-				'onboarding_complete',
-				'active',
-				'inactive'
-			)
-		`).run();
-
-		await env.nomorescamcalls_db.batch([
-			env.nomorescamcalls_db.prepare(`
-				INSERT INTO beta_invitations (
-					response_token,
-					sms_capable,
-					email_contact,
-					selected_channel,
-					selected_destination,
-					status,
-					created_by_user_id,
-					issued_at,
-					awaiting_response_at,
-					response_received_at,
-					accepted_at,
-					credential_issued_at
-				)
-				SELECT
-					'portal-integration-response-token',
-					0,
-					'portal.integration@example.com',
-					'email',
-					'portal.integration@example.com',
-					'credential_issued',
-					id,
-					CURRENT_TIMESTAMP,
-					CURRENT_TIMESTAMP,
-					CURRENT_TIMESTAMP,
-					CURRENT_TIMESTAMP,
-					CURRENT_TIMESTAMP
-				FROM users
-				WHERE role IN ('admin', 'administrator')
-				LIMIT 1
-			`),
-			env.nomorescamcalls_db.prepare(`
-				INSERT INTO beta_invite_codes (
-					code,
-					status,
-					max_uses,
-					use_count,
-					invitation_id
-				)
-				SELECT ?, 'active', 1, 0, id
-				FROM beta_invitations
-				WHERE response_token = 'portal-integration-response-token'
-				ON CONFLICT(code) DO UPDATE SET
-					status = 'active',
-					max_uses = 1,
-					use_count = 0,
-					expires_at = NULL,
-					redeemed_by_user_id = NULL,
-					invitation_id = excluded.invitation_id
-			`).bind(inviteCode)
-		]);
-
-		const validateResponse = await SELF.fetch('http://example.com/portal/invite-codes/validate', {
-			method: 'POST',
-			headers: {
-				'content-type': 'application/json',
-			},
-			body: JSON.stringify({
-				code: inviteCode,
-			}),
-		});
-
-		expect(validateResponse.status).toBe(200);
-		expect(await validateResponse.json()).toMatchObject({
-			valid: true,
-			code: inviteCode,
-		});
-
+	it('completes registration, session, agreement, and logout', async () => {
 		const registerResponse = await SELF.fetch('http://example.com/portal/auth/register', {
 			method: 'POST',
 			headers: {
 				'content-type': 'application/json',
 			},
 			body: JSON.stringify({
-				code: inviteCode,
+				betaAccessCode: '2468',
 				firstName: 'Portal',
 				lastName: 'Participant',
 				email: 'portal.integration@example.com',
@@ -400,24 +308,6 @@ describe('subscriber portal API', () => {
 		});
 
 		expect(rejectedSession.status).toBe(401);
-	});
-
-	it('rejects an unavailable invitation code', async () => {
-		const response = await SELF.fetch('http://example.com/portal/invite-codes/validate', {
-			method: 'POST',
-			headers: {
-				'content-type': 'application/json',
-			},
-			body: JSON.stringify({
-				code: 'PORTAL-NOT-AVAILABLE',
-			}),
-		});
-
-		expect(response.status).toBe(404);
-
-		expect(await response.json()).toMatchObject({
-			valid: false,
-		});
 	});
 
 	it('answers portal browser preflight requests', async () => {

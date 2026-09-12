@@ -1,10 +1,7 @@
 import type { UserRecord } from "./users";
 
 export type CustomerCommunicationChannel = "sms" | "email";
-export type CustomerCommunicationPurpose =
-	| "beta_invitation"
-	| "onboarding_credential"
-	| "forwarding_instructions";
+export type CustomerCommunicationPurpose = "forwarding_instructions";
 export type CustomerCommunicationStatus =
 	| "provider_unavailable"
 	| "pending"
@@ -30,9 +27,8 @@ export interface CustomerCommunicationProvider {
 export interface CustomerCommunicationRecord
 	extends CustomerCommunicationMessage {
 	id: number;
-	invitationId: number | null;
-	userId: number | null;
-	protectedLineId: number | null;
+	userId: number;
+	protectedLineId: number;
 	purpose: CustomerCommunicationPurpose;
 	status: CustomerCommunicationStatus;
 	provider: string | null;
@@ -45,9 +41,8 @@ export interface CustomerCommunicationRecord
 
 interface CustomerCommunicationRow {
 	id: number;
-	invitation_id: number | null;
-	user_id: number | null;
-	protected_line_id: number | null;
+	user_id: number;
+	protected_line_id: number;
 	purpose: CustomerCommunicationPurpose;
 	channel: CustomerCommunicationChannel;
 	destination: string;
@@ -67,7 +62,6 @@ function mapCommunicationRow(
 ): CustomerCommunicationRecord {
 	return {
 		id: row.id,
-		invitationId: row.invitation_id,
 		userId: row.user_id,
 		protectedLineId: row.protected_line_id,
 		purpose: row.purpose,
@@ -87,7 +81,6 @@ function mapCommunicationRow(
 
 const COMMUNICATION_COLUMNS = `
 	id,
-	invitation_id,
 	user_id,
 	protected_line_id,
 	purpose,
@@ -130,30 +123,20 @@ export function selectAccountCommunicationDestination(
 export async function findLatestCustomerCommunication(
 	db: D1Database,
 	input: {
-		invitationId?: number;
-		protectedLineId?: number;
+		protectedLineId: number;
 		purpose: CustomerCommunicationPurpose;
 	}
 ): Promise<CustomerCommunicationRecord | null> {
-	const targetColumn = input.invitationId
-		? "invitation_id"
-		: "protected_line_id";
-	const targetId = input.invitationId ?? input.protectedLineId;
-
-	if (!targetId) {
-		return null;
-	}
-
 	const row = await db
 		.prepare(`
 			SELECT ${COMMUNICATION_COLUMNS}
 			FROM customer_communication_deliveries
-			WHERE ${targetColumn} = ?
+			WHERE protected_line_id = ?
 				AND purpose = ?
 			ORDER BY id DESC
 			LIMIT 1
 		`)
-		.bind(targetId, input.purpose)
+		.bind(input.protectedLineId, input.purpose)
 		.first<CustomerCommunicationRow>();
 
 	return row ? mapCommunicationRow(row) : null;
@@ -162,9 +145,8 @@ export async function findLatestCustomerCommunication(
 export async function deliverCustomerCommunication(
 	db: D1Database,
 	input: {
-		invitationId?: number;
-		userId?: number;
-		protectedLineId?: number;
+		userId: number;
+		protectedLineId: number;
 		purpose: CustomerCommunicationPurpose;
 		message: CustomerCommunicationMessage;
 	},
@@ -190,7 +172,6 @@ export async function deliverCustomerCommunication(
 	const inserted = await db
 		.prepare(`
 			INSERT INTO customer_communication_deliveries (
-				invitation_id,
 				user_id,
 				protected_line_id,
 				purpose,
@@ -205,12 +186,11 @@ export async function deliverCustomerCommunication(
 				created_at,
 				updated_at
 			)
-			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 		`)
 		.bind(
-			input.invitationId ?? null,
-			input.userId ?? null,
-			input.protectedLineId ?? null,
+			input.userId,
+			input.protectedLineId,
 			input.purpose,
 			input.message.channel,
 			input.message.destination,
