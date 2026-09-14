@@ -16,6 +16,11 @@ export interface TelnyxSpeechRequest {
 	clientState?: string;
 }
 
+export interface TelnyxTransferIdentity {
+	originalCaller: string;
+	diversionSystemNumber: string;
+}
+
 export interface TelnyxRequestMetadata {
 	liveApiReady: boolean;
 	command: TelnyxPlannedCommand["command"];
@@ -39,7 +44,8 @@ export function buildTelnyxRequest(
 	command: TelnyxPlannedCommand,
 	speechRequest: TelnyxSpeechRequest | null,
 	approvedDestination:
-		ApprovedCallDestination | null = null
+		ApprovedCallDestination | null = null,
+	transferIdentity: TelnyxTransferIdentity | null = null
 ): SimulatedTelnyxRequest | null {
 	if (command.command === "noop") {
 		return null;
@@ -165,10 +171,12 @@ export function buildTelnyxRequest(
 				to:
 					`sip:${telnyxAppDestination.sipUsername}@sip.telnyx.com`,
 				from:
-					approvedDestination
-						?.systemNumber ?? "",
-				from_display_name:
-					"NoMoreScamCalls",
+					transferIdentity?.originalCaller
+						?? approvedDestination?.systemNumber
+						?? "",
+				...(transferIdentity
+					? { diversion: transferIdentity.diversionSystemNumber }
+					: { from_display_name: "NoMoreScamCalls" }),
 				timeout_secs: 60,
 				media_encryption: "SRTP"
 			},

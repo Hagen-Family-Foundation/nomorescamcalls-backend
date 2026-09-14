@@ -110,7 +110,7 @@ export async function verifySystemNumberWithProvider(
 	config: SystemNumberProviderConfig
 ): Promise<SystemNumberVerificationResult> {
 	if (!config.voiceApplicationId) {
-		throw new Error("TELNYX_VOICE_APPLICATION_ID is required for System Number verification");
+		throw new Error("TELNYX_CALL_CONTROL_APPLICATION_ID is required for System Number verification");
 	}
 	if (!record.providerNumberId) {
 		const result = { verified: false, reasons: ["provider_number_id_missing"] };
@@ -228,7 +228,7 @@ async function advanceOrdering(
 	config: SystemNumberProviderConfig
 ): Promise<SystemNumberMaintenanceResult> {
 	if (!config.voiceApplicationId) {
-		throw new Error("TELNYX_VOICE_APPLICATION_ID is required for replenishment");
+		throw new Error("TELNYX_CALL_CONTROL_APPLICATION_ID is required for replenishment");
 	}
 	const claimed = await claimSystemNumberReplenishmentStage(
 		db,

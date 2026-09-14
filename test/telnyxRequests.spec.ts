@@ -84,6 +84,30 @@ describe("Telnyx request builder", () => {
 		).toBe(true);
 	});
 
+	it("supports permanent caller identity without cutting over legacy routing", () => {
+		const request = buildTelnyxRequest(
+			command("transfer"),
+			null,
+			{
+				destinationType: "app",
+				destination: "gencred-device",
+				systemNumber: "+19135550000",
+				reason: "permanent device destination"
+			},
+			{
+				originalCaller: "+18165550123",
+				diversionSystemNumber: "+19135550000"
+			}
+		);
+
+		expect(request?.body).toMatchObject({
+			to: "sip:gencred-device@sip.telnyx.com",
+			from: "+18165550123",
+			diversion: "+19135550000"
+		});
+		expect(request?.body).not.toHaveProperty("from_display_name");
+	});
+
 	it("builds a hangup request", () => {
 		const request =
 			buildTelnyxRequest(

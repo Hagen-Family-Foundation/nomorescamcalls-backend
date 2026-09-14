@@ -12,7 +12,7 @@ const CLIENT_STATE_TYPE = "nmsc_post_activation_confirmation";
 
 export interface PostActivationConfirmationConfig extends TelnyxHttpClientConfig {
 	liveExecution?: string;
-	connectionId?: string;
+	callControlApplicationId?: string;
 }
 
 export interface PostActivationConfirmationResult {
@@ -89,8 +89,8 @@ function unavailableReason(config: PostActivationConfirmationConfig): string | n
 	if (!config.apiKey?.trim()) {
 		return "TELNYX_API_KEY is required for the activation confirmation call.";
 	}
-	if (!config.connectionId?.trim()) {
-		return "TELNYX_CONNECTION_ID is required for the activation confirmation call.";
+	if (!config.callControlApplicationId?.trim()) {
+		return "TELNYX_CALL_CONTROL_APPLICATION_ID is required for the activation confirmation call.";
 	}
 	return null;
 }
@@ -202,7 +202,7 @@ export async function initiatePostActivationConfirmation(
 	try {
 		const clientState = confirmationClientState(protectedLineId);
 		const response = await postTelnyxJson(config, "/calls", {
-			connection_id: config.connectionId?.trim(),
+			connection_id: config.callControlApplicationId?.trim(),
 			to: destination,
 			from: line.systemNumber,
 			from_display_name: "NoMoreScamCalls",

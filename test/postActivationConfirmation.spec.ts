@@ -25,7 +25,7 @@ const TELNYX_CONFIG: PostActivationConfirmationConfig = {
 	apiKey: "synthetic-telnyx-key",
 	baseUrl: "https://api.telnyx.test/v2",
 	liveExecution: "true",
-	connectionId: "synthetic-call-control-connection"
+	callControlApplicationId: "synthetic-call-control-connection"
 };
 
 let sequence = 0;
@@ -91,7 +91,7 @@ function dispatchWebhook(payload: unknown): Promise<Response> {
 			TELNYX_API_KEY: TELNYX_CONFIG.apiKey,
 			TELNYX_API_BASE_URL: TELNYX_CONFIG.baseUrl,
 			TELNYX_LIVE_EXECUTION: "true",
-			TELNYX_CONNECTION_ID: TELNYX_CONFIG.connectionId
+			TELNYX_CALL_CONTROL_APPLICATION_ID: TELNYX_CONFIG.callControlApplicationId
 		} as Env
 	);
 }
@@ -134,7 +134,7 @@ describe("post-activation onboarding confirmation", () => {
 		);
 		const dialBody = telnyxBody(telnyxFetch, 0);
 		expect(dialBody).toMatchObject({
-			connection_id: TELNYX_CONFIG.connectionId,
+			connection_id: TELNYX_CONFIG.callControlApplicationId,
 			to: fixture.contactPhoneNumber,
 			from: fixture.systemNumber,
 			from_display_name: "NoMoreScamCalls"

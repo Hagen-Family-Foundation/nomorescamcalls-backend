@@ -54,11 +54,11 @@ export async function getTelnyxJson(
 export async function postTelnyxJson(
 	config: TelnyxHttpClientConfig,
 	endpoint: string,
-	body: Record<string, unknown>
+	body?: Record<string, unknown>
 ): Promise<TelnyxHttpJsonResult> {
 	return requestTelnyxJson(config, endpoint, {
 		method: "POST",
-		body: JSON.stringify(body)
+		body: body === undefined ? undefined : JSON.stringify(body)
 	});
 }
 
@@ -71,4 +71,11 @@ export async function patchTelnyxJson(
 		method: "PATCH",
 		body: JSON.stringify(body)
 	});
+}
+
+export async function deleteTelnyxJson(
+	config: TelnyxHttpClientConfig,
+	endpoint: string
+): Promise<TelnyxHttpJsonResult> {
+	return requestTelnyxJson(config, endpoint, { method: "DELETE" });
 }

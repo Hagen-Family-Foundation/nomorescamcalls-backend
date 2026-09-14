@@ -5,8 +5,8 @@ interface __BaseEnv_Env {
 	nomorescamcalls_db: D1Database;
 	TELNYX_LIVE_EXECUTION: "true";
 	TELNYX_API_BASE_URL: "https://api.telnyx.com/v2";
-	TELNYX_VOICE_APPLICATION_ID: "2974360803492235067";
-	TELNYX_CONNECTION_ID: "2974341569219396688";
+	TELNYX_CALL_CONTROL_APPLICATION_ID: "2974360803492235067";
+	TELNYX_SUBSCRIBER_CREDENTIAL_CONNECTION_ID: "2974341569219396688";
 	TELNYX_WEBHOOK_SIGNING_SECRET?: string;
 	TELNYX_API_KEY?: string;
 	TELNYX_MESSAGING_PROFILE_ID?: string;
@@ -31,7 +31,7 @@ type StringifyValues<EnvType extends Record<string, unknown>> = {
 	[Binding in keyof EnvType]: EnvType[Binding] extends string ? EnvType[Binding] : string;
 };
 declare namespace NodeJS {
-	interface ProcessEnv extends StringifyValues<Pick<Cloudflare.Env, "TELNYX_LIVE_EXECUTION" | "TELNYX_API_BASE_URL" | "TELNYX_VOICE_APPLICATION_ID" | "TELNYX_CONNECTION_ID">> {}
+	interface ProcessEnv extends StringifyValues<Pick<Cloudflare.Env, "TELNYX_LIVE_EXECUTION" | "TELNYX_API_BASE_URL" | "TELNYX_CALL_CONTROL_APPLICATION_ID" | "TELNYX_SUBSCRIBER_CREDENTIAL_CONNECTION_ID">> {}
 }
 
 // Begin runtime types
