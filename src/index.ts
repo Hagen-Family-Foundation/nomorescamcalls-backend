@@ -74,6 +74,17 @@ import {
 	advanceSubscriberLifecycle
 } from "./services/subscriberLifecycle";
 import {
+	activateDeviceRegistration,
+	authorizeDeviceRegistration,
+	issueDeviceTelnyxToken,
+	listSelectablePhoneModels,
+	revokeDeviceRegistration,
+	SubscriberDeliveryError
+} from "./services/subscriberDelivery";
+import type {
+	TelnyxSubscriberCredentialConfig
+} from "./services/telnyxTelephonyCredentialsClient";
+import {
 	addSearchToRecipeCatalog,
 	listRecipeCatalog,
 	listSearchHistory,
@@ -89,7 +100,7 @@ export {
 const PORTAL_CORS_HEADERS = {
 	"Access-Control-Allow-Origin": "*",
 	"Access-Control-Allow-Headers":
-		"Authorization, Content-Type, Accept",
+		"Authorization, Content-Type, Accept, X-NMSC-Device-Authenticator",
 	"Access-Control-Allow-Methods":
 		"GET, POST, PATCH, OPTIONS"
 };
@@ -138,7 +149,7 @@ function postActivationConfirmationConfig(
 		apiKey: env.TELNYX_API_KEY,
 		baseUrl: env.TELNYX_API_BASE_URL,
 		liveExecution: env.TELNYX_LIVE_EXECUTION,
-		connectionId: env.TELNYX_CONNECTION_ID
+		callControlApplicationId: env.TELNYX_CALL_CONTROL_APPLICATION_ID
 	};
 }
 
@@ -146,7 +157,18 @@ function systemNumberProviderConfig(env: Env): SystemNumberProviderConfig {
 	return {
 		apiKey: env.TELNYX_API_KEY,
 		baseUrl: env.TELNYX_API_BASE_URL,
-		voiceApplicationId: env.TELNYX_VOICE_APPLICATION_ID
+		voiceApplicationId: env.TELNYX_CALL_CONTROL_APPLICATION_ID
+	};
+}
+
+function subscriberCredentialConfig(
+	env: Env
+): TelnyxSubscriberCredentialConfig {
+	return {
+		apiKey: env.TELNYX_API_KEY,
+		baseUrl: env.TELNYX_API_BASE_URL,
+		credentialConnectionId:
+			env.TELNYX_SUBSCRIBER_CREDENTIAL_CONNECTION_ID
 	};
 }
 
@@ -376,7 +398,7 @@ export default {
 						apiKey: env.TELNYX_API_KEY,
 						baseUrl: env.TELNYX_API_BASE_URL
 					},
-					connectionId: env.TELNYX_CONNECTION_ID
+					connectionId: env.TELNYX_SUBSCRIBER_CREDENTIAL_CONNECTION_ID
 				}
 			);
 
@@ -559,6 +581,164 @@ export default {
 		}
 
 		// Authenticated customer Location creation.
+		if (request.method === "GET" && url.pathname === "/portal/phone-models") {
+			return portalJson({
+				phoneModels: await listSelectablePhoneModels(env.nomorescamcalls_db)
+			});
+		}
+
+		const portalDeviceRegistrationCreateMatch = url.pathname.match(
+			/^\/portal\/me\/protected-lines\/(\d+)\/device-registrations$/
+		);
+		if (request.method === "POST" && portalDeviceRegistrationCreateMatch) {
+			const authorization = await authorizeBetaCustomerPortalSession(
+				env.nomorescamcalls_db,
+				getBearerToken(request)
+			);
+			if (!authorization.authorized) {
+				return portalJson({
+					error: authorization.failure === "forbidden"
+						? "Beta customer role required"
+						: "Valid portal session required"
+				}, authorization.failure === "forbidden" ? 403 : 401);
+			}
+			try {
+				const body = await request.json() as { phoneModelId?: string };
+				const authorized = await authorizeDeviceRegistration(
+					env.nomorescamcalls_db,
+					authorization.session.user.id,
+					Number(portalDeviceRegistrationCreateMatch[1]),
+					body.phoneModelId?.trim() ?? "",
+					subscriberCredentialConfig(env)
+				);
+				return portalJson({
+					deviceRegistration: {
+						id: authorized.deviceRegistration.id,
+						phoneModelId: authorized.deviceRegistration.phoneModelId,
+						status: authorized.deviceRegistration.status,
+						authorizedAt: authorized.deviceRegistration.authorizedAt
+					},
+					deviceAuthenticator: authorized.deviceAuthenticator
+				}, 201);
+			} catch (error) {
+				return portalJson({
+					error: error instanceof Error ? error.message : "Device authorization failed",
+					code: error instanceof SubscriberDeliveryError
+						? error.code
+						: "device_authorization_failed"
+				}, error instanceof SubscriberDeliveryError ? error.status : 502);
+			}
+		}
+
+		const portalDeviceTokenMatch = url.pathname.match(
+			/^\/portal\/me\/device-registrations\/(\d+)\/telnyx-token$/
+		);
+		if (request.method === "POST" && portalDeviceTokenMatch) {
+			const sessionAuthorization = await authorizeBetaCustomerPortalSession(
+				env.nomorescamcalls_db,
+				getBearerToken(request)
+			);
+			const deviceAuthenticator = request.headers
+				.get("x-nmsc-device-authenticator")?.trim() ?? "";
+			if (!sessionAuthorization.authorized && !deviceAuthenticator) {
+				return portalJson({
+					error: "Customer session or device authenticator required",
+					code: "device_token_unauthenticated"
+				}, 401);
+			}
+			try {
+				const token = await issueDeviceTelnyxToken(
+					env.nomorescamcalls_db,
+					Number(portalDeviceTokenMatch[1]),
+					subscriberCredentialConfig(env),
+					sessionAuthorization.authorized
+						? { userId: sessionAuthorization.session.user.id }
+						: { deviceAuthenticator }
+				);
+				return portalJson({ token: token.token, expiresAt: token.expiresAt });
+			} catch (error) {
+				return portalJson({
+					error: error instanceof Error ? error.message : "Device token request failed",
+					code: error instanceof SubscriberDeliveryError
+						? error.code
+						: "device_token_failed"
+				}, error instanceof SubscriberDeliveryError ? error.status : 502);
+			}
+		}
+
+		const portalDeviceActivateMatch = url.pathname.match(
+			/^\/portal\/me\/device-registrations\/(\d+)\/activate$/
+		);
+		if (request.method === "POST" && portalDeviceActivateMatch) {
+			const authorization = await authorizeBetaCustomerPortalSession(
+				env.nomorescamcalls_db,
+				getBearerToken(request)
+			);
+			if (!authorization.authorized) {
+				return portalJson({ error: "Valid customer portal session required" },
+					authorization.failure === "forbidden" ? 403 : 401);
+			}
+			try {
+				const registration = await activateDeviceRegistration(
+					env.nomorescamcalls_db,
+					authorization.session.user.id,
+					Number(portalDeviceActivateMatch[1]),
+					subscriberCredentialConfig(env)
+				);
+				return portalJson({
+					deviceRegistration: {
+						id: registration.id,
+						phoneModelId: registration.phoneModelId,
+						status: registration.status,
+						activatedAt: registration.activatedAt
+					}
+				});
+			} catch (error) {
+				return portalJson({
+					error: error instanceof Error ? error.message : "Device activation failed",
+					code: error instanceof SubscriberDeliveryError
+						? error.code
+						: "device_activation_failed"
+				}, error instanceof SubscriberDeliveryError ? error.status : 502);
+			}
+		}
+
+		const portalDeviceRevokeMatch = url.pathname.match(
+			/^\/portal\/me\/device-registrations\/(\d+)\/revoke$/
+		);
+		if (request.method === "POST" && portalDeviceRevokeMatch) {
+			const authorization = await authorizeBetaCustomerPortalSession(
+				env.nomorescamcalls_db,
+				getBearerToken(request)
+			);
+			if (!authorization.authorized) {
+				return portalJson({ error: "Valid customer portal session required" },
+					authorization.failure === "forbidden" ? 403 : 401);
+			}
+			try {
+				const registration = await revokeDeviceRegistration(
+					env.nomorescamcalls_db,
+					authorization.session.user.id,
+					Number(portalDeviceRevokeMatch[1]),
+					subscriberCredentialConfig(env)
+				);
+				return portalJson({
+					deviceRegistration: {
+						id: registration.id,
+						status: registration.status,
+						revokedAt: registration.revokedAt
+					}
+				});
+			} catch (error) {
+				return portalJson({
+					error: error instanceof Error ? error.message : "Device revocation failed",
+					code: error instanceof SubscriberDeliveryError
+						? error.code
+						: "device_revocation_failed"
+				}, error instanceof SubscriberDeliveryError ? error.status : 502);
+			}
+		}
+
 		if (
 			request.method === "POST"
 			&& url.pathname === "/portal/me/locations"
@@ -1802,16 +1982,16 @@ export default {
 
 		// Telnyx Voice Application Diagnostic Endpoint
 		if (request.method === "GET" && url.pathname === "/telnyx/voice-application") {
-			if (!env.TELNYX_VOICE_APPLICATION_ID) {
+			if (!env.TELNYX_CALL_CONTROL_APPLICATION_ID) {
 				return Response.json({
-					error: "TELNYX_VOICE_APPLICATION_ID is not configured"
+					error: "TELNYX_CALL_CONTROL_APPLICATION_ID is not configured"
 				}, {
 					status: 503
 				});
 			}
 
 			const voiceApplication = await fetchTelnyxVoiceApplication(
-				env.TELNYX_VOICE_APPLICATION_ID,
+				env.TELNYX_CALL_CONTROL_APPLICATION_ID,
 				{
 					apiKey: env.TELNYX_API_KEY,
 					baseUrl: env.TELNYX_API_BASE_URL
