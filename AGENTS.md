@@ -41,6 +41,15 @@ Do not ask the Product Owner to manually click, inspect, copy, or report informa
 
 Continue through all non-blocked portions of the assignment without routine permission requests.
 
+## Browser / Provider Access
+
+For NoMoreScamCalls work, Google Chrome is the authorized browser for provider dashboards, authentication, OAuth, and web navigation involving NMSC infrastructure, including Cloudflare, Telnyx, GitHub, and similar provider systems.
+
+- Do not use Comet, Perplexity, or another browser or application for NMSC provider access unless the Product Owner explicitly authorizes that specific application for that specific assignment.
+- If an OAuth or authentication flow opens in Comet, Perplexity, or another unauthorized application, do not continue there. Reopen or complete the authentication flow in Chrome.
+- Do not grant new external application access merely because it is available.
+- If human authentication is required, leave the Chrome authentication screen open and request only the exact human action required.
+
 ## Default Access Boundary
 
 READ / INSPECT / NAVIGATE / DIAGNOSE authority is broad inside the assignment.
