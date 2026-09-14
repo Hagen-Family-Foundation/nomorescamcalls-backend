@@ -115,6 +115,18 @@ function applyMigration0035(db) {
 	);
 }
 
+function applyMigration0036(db) {
+	db.exec(
+		readFileSync(
+			join(
+				migrationsDirectory,
+				"0036_add_subscriber_delivery_foundation.sql"
+			),
+			"utf8"
+		)
+	);
+}
+
 function foreignKeyReferencesToUsers(db) {
 	const tables = db
 		.prepare(`
@@ -151,7 +163,7 @@ function foreignKeyReferencesToUsers(db) {
 
 test("the complete migration chain applies with clean foreign keys", () => {
 	const db = createDatabaseThrough(
-		"0035_replace_screening_inventory_with_system_number_pool.sql"
+		"0036_add_subscriber_delivery_foundation.sql"
 	);
 
 	assert.deepEqual(db.prepare("PRAGMA foreign_key_check").all(), []);
@@ -206,6 +218,52 @@ test("the complete migration chain applies with clean foreign keys", () => {
 		}
 	]);
 
+	db.close();
+});
+
+test("0036 adds device-owned delivery state without migrating legacy SIP inventory", () => {
+	const db = createDatabaseThrough(
+		"0035_replace_screening_inventory_with_system_number_pool.sql"
+	);
+	db.exec(`
+		INSERT INTO users (id, phone_number, account_status, status)
+		VALUES (96, '+18005550096', 'active', 'active');
+		INSERT INTO account_locations (id, user_id) VALUES (960, 96);
+		INSERT INTO protected_lines (
+			id, user_id, location_id, protected_phone_number,
+			caller_facing_business_name, sip_username
+		) VALUES (
+			961, 96, 960, '+18005550961', 'Delivery Migration Fixture',
+			'legacy-inventory-identity'
+		);
+		INSERT INTO sip_credential_inventory (
+			id, sip_username, status, provider_credential_id,
+			connection_id, assigned_protected_line_id
+		) VALUES (
+			962, 'legacy-inventory-identity', 'assigned',
+			'legacy-provider-credential', 'legacy-connection', 961
+		);
+	`);
+
+	applyMigration0036(db);
+
+	assert.equal(
+		db.prepare("SELECT COUNT(*) AS count FROM delivery_identities").get().count,
+		0
+	);
+	assert.equal(
+		db.prepare("SELECT COUNT(*) AS count FROM device_registrations").get().count,
+		0
+	);
+	assert.equal(
+		db.prepare("SELECT COUNT(*) AS count FROM sip_credential_inventory WHERE id = 962").get().count,
+		1
+	);
+	assert.deepEqual(
+		{ ...db.prepare("SELECT id, platform, selectable FROM phone_models").get() },
+		{ id: "other-model-not-listed", platform: "other", selectable: 1 }
+	);
+	assert.deepEqual(db.prepare("PRAGMA foreign_key_check").all(), []);
 	db.close();
 });
 

@@ -588,4 +588,58 @@ export async function ensureTestSchema(): Promise<void> {
 			ON beta_agreement_acceptances(user_id)
 		`)
 		.run();
+
+	await env.nomorescamcalls_db.prepare(`
+		CREATE TABLE IF NOT EXISTS phone_models (
+			id TEXT PRIMARY KEY,
+			manufacturer TEXT NOT NULL,
+			display_name TEXT NOT NULL,
+			platform TEXT NOT NULL CHECK (platform IN ('ios', 'android', 'other')),
+			release_year INTEGER,
+			selectable INTEGER NOT NULL DEFAULT 1 CHECK (selectable IN (0, 1)),
+			created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+		)
+	`).run();
+	await env.nomorescamcalls_db.prepare(`
+		INSERT INTO phone_models (id, manufacturer, display_name, platform)
+		VALUES ('other-model-not-listed', 'Other', 'Model Not Listed', 'other')
+		ON CONFLICT(id) DO NOTHING
+	`).run();
+	await env.nomorescamcalls_db.prepare(`
+		CREATE TABLE IF NOT EXISTS delivery_identities (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			protected_line_id INTEGER NOT NULL UNIQUE,
+			status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'terminated')),
+			terminated_at TEXT,
+			created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			FOREIGN KEY (protected_line_id) REFERENCES protected_lines(id) ON DELETE RESTRICT
+		)
+	`).run();
+	await env.nomorescamcalls_db.prepare(`
+		CREATE TABLE IF NOT EXISTS device_registrations (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			delivery_identity_id INTEGER NOT NULL,
+			phone_model_id TEXT NOT NULL,
+			status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'active', 'revoked')),
+			provider_telephony_credential_id TEXT NOT NULL UNIQUE,
+			provider_sip_username TEXT NOT NULL UNIQUE,
+			provider_credential_expires_at TEXT,
+			device_authenticator_hash TEXT NOT NULL UNIQUE,
+			authorized_at TEXT NOT NULL,
+			activated_at TEXT,
+			revoked_at TEXT,
+			last_provider_verification_at TEXT,
+			created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			FOREIGN KEY (delivery_identity_id) REFERENCES delivery_identities(id) ON DELETE RESTRICT,
+			FOREIGN KEY (phone_model_id) REFERENCES phone_models(id) ON DELETE RESTRICT
+		)
+	`).run();
+	await env.nomorescamcalls_db.prepare(`
+		CREATE UNIQUE INDEX IF NOT EXISTS idx_test_device_registrations_one_active
+		ON device_registrations(delivery_identity_id)
+		WHERE status = 'active'
+	`).run();
 }
