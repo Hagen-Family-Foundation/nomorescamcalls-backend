@@ -103,6 +103,18 @@ function applyMigration0034(db) {
 	);
 }
 
+function applyMigration0035(db) {
+	db.exec(
+		readFileSync(
+			join(
+				migrationsDirectory,
+				"0035_replace_screening_inventory_with_system_number_pool.sql"
+			),
+			"utf8"
+		)
+	);
+}
+
 function foreignKeyReferencesToUsers(db) {
 	const tables = db
 		.prepare(`
@@ -139,7 +151,7 @@ function foreignKeyReferencesToUsers(db) {
 
 test("the complete migration chain applies with clean foreign keys", () => {
 	const db = createDatabaseThrough(
-		"0034_add_activation_confirmation_call_state.sql"
+		"0035_replace_screening_inventory_with_system_number_pool.sql"
 	);
 
 	assert.deepEqual(db.prepare("PRAGMA foreign_key_check").all(), []);
@@ -194,6 +206,139 @@ test("the complete migration chain applies with clean foreign keys", () => {
 		}
 	]);
 
+	db.close();
+});
+
+test("0035 replaces legacy inventory with the constrained System Number Pool", () => {
+	const db = createDatabaseThrough(
+		"0034_add_activation_confirmation_call_state.sql"
+	);
+
+	db.exec(`
+		INSERT INTO users (
+			id,
+			phone_number,
+			screening_number,
+			contact_phone_number
+		)
+		VALUES (
+			95,
+			'+18005550095',
+			'+19135550095',
+			'+18005550195'
+		);
+
+		INSERT INTO account_locations (id, user_id)
+		VALUES (950, 95);
+
+		INSERT INTO protected_lines (
+			id,
+			user_id,
+			location_id,
+			protected_phone_number,
+			caller_facing_business_name,
+			screening_number
+		)
+		VALUES (
+			951,
+			95,
+			950,
+			'+18005550951',
+			'System Number Migration Fixture',
+			'+19135550951'
+		);
+
+		INSERT INTO evidence_library_calls (
+			id,
+			call_session_id,
+			call_control_id,
+			subscriber_screening_number,
+			call_started_at,
+			evidence_box
+		)
+		VALUES (
+			952,
+			'migration-session-952',
+			'migration-call-952',
+			'+19135550951',
+			'2026-09-12T12:00:00.000Z',
+			'{}'
+		);
+
+		INSERT INTO screening_number_inventory (
+			provider_number_id,
+			phone_number,
+			status,
+			assigned_protected_line_id,
+			assigned_at
+		)
+		VALUES
+			('legacy-provider-id', '+19135858300', 'available', NULL, NULL),
+			('test-provider-id', '+19139562493', 'available', NULL, NULL),
+			('ready-candidate-id', '+19135550001', 'available', NULL, NULL),
+			('assigned-provider-id', '+19135550951', 'assigned', 951, '2026-09-12T12:00:00.000Z');
+	`);
+
+	applyMigration0035(db);
+
+	assert.equal(
+		db.prepare("SELECT system_number FROM users WHERE id = 95").get().system_number,
+		"+19135550095"
+	);
+	assert.equal(
+		db.prepare("SELECT system_number FROM protected_lines WHERE id = 951").get().system_number,
+		"+19135550951"
+	);
+	assert.equal(
+		db.prepare("SELECT subscriber_system_number FROM evidence_library_calls WHERE id = 952").get().subscriber_system_number,
+		"+19135550951"
+	);
+	assert.deepEqual(
+		db.prepare(`
+			SELECT phone_number, lifecycle_state, protected_line_id, verification_state, quarantine_reason
+			FROM system_numbers
+			ORDER BY phone_number
+		`).all().map((row) => ({ ...row })),
+		[
+			{
+				phone_number: "+19135550001",
+				lifecycle_state: "quarantined",
+				protected_line_id: null,
+				verification_state: "pending",
+				quarantine_reason: "provider_normalization_required"
+			},
+			{
+				phone_number: "+19135550951",
+				lifecycle_state: "assigned",
+				protected_line_id: 951,
+				verification_state: "pending",
+				quarantine_reason: "assigned_number_requires_provider_verification"
+			},
+			{
+				phone_number: "+19135858300",
+				lifecycle_state: "ineligible",
+				protected_line_id: null,
+				verification_state: "pending",
+				quarantine_reason: "legacy_scaminater_configuration"
+			},
+			{
+				phone_number: "+19139562493",
+				lifecycle_state: "quarantined",
+				protected_line_id: null,
+				verification_state: "pending",
+				quarantine_reason: "working_test_number"
+			}
+		]
+	);
+	assert.equal(
+		db.prepare("SELECT COUNT(*) AS count FROM sqlite_master WHERE type = 'table' AND name = 'screening_number_inventory'").get().count,
+		0
+	);
+	assert.equal(
+		db.prepare("SELECT COUNT(*) AS count FROM sqlite_master WHERE type = 'index' AND name = 'idx_users_system_number'").get().count,
+		1
+	);
+	assert.deepEqual(db.prepare("PRAGMA foreign_key_check").all(), []);
 	db.close();
 });
 

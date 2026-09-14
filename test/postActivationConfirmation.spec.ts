@@ -15,7 +15,7 @@ import {
 	toCustomerProtectedLine
 } from "../src/services/protectedLines";
 import { provisionProtectedLine } from "../src/services/provisioning";
-import { addScreeningNumberToInventory } from "../src/services/screeningNumberInventory";
+import { addReadySystemNumber } from "./systemNumberFixtures";
 import { addSipCredentialToInventory } from "../src/services/sipCredentialInventory";
 import { refreshSubscriberOnboardingStatus } from "../src/services/subscriberOnboarding";
 import { createUser } from "../src/services/users";
@@ -35,7 +35,7 @@ async function createProvisionedFixture() {
 	const suffix = sequence.toString().padStart(3, "0");
 	const contactPhoneNumber = `+1800610${suffix}`;
 	const protectedPhoneNumber = `+1800620${suffix}`;
-	const screeningNumber = `+1800630${suffix}`;
+	const systemNumber = `+1800630${suffix}`;
 	const account = await createUser(env.nomorescamcalls_db, {
 		firstName: "Activation",
 		lastName: "Customer",
@@ -58,7 +58,7 @@ async function createProvisionedFixture() {
 			carrier: "Synthetic Carrier"
 		}
 	);
-	await addScreeningNumberToInventory(env.nomorescamcalls_db, screeningNumber);
+	await addReadySystemNumber(systemNumber);
 	await addSipCredentialToInventory(
 		env.nomorescamcalls_db,
 		`activation_sip_${suffix}`
@@ -70,7 +70,7 @@ async function createProvisionedFixture() {
 		line,
 		contactPhoneNumber,
 		protectedPhoneNumber,
-		screeningNumber
+		systemNumber
 	};
 }
 
@@ -136,7 +136,7 @@ describe("post-activation onboarding confirmation", () => {
 		expect(dialBody).toMatchObject({
 			connection_id: TELNYX_CONFIG.connectionId,
 			to: fixture.contactPhoneNumber,
-			from: fixture.screeningNumber,
+			from: fixture.systemNumber,
 			from_display_name: "NoMoreScamCalls"
 		});
 		expect(dialBody.to).not.toBe(fixture.protectedPhoneNumber);

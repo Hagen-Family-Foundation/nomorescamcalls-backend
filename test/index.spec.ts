@@ -49,7 +49,7 @@ describe("NoMoreScamCalls Worker", () => {
 					location_id,
 					protected_phone_number,
 					caller_facing_business_name,
-					screening_number,
+					system_number,
 					sip_username,
 					provisioning_status,
 					coverage_status
@@ -330,28 +330,30 @@ describe("NoMoreScamCalls Worker", () => {
 		expect(Array.isArray(body.numbers)).toBe(true);
 	});
 
-	it("returns screening number inventory health", async () => {
-		const response = await SELF.fetch("http://example.com/inventory/screening-numbers/health?threshold=5");
+	it("returns System Number inventory health", async () => {
+		const response = await SELF.fetch("http://example.com/inventory/system-numbers/health");
 
 		expect(response.status).toBe(200);
 
 		const body = await response.json<{
-			health: {
+				health: {
 				total: number;
-				available: number;
+				ready: number;
 				assigned: number;
-				lowInventoryThreshold: number;
-				status: string;
+				quarantined: number;
+				ineligible: number;
+				reorderThreshold: number;
+				reorderRequired: boolean;
 			};
 		}>();
 
 		expect(body.health.total).toBeGreaterThanOrEqual(0);
-		expect(body.health.lowInventoryThreshold).toBe(5);
-		expect(["healthy", "low_inventory", "empty"]).toContain(body.health.status);
+		expect(body.health.reorderThreshold).toBe(5);
+		expect(typeof body.health.reorderRequired).toBe("boolean");
 	});
 
-	it("syncs Telnyx inventory from the configured Telnyx account", async () => {
-		const response = await SELF.fetch("http://example.com/telnyx/inventory/sync", {
+	it("requires an administrator session for System Number reconciliation", async () => {
+		const response = await SELF.fetch("http://example.com/admin/system-numbers/reconcile", {
 			method: "POST",
 			headers: {
 				"content-type": "application/json"
@@ -359,23 +361,7 @@ describe("NoMoreScamCalls Worker", () => {
 			body: JSON.stringify({})
 		});
 
-		expect(response.status).toBe(200);
-
-		const body = await response.json<{
-			sync: {
-				mode: string;
-				source: string;
-				importedCount: number;
-				numbers: string[];
-				reason: string;
-			};
-		}>();
-
-		expect(body.sync.mode).toBe("simulated");
-		expect(body.sync.source).toBe("telnyx_account");
-		expect(body.sync.importedCount).toBe(0);
-		expect(body.sync.numbers).toEqual([]);
-		expect(body.sync.reason).toContain("TELNYX_API_KEY");
+		expect(response.status).toBe(401);
 	});
 
 
@@ -453,7 +439,7 @@ describe("NoMoreScamCalls Worker", () => {
 
 		expect(createBody.user.contactPhoneNumber).toBe("+18005550302");
 		expect(createBody.user).not.toHaveProperty("phoneNumber");
-		expect(createBody.user).not.toHaveProperty("screeningNumber");
+		expect(createBody.user).not.toHaveProperty("systemNumber");
 		expect(createBody.user).not.toHaveProperty("sipUsername");
 		expect(createBody.user).not.toHaveProperty("callerFacingBusinessName");
 		expect(createBody.user).not.toHaveProperty("coverageStatus");
@@ -528,7 +514,7 @@ describe("NoMoreScamCalls Worker", () => {
 					location_id,
 					protected_phone_number,
 					caller_facing_business_name,
-					screening_number,
+					system_number,
 					sip_username,
 					provisioning_status,
 					coverage_status
@@ -574,14 +560,14 @@ describe("NoMoreScamCalls Worker", () => {
 			protectedLine: {
 				id: number;
 				protectedPhoneNumber: string;
-				screeningNumber: string;
+				systemNumber: string;
 				sipUsername: string;
 				coverageStatus: string;
 			};
 			approvedDestination: {
 				destinationType: string;
 				destination: string | null;
-				screeningNumber: string | null;
+				systemNumber: string | null;
 			};
 			answerRequest: {
 				endpoint: string;
@@ -595,14 +581,14 @@ describe("NoMoreScamCalls Worker", () => {
 		}>();
 
 		expect(body.protectedLine.protectedPhoneNumber).toBe("+18005550101");
-		expect(body.protectedLine.screeningNumber).toBe("+18005550000");
+		expect(body.protectedLine.systemNumber).toBe("+18005550000");
 		expect(body.protectedLine.sipUsername).toBe("test_user_18005550101");
 		expect(body.protectedLine.coverageStatus).toBe("active");
 		expect(body.approvedDestination.destinationType).toBe("app");
 		expect(body.approvedDestination.destination).toBe(
 			"test_user_18005550101"
 		);
-		expect(body.approvedDestination.screeningNumber).toBe(
+		expect(body.approvedDestination.systemNumber).toBe(
 			"+18005550000"
 		);
 		expect(body.answerRequest.endpoint).toBe(
@@ -1139,7 +1125,7 @@ describe("NoMoreScamCalls Worker", () => {
 					location_id,
 					protected_phone_number,
 					caller_facing_business_name,
-					screening_number,
+					system_number,
 					sip_username,
 					provisioning_status,
 					coverage_status
@@ -1197,7 +1183,7 @@ describe("NoMoreScamCalls Worker", () => {
 				locations: Array<{ id: number }>;
 				protected_lines: Array<{
 					protectedPhoneNumber: string;
-					screeningNumber: string | null;
+					systemNumber: string | null;
 				}>;
 			total_calls: number;
 			successful_calls: number;
@@ -1210,7 +1196,7 @@ describe("NoMoreScamCalls Worker", () => {
 			locations: expect.any(Array),
 			protected_lines: [{
 				protectedPhoneNumber: "+15550003999",
-				screeningNumber: "+15550002999"
+				systemNumber: "+15550002999"
 			}],
 			total_calls: 2,
 			successful_calls: 1,

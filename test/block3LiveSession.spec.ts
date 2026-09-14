@@ -131,7 +131,7 @@ function liveContext() {
 			name: "Test Subscriber",
 			callerFacingBusinessName: "Test Subscriber Services",
 			phoneNumber: "+18005559875",
-			screeningNumber: "+18005559876",
+			systemNumber: "+18005559876",
 			sipUsername: "test_subscriber",
 			carrier: null,
 			accountStatus: "active",
@@ -146,7 +146,7 @@ function liveContext() {
 		approvedDestination: {
 			destinationType: "app" as const,
 			destination: "test_subscriber",
-			screeningNumber: "+18005559876",
+			systemNumber: "+18005559876",
 			reason: "Test approved destination."
 		}
 	};

@@ -54,7 +54,7 @@ describe(
 						approvedDestination: {
 							destination:
 								"test_user_controller",
-							screeningNumber:
+							systemNumber:
 								"+18005550100",
 							sipUsername:
 								"test_user_controller",
@@ -165,7 +165,7 @@ describe(
 						approvedDestination: {
 							destination:
 								"test_user_failure",
-							screeningNumber:
+							systemNumber:
 								"+18005550101",
 							sipUsername:
 								"test_user_failure",

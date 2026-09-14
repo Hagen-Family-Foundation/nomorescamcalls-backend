@@ -128,38 +128,17 @@ describe('subscriber portal API', () => {
 			protectedLine: { id: number };
 		}>()).protectedLine;
 
-		await env.nomorescamcalls_db
-			.prepare(
-				`
-					INSERT INTO screening_number_inventory (
-						phone_number,
-						status,
-						provider,
-						provider_number_id,
-						voice_application_id,
-						connection_id,
-						last_synced_at
-					)
-					VALUES (?, 'available', 'telnyx', ?, ?, ?, CURRENT_TIMESTAMP)
-					ON CONFLICT(phone_number) DO UPDATE SET
-						status = 'available',
-						assigned_user_id = NULL,
-						assigned_protected_line_id = NULL,
-						assigned_at = NULL,
-						provider = excluded.provider,
-						provider_number_id = excluded.provider_number_id,
-						voice_application_id = excluded.voice_application_id,
-						connection_id = excluded.connection_id,
-						last_synced_at = CURRENT_TIMESTAMP
-				`,
+		await env.nomorescamcalls_db.prepare(`
+			INSERT INTO system_numbers (
+				provider_number_id,
+				phone_number,
+				lifecycle_state,
+				available_since,
+				verification_state,
+				last_verified_at
 			)
-			.bind(
-				'+15550002020',
-				'portal-number-id',
-				'portal-voice-application-id',
-				'portal-call-control-connection-id',
-			)
-			.run();
+			VALUES (?, ?, 'ready', CURRENT_TIMESTAMP, 'verified', CURRENT_TIMESTAMP)
+		`).bind('portal-number-id', '+15550002020').run();
 
 		await env.nomorescamcalls_db
 			.prepare(
@@ -203,7 +182,7 @@ describe('subscriber portal API', () => {
 				provisioningStatus: string;
 				coverageStatus: string;
 				protectedLine: {
-					screeningNumber: string | null;
+					systemNumber: string | null;
 					forwardingStatus: string;
 				};
 			};
@@ -214,7 +193,7 @@ describe('subscriber portal API', () => {
 				provisioningStatus: 'provisioned',
 				coverageStatus: 'inactive',
 				protectedLine: {
-					screeningNumber: '+15550002020',
+					systemNumber: '+15550002020',
 					forwardingStatus: 'awaiting_confirmation',
 				},
 			},
@@ -245,7 +224,7 @@ describe('subscriber portal API', () => {
 			.prepare(
 				`
 					SELECT
-						screening_number,
+						system_number,
 						sip_username,
 						coverage_status
 					FROM protected_lines
@@ -254,13 +233,13 @@ describe('subscriber portal API', () => {
 			)
 			.bind(protectedLine.id)
 			.first<{
-				screening_number: string | null;
+				system_number: string | null;
 				sip_username: string | null;
 				coverage_status: string;
 			}>();
 
 		expect(provisionedLine).toEqual({
-			screening_number: '+15550002020',
+			system_number: '+15550002020',
 			sip_username: 'portal_integration_user',
 			coverage_status: 'active',
 		});

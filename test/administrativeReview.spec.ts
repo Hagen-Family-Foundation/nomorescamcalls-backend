@@ -16,7 +16,7 @@ interface ReviewLineBody {
 	protectedPhoneNumber: string;
 	callerFacingBusinessName: string;
 	carrier: string | null;
-	screeningNumber: string | null;
+	systemNumber: string | null;
 	provisioningStatus: string;
 	coverageStatus: string;
 	isInitialTarget: boolean;
@@ -188,7 +188,7 @@ describe("single administrative account-review gate", () => {
 		await env.nomorescamcalls_db.batch([
 			env.nomorescamcalls_db.prepare(`
 				UPDATE protected_lines
-				SET screening_number = '+18005557201',
+				SET system_number = '+18005557201',
 					sip_username = 'review_line_one',
 					provisioning_status = 'provisioned',
 					coverage_status = 'active'
@@ -317,13 +317,13 @@ describe("single administrative account-review gate", () => {
 		]);
 		expect(visibleLines.find((line) => line.id === customerLines[0].id))
 			.toMatchObject({
-				screeningNumber: "+18005557201",
+				systemNumber: "+18005557201",
 				provisioningStatus: "provisioned",
 				coverageStatus: "active"
 			});
 		expect(visibleLines.find((line) => line.id === customerLines[1].id))
 			.toMatchObject({
-				screeningNumber: null,
+				systemNumber: null,
 				provisioningStatus: "unprovisioned",
 				coverageStatus: "inactive"
 			});
@@ -473,7 +473,7 @@ describe("single administrative account-review gate", () => {
 		expect(updatedLines.find((line) => line.id === customerLines[0].id))
 			.toMatchObject({
 				carrier: "Carrier One",
-				screeningNumber: "+18005557201",
+				systemNumber: "+18005557201",
 				provisioningStatus: "provisioned",
 				coverageStatus: "active"
 			});
@@ -611,7 +611,7 @@ describe("single administrative account-review gate", () => {
 				initialProtectedLineId: customerLines[0].id
 			},
 			{
-				type: "screening_number",
+				type: "system_number",
 				value: "+18005557201",
 				initialProtectedLineId: customerLines[0].id
 			}

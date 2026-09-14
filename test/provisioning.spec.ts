@@ -1,10 +1,7 @@
 import { env } from "cloudflare:test";
 import { beforeAll, describe, expect, it } from "vitest";
 import { acceptCurrentBetaAgreement } from "../src/services/betaAgreement";
-import {
-	addScreeningNumberToInventory,
-	findScreeningNumberInInventory
-} from "../src/services/screeningNumberInventory";
+import { findSystemNumber } from "../src/services/systemNumberPool";
 import {
 	addSipCredentialToInventory,
 	findSipCredentialInInventory
@@ -27,6 +24,7 @@ import {
 } from "../src/services/subscriberOnboarding";
 import { createUser, findUserById } from "../src/services/users";
 import { ensureTestSchema } from "./testSchema";
+import { addReadySystemNumber } from "./systemNumberFixtures";
 
 let fixtureSequence = 0;
 
@@ -54,10 +52,10 @@ async function createCompleteAccount(
 }
 
 async function addProvisioningInventory(
-	screeningNumber: string,
+	systemNumber: string,
 	sipUsername: string
 ): Promise<void> {
-	await addScreeningNumberToInventory(env.nomorescamcalls_db, screeningNumber);
+	await addReadySystemNumber(systemNumber);
 	await addSipCredentialToInventory(env.nomorescamcalls_db, sipUsername);
 }
 
@@ -192,7 +190,7 @@ describe("account, location, and protected-line provisioning", () => {
 			account: { id: account.id, setupStatus: "onboarding_complete" },
 			protectedLine: {
 				id: firstLine.id,
-				screeningNumber: "+18005555002",
+				systemNumber: "+18005555002",
 				provisioningStatus: "provisioned",
 				coverageStatus: "inactive",
 				forwardingStatus: "awaiting_confirmation"
@@ -218,19 +216,18 @@ describe("account, location, and protected-line provisioning", () => {
 			env.nomorescamcalls_db,
 			secondLine.id
 		)).toMatchObject({
-			screeningNumber: null,
+			systemNumber: null,
 			sipUsername: null,
 			provisioningStatus: "unprovisioned",
 			coverageStatus: "inactive",
 			forwardingStatus: "not_started"
 		});
-		expect(await findScreeningNumberInInventory(
+		expect(await findSystemNumber(
 			env.nomorescamcalls_db,
 			"+18005555002"
 		)).toMatchObject({
-			assignedUserId: account.id,
-			assignedProtectedLineId: firstLine.id,
-			status: "assigned"
+			protectedLineId: firstLine.id,
+			lifecycleState: "assigned"
 		});
 		expect(await findSipCredentialInInventory(
 			env.nomorescamcalls_db,
@@ -284,21 +281,18 @@ describe("account, location, and protected-line provisioning", () => {
 				callerFacingBusinessName: "Unchanged Exact Phrase"
 			}
 		);
-		await addScreeningNumberToInventory(
-			env.nomorescamcalls_db,
-			"+18005555004"
-		);
+		await addReadySystemNumber("+18005555004");
 
 		await expect(provisionProtectedLine(
 			env.nomorescamcalls_db,
 			line.id
 		)).rejects.toThrow("No available SIP credentials");
-		expect(await findScreeningNumberInInventory(
+		expect(await findSystemNumber(
 			env.nomorescamcalls_db,
 			"+18005555004"
 		)).toMatchObject({
-			status: "available",
-			assignedProtectedLineId: null
+			lifecycleState: "ready",
+			protectedLineId: null
 		});
 		expect(await findProtectedLineById(
 			env.nomorescamcalls_db,

@@ -56,7 +56,7 @@ describe("Telnyx request builder", () => {
 					destinationType: "app",
 					destination:
 						"test_user_18005550101",
-					screeningNumber:
+					systemNumber:
 						"+18005550000",
 					reason:
 						"test approved destination"

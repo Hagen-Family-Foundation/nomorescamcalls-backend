@@ -180,9 +180,19 @@ describe("shared beta registration through Protected-Line activation", () => {
 
 		await env.nomorescamcalls_db.batch([
 			env.nomorescamcalls_db.prepare(`
-				INSERT INTO screening_number_inventory (phone_number, status)
-				VALUES (?, 'available')
-			`).bind(`+1800777${sequence.toString().padStart(4, "0")}`),
+				INSERT INTO system_numbers (
+					provider_number_id,
+					phone_number,
+					lifecycle_state,
+					available_since,
+					verification_state,
+					last_verified_at
+				)
+				VALUES (?, ?, 'ready', CURRENT_TIMESTAMP, 'verified', CURRENT_TIMESTAMP)
+			`).bind(
+				`test-beta-system-number-${sequence}`,
+				`+1800777${sequence.toString().padStart(4, "0")}`
+			),
 			env.nomorescamcalls_db.prepare(`
 				INSERT INTO sip_credential_inventory (sip_username, status)
 				VALUES (?, 'available')

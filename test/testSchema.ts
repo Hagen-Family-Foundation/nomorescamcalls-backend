@@ -27,7 +27,7 @@ export async function ensureTestSchema(): Promise<void> {
 						)
 					),
 				phone_number TEXT NOT NULL UNIQUE,
-				screening_number TEXT UNIQUE,
+				system_number TEXT UNIQUE,
 				sip_username TEXT UNIQUE,
 				status TEXT NOT NULL DEFAULT 'active',
 				coverage_status TEXT NOT NULL DEFAULT 'inactive',
@@ -89,7 +89,7 @@ export async function ensureTestSchema(): Promise<void> {
 				protected_phone_number TEXT NOT NULL UNIQUE,
 				caller_facing_business_name TEXT NOT NULL,
 				carrier TEXT,
-				screening_number TEXT UNIQUE,
+				system_number TEXT UNIQUE,
 				sip_username TEXT UNIQUE,
 				provisioning_status TEXT NOT NULL DEFAULT 'unprovisioned',
 				coverage_status TEXT NOT NULL DEFAULT 'inactive',
@@ -354,19 +354,47 @@ export async function ensureTestSchema(): Promise<void> {
 
 	await env.nomorescamcalls_db
 		.prepare(`
-			CREATE TABLE IF NOT EXISTS screening_number_inventory (
+			CREATE TABLE IF NOT EXISTS system_number_replenishments (
 				id INTEGER PRIMARY KEY AUTOINCREMENT,
+				request_key TEXT NOT NULL UNIQUE,
+				provider_customer_reference TEXT NOT NULL UNIQUE,
+				provider_order_id TEXT UNIQUE,
+				provider_configuration_job_id TEXT UNIQUE,
+				status TEXT NOT NULL,
+				in_flight_slot INTEGER UNIQUE,
+				requested_quantity INTEGER NOT NULL DEFAULT 50,
+				ready_count_at_trigger INTEGER NOT NULL,
+				provider_allocated_count INTEGER NOT NULL DEFAULT 0,
+				verified_ready_count INTEGER NOT NULL DEFAULT 0,
+				last_error TEXT,
+				created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+				submitted_at TEXT,
+				completed_at TEXT,
+				updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+			)
+		`)
+		.run();
+
+	await env.nomorescamcalls_db
+		.prepare(`
+			CREATE TABLE IF NOT EXISTS system_numbers (
+				id INTEGER PRIMARY KEY AUTOINCREMENT,
+				provider_number_id TEXT UNIQUE,
 				phone_number TEXT NOT NULL UNIQUE,
-				status TEXT NOT NULL DEFAULT 'available',
-				assigned_user_id INTEGER,
-				assigned_protected_line_id INTEGER,
+				lifecycle_state TEXT NOT NULL DEFAULT 'quarantined',
+				protected_line_id INTEGER UNIQUE,
+				replenishment_id INTEGER,
+				available_since TEXT,
 				assigned_at TEXT,
-				provider TEXT NOT NULL DEFAULT 'telnyx',
-				provider_number_id TEXT,
-				voice_application_id TEXT,
-				connection_id TEXT,
-				last_synced_at TEXT,
-				created_at TEXT DEFAULT CURRENT_TIMESTAMP
+				released_at TEXT,
+				verification_state TEXT NOT NULL DEFAULT 'pending',
+				last_verified_at TEXT,
+				verification_error TEXT,
+				quarantine_reason TEXT,
+				created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+				updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+				FOREIGN KEY (protected_line_id) REFERENCES protected_lines(id),
+				FOREIGN KEY (replenishment_id) REFERENCES system_number_replenishments(id)
 			)
 		`)
 		.run();
@@ -390,7 +418,6 @@ export async function ensureTestSchema(): Promise<void> {
 		.run();
 
 	for (const [table, column] of [
-		["screening_number_inventory", "assigned_protected_line_id"],
 		["sip_credential_inventory", "assigned_protected_line_id"],
 		["call_events", "protected_line_id"]
 	] as const) {
@@ -404,26 +431,10 @@ export async function ensureTestSchema(): Promise<void> {
 		}
 	}
 
-	await env.nomorescamcalls_db
-		.prepare(`
-			CREATE INDEX IF NOT EXISTS idx_screening_number_inventory_status
-			ON screening_number_inventory(status)
-		`)
-		.run();
-
-	await env.nomorescamcalls_db
-		.prepare(`
-			CREATE INDEX IF NOT EXISTS idx_screening_number_inventory_provider
-			ON screening_number_inventory(provider)
-		`)
-		.run();
-
-	await env.nomorescamcalls_db
-		.prepare(`
-			CREATE INDEX IF NOT EXISTS idx_screening_number_inventory_provider_number_id
-			ON screening_number_inventory(provider_number_id)
-		`)
-		.run();
+	await env.nomorescamcalls_db.prepare(`
+		CREATE INDEX IF NOT EXISTS idx_system_numbers_lifecycle_fifo
+		ON system_numbers(lifecycle_state, available_since, id)
+	`).run();
 
 	await env.nomorescamcalls_db
 		.prepare(`
@@ -491,7 +502,7 @@ export async function ensureTestSchema(): Promise<void> {
 				subscriber_name TEXT,
 				subscriber_caller_facing_business_name TEXT,
 				subscriber_phone_number TEXT,
-				subscriber_screening_number TEXT,
+				subscriber_system_number TEXT,
 				subscriber_sip_username TEXT,
 				subscriber_carrier TEXT,
 				subscriber_account_status TEXT,

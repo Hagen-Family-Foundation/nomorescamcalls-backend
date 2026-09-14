@@ -36,7 +36,7 @@ function protectedLineResolution(
 	callerFacingBusinessName: string | null,
 	lineId = 10,
 	accountId = 1,
-	screeningNumber = "+15550002001"
+	systemNumber = "+15550002001"
 ) {
 	return {
 		protectedLine: {
@@ -46,7 +46,7 @@ function protectedLineResolution(
 			protected_phone_number: "+15550003001",
 			caller_facing_business_name: callerFacingBusinessName,
 			carrier: null,
-			screening_number: screeningNumber,
+			system_number: systemNumber,
 			sip_username: `protected_line_${lineId}`,
 			provisioning_status: "provisioned",
 			coverage_status: "active",
@@ -61,7 +61,7 @@ function protectedLineResolution(
 			email: "owner@example.com",
 			contact_phone_number: "+15550004001",
 			phone_number: "+15550004001",
-			screening_number: null,
+			system_number: null,
 			sip_username: null,
 			carrier: null,
 			contact_method: "email",
@@ -189,7 +189,7 @@ describe("Telnyx webhook native transcription path", () => {
 			protectedLineId: 10,
 			name: "Account Owner",
 			callerFacingBusinessName: "Hagen & Son's Plumbing",
-			screeningNumber: "+15550002001"
+			systemNumber: "+15550002001"
 		});
 	});
 

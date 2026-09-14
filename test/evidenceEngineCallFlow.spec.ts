@@ -145,7 +145,7 @@ describe("Evidence Engine Call Flow", () => {
 						"Test Subscriber Services",
 					phoneNumber:
 						"+19135550200",
-					screeningNumber:
+					systemNumber:
 						"+18005550993",
 					sipUsername:
 						"test_subscriber",

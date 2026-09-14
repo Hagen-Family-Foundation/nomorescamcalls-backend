@@ -7,7 +7,7 @@ import {
 	findProtectedLineById
 } from "../src/services/protectedLines";
 import { provisionProtectedLine } from "../src/services/provisioning";
-import { addScreeningNumberToInventory } from "../src/services/screeningNumberInventory";
+import { addReadySystemNumber } from "./systemNumberFixtures";
 import { addSipCredentialToInventory } from "../src/services/sipCredentialInventory";
 import { refreshSubscriberOnboardingStatus } from "../src/services/subscriberOnboarding";
 import {
@@ -121,7 +121,7 @@ describe("Telnyx forwarding messaging", () => {
 					callerFacingBusinessName: `Messaging Line ${index + 1}`
 				}
 			));
-			await addScreeningNumberToInventory(env.nomorescamcalls_db, nextNumber());
+			await addReadySystemNumber(nextNumber());
 			await addSipCredentialToInventory(
 				env.nomorescamcalls_db,
 				`test_user_messaging_${sequence}_${index}`
@@ -150,7 +150,7 @@ describe("Telnyx forwarding messaging", () => {
 				messaging_profile_id: TELNYX_CONFIG.messagingProfileId
 			});
 			expect(body.text).toContain(result.protectedLine.protectedPhoneNumber);
-			expect(body.text).toContain(result.protectedLine.screeningNumber);
+			expect(body.text).toContain(result.protectedLine.systemNumber);
 			expect(body.text).not.toContain("test_user_");
 			expect(result).toMatchObject({
 				coverageStatus: "inactive",
