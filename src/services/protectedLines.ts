@@ -26,7 +26,7 @@ export interface ProtectedLineRecord {
 	protectedPhoneNumber: string;
 	callerFacingBusinessName: string;
 	carrier: string | null;
-	screeningNumber: string | null;
+	systemNumber: string | null;
 	sipUsername: string | null;
 	provisioningStatus: "unprovisioned" | "provisioned" | "failed";
 	coverageStatus: "inactive" | "active";
@@ -75,7 +75,7 @@ interface ProtectedLineRow {
 	protected_phone_number: string;
 	caller_facing_business_name: string;
 	carrier: string | null;
-	screening_number: string | null;
+	system_number: string | null;
 	sip_username: string | null;
 	provisioning_status: "unprovisioned" | "provisioned" | "failed";
 	coverage_status: "inactive" | "active";
@@ -100,7 +100,7 @@ const PROTECTED_LINE_COLUMNS = `
 	protected_phone_number,
 	caller_facing_business_name,
 	carrier,
-	screening_number,
+	system_number,
 	sip_username,
 	provisioning_status,
 	coverage_status,
@@ -134,7 +134,7 @@ function mapProtectedLineRow(row: ProtectedLineRow): ProtectedLineRecord {
 		protectedPhoneNumber: row.protected_phone_number,
 		callerFacingBusinessName: row.caller_facing_business_name,
 		carrier: row.carrier,
-		screeningNumber: row.screening_number,
+		systemNumber: row.system_number,
 		sipUsername: row.sip_username,
 		provisioningStatus: row.provisioning_status,
 		coverageStatus: row.coverage_status,
@@ -421,15 +421,15 @@ export async function listCustomerProtectedLinesForAccount(
 		.map(toCustomerProtectedLine);
 }
 
-export async function findProtectedLineByScreeningNumber(
+export async function findProtectedLineBySystemNumber(
 	db: D1Database,
-	screeningNumber: string
+	systemNumber: string
 ): Promise<ProtectedLineWithAccount | null> {
 	const row = await db
 		.prepare(`
 			SELECT ${PROTECTED_LINE_COLUMNS}
 			FROM protected_lines
-			WHERE screening_number = ?
+			WHERE system_number = ?
 				AND provisioning_status = 'provisioned'
 				AND coverage_status = 'active'
 				AND EXISTS (
@@ -440,7 +440,7 @@ export async function findProtectedLineByScreeningNumber(
 						AND users.account_status = 'active'
 				)
 		`)
-		.bind(screeningNumber)
+		.bind(systemNumber)
 		.first<ProtectedLineRow>();
 
 	if (!row) {
@@ -456,14 +456,14 @@ export async function findProtectedLineByScreeningNumber(
 export async function assignProtectedLineResources(
 	db: D1Database,
 	lineId: number,
-	screeningNumber: string,
+	systemNumber: string,
 	sipUsername: string
 ): Promise<ProtectedLineRecord> {
 	const assignedAt = new Date().toISOString();
 	await db
 		.prepare(`
 			UPDATE protected_lines
-			SET screening_number = ?,
+			SET system_number = ?,
 				sip_username = ?,
 				provisioning_status = 'provisioned',
 				coverage_status = 'inactive',
@@ -475,14 +475,14 @@ export async function assignProtectedLineResources(
 				updated_at = ?
 			WHERE id = ?
 				AND coverage_status = 'inactive'
-				AND screening_number IS NULL
+				AND system_number IS NULL
 				AND sip_username IS NULL
 				AND EXISTS (
 					SELECT 1
-					FROM screening_number_inventory
+					FROM system_numbers
 					WHERE phone_number = ?
-						AND status = 'assigned'
-						AND assigned_protected_line_id = ?
+						AND lifecycle_state = 'assigned'
+						AND protected_line_id = ?
 				)
 				AND EXISTS (
 					SELECT 1
@@ -493,13 +493,13 @@ export async function assignProtectedLineResources(
 				)
 		`)
 		.bind(
-			screeningNumber,
+			systemNumber,
 			sipUsername,
 			assignedAt,
 			assignedAt,
 			assignedAt,
 			lineId,
-			screeningNumber,
+			systemNumber,
 			lineId,
 			sipUsername,
 			lineId
@@ -510,7 +510,7 @@ export async function assignProtectedLineResources(
 
 	if (
 		!line
-		|| line.screeningNumber !== screeningNumber
+		|| line.systemNumber !== systemNumber
 		|| line.sipUsername !== sipUsername
 		|| line.provisioningStatus !== "provisioned"
 		|| line.coverageStatus !== "inactive"
@@ -539,7 +539,7 @@ export async function confirmProtectedLineForwarding(
 
 	if (
 		existingLine.provisioningStatus !== "provisioned"
-		|| !existingLine.screeningNumber
+		|| !existingLine.systemNumber
 		|| !existingLine.sipUsername
 	) {
 		throw new ProtectedLineError(
@@ -566,7 +566,7 @@ export async function confirmProtectedLineForwarding(
 			WHERE id = ?
 				AND user_id = ?
 				AND provisioning_status = 'provisioned'
-				AND screening_number IS NOT NULL
+				AND system_number IS NOT NULL
 				AND sip_username IS NOT NULL
 				AND forwarding_status = 'awaiting_confirmation'
 				AND coverage_status = 'inactive'

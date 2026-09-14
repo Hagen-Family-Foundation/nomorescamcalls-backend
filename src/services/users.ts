@@ -110,7 +110,7 @@ export async function createUser(
 				email,
 				contact_phone_number,
 				phone_number,
-				screening_number,
+				system_number,
 				sip_username,
 				carrier,
 				contact_method,

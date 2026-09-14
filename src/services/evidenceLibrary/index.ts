@@ -8,7 +8,7 @@ export interface EvidenceLibrarySubscriber {
 	name: string | null;
 	callerFacingBusinessName: string | null;
 	phoneNumber: string | null;
-	screeningNumber: string | null;
+	systemNumber: string | null;
 	sipUsername: string | null;
 	carrier: string | null;
 	accountStatus: string | null;
@@ -332,7 +332,7 @@ export async function receiveEvidenceBox(
 				subscriber_name,
 				subscriber_caller_facing_business_name,
 				subscriber_phone_number,
-				subscriber_screening_number,
+				subscriber_system_number,
 				subscriber_sip_username,
 				subscriber_carrier,
 				subscriber_account_status,
@@ -479,8 +479,8 @@ export async function receiveEvidenceBox(
 					excluded.subscriber_caller_facing_business_name,
 				subscriber_phone_number =
 					excluded.subscriber_phone_number,
-				subscriber_screening_number =
-					excluded.subscriber_screening_number,
+				subscriber_system_number =
+					excluded.subscriber_system_number,
 				subscriber_sip_username =
 					excluded.subscriber_sip_username,
 				subscriber_carrier =
@@ -605,7 +605,7 @@ export async function receiveEvidenceBox(
 			subscriber.name,
 			subscriber.callerFacingBusinessName,
 			subscriber.phoneNumber,
-			subscriber.screeningNumber,
+			subscriber.systemNumber,
 			subscriber.sipUsername,
 			subscriber.carrier,
 			subscriber.accountStatus,

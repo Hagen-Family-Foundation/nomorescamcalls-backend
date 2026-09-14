@@ -35,7 +35,7 @@ import type {
 	TelnyxPlannedCommand
 } from "./telnyxCommands";
 import {
-	findProtectedLineByScreeningNumber
+	findProtectedLineBySystemNumber
 } from "./protectedLines";
 import {
 	planApprovedCallDestination
@@ -220,7 +220,7 @@ export async function handleTelnyxWebhook(
 
 	const resolvedProtectedLine =
 		telnyxEvent.to
-			? await findProtectedLineByScreeningNumber(
+			? await findProtectedLineBySystemNumber(
 				db,
 				telnyxEvent.to
 			)
@@ -344,8 +344,8 @@ export async function handleTelnyxWebhook(
 		callerFacingBusinessName:
 			protectedLine.callerFacingBusinessName,
 		phoneNumber: protectedLine.protectedPhoneNumber,
-		screeningNumber:
-			protectedLine.screeningNumber,
+		systemNumber:
+			protectedLine.systemNumber,
 		sipUsername: protectedLine.sipUsername,
 		carrier: protectedLine.carrier,
 		accountStatus:

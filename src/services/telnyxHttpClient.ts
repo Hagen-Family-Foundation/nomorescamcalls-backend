@@ -61,3 +61,14 @@ export async function postTelnyxJson(
 		body: JSON.stringify(body)
 	});
 }
+
+export async function patchTelnyxJson(
+	config: TelnyxHttpClientConfig,
+	endpoint: string,
+	body: Record<string, unknown>
+): Promise<TelnyxHttpJsonResult> {
+	return requestTelnyxJson(config, endpoint, {
+		method: "PATCH",
+		body: JSON.stringify(body)
+	});
+}

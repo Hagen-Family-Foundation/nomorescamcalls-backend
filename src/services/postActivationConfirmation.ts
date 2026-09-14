@@ -162,7 +162,7 @@ export async function initiatePostActivationConfirmation(
 	if (
 		line.coverageStatus !== "active"
 		|| line.forwardingStatus !== "confirmed"
-		|| !line.screeningNumber
+		|| !line.systemNumber
 	) {
 		throw new Error("Protected line must be active before confirmation is initiated");
 	}
@@ -204,7 +204,7 @@ export async function initiatePostActivationConfirmation(
 		const response = await postTelnyxJson(config, "/calls", {
 			connection_id: config.connectionId?.trim(),
 			to: destination,
-			from: line.screeningNumber,
+			from: line.systemNumber,
 			from_display_name: "NoMoreScamCalls",
 			client_state: clientState
 		});

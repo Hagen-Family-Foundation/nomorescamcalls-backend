@@ -15,6 +15,9 @@
 		"enabled": true
 	},
 	"upload_source_maps": true,
+	"triggers": {
+		"crons": ["*/5 * * * *", "0 9 * * *"]
+	},
 	"vars": {
 		"TELNYX_LIVE_EXECUTION": "true",
 		"TELNYX_API_BASE_URL": "https://api.telnyx.com/v2",

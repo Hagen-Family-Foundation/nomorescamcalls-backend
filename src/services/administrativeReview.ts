@@ -43,7 +43,7 @@ export interface AdministrativeReviewLine {
 	protectedPhoneNumber: string;
 	callerFacingBusinessName: string;
 	carrier: string | null;
-	screeningNumber: string | null;
+	systemNumber: string | null;
 	provisioningStatus: ProtectedLineRecord["provisioningStatus"];
 	coverageStatus: ProtectedLineRecord["coverageStatus"];
 	isInitialTarget: boolean;
@@ -213,17 +213,17 @@ async function requireOwnedReviewSession(
 	return session;
 }
 
-async function findLineIdByScreeningNumber(
+async function findLineIdBySystemNumber(
 	db: D1Database,
-	screeningNumber: string
+	systemNumber: string
 ): Promise<number | null> {
 	const row = await db
 		.prepare(`
 			SELECT id
 			FROM protected_lines
-			WHERE screening_number = ?
+			WHERE system_number = ?
 		`)
-		.bind(screeningNumber)
+		.bind(systemNumber)
 		.first<{ id: number }>();
 
 	return row?.id ?? null;
@@ -275,8 +275,8 @@ async function resolveReviewIdentifier(
 			);
 			break;
 
-		case "screening_number": {
-			const lineId = await findLineIdByScreeningNumber(
+		case "system_number": {
+			const lineId = await findLineIdBySystemNumber(
 				db,
 				requiredString(identifier?.value, "identifier.value")
 			);
@@ -361,7 +361,7 @@ async function buildAccountFamily(
 		protectedPhoneNumber: line.protectedPhoneNumber,
 		callerFacingBusinessName: line.callerFacingBusinessName,
 		carrier: line.carrier,
-		screeningNumber: line.screeningNumber,
+		systemNumber: line.systemNumber,
 		provisioningStatus: line.provisioningStatus,
 		coverageStatus: line.coverageStatus,
 		isInitialTarget: line.id === initialProtectedLineId

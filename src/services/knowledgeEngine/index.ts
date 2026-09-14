@@ -106,7 +106,7 @@ const SEARCHABLE_FIELDS = new Set([
 	"subscriber_id",
 	"subscriber_name",
 	"subscriber_phone_number",
-	"subscriber_screening_number",
+	"subscriber_system_number",
 	"subscriber_sip_username",
 	"subscriber_carrier",
 	"subscriber_account_status",

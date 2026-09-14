@@ -166,7 +166,7 @@ export function buildTelnyxRequest(
 					`sip:${telnyxAppDestination.sipUsername}@sip.telnyx.com`,
 				from:
 					approvedDestination
-						?.screeningNumber ?? "",
+						?.systemNumber ?? "",
 				from_display_name:
 					"NoMoreScamCalls",
 				timeout_secs: 60,

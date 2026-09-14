@@ -20,7 +20,7 @@ import { promoteConfirmedScamNumber } from "./services/scamPromotion";
 import { getCallerIntelligence } from "./services/callerLookup";
 import { addCallerListEntry, listCallerListEntries, removeCallerListEntry } from "./services/callerLists";
 import { createUser } from "./services/users";
-import { getScreeningNumberInventoryHealth } from "./services/screeningNumberInventory";
+import { getSystemNumberPoolHealth } from "./services/systemNumberPool";
 import { getSipCredentialInventoryHealth } from "./services/sipCredentialInventory";
 import { getTelnyxExecutionPolicy } from "./services/telnyxExecutionPolicy";
 import {
@@ -37,7 +37,11 @@ import {
 	toCustomerProtectedLine,
 	ProtectedLineError
 } from "./services/protectedLines";
-import { syncTelnyxInventory } from "./services/telnyxInventorySync";
+import {
+	maintainSystemNumberPool,
+	reconcileSystemNumbers,
+	type SystemNumberProviderConfig
+} from "./services/systemNumberProvider";
 import { syncTelnyxSipCredentials } from "./services/telnyxSipCredentialSync";
 import { fetchTelnyxVoiceApplication } from "./services/telnyxVoiceApplicationsClient";
 import { fetchTelnyxRecordings } from "./services/telnyxRecordingsClient";
@@ -138,8 +142,16 @@ function postActivationConfirmationConfig(
 	};
 }
 
+function systemNumberProviderConfig(env: Env): SystemNumberProviderConfig {
+	return {
+		apiKey: env.TELNYX_API_KEY,
+		baseUrl: env.TELNYX_API_BASE_URL,
+		voiceApplicationId: env.TELNYX_VOICE_APPLICATION_ID
+	};
+}
+
 export default {
-	async fetch(request: Request, env: Env): Promise<Response> {
+	async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
 		const url = new URL(request.url);
 
 		// Health Check
@@ -312,35 +324,33 @@ export default {
 			});
 		}
 
-		// Screening Number Inventory Health Endpoint
-		if (request.method === "GET" && url.pathname === "/inventory/screening-numbers/health") {
-			const threshold = Number(url.searchParams.get("threshold") ?? "5");
-			const health = await getScreeningNumberInventoryHealth(
-				env.nomorescamcalls_db,
-				threshold
-			);
+		// Permanent System Number Pool health.
+		if (request.method === "GET" && url.pathname === "/inventory/system-numbers/health") {
+			const health = await getSystemNumberPoolHealth(env.nomorescamcalls_db);
 
 			return Response.json({
 				health
 			});
 		}
 
-		// Telnyx Inventory Sync Endpoint
-		if (request.method === "POST" && url.pathname === "/telnyx/inventory/sync") {
-			const sync = await syncTelnyxInventory(
+		// Administrative provider reconciliation for NMSC System Numbers only.
+		if (request.method === "POST" && url.pathname === "/admin/system-numbers/reconcile") {
+			const authorization = await authorizeAdministrativePortalSession(
 				env.nomorescamcalls_db,
-				{
-					telnyxConfig: {
-						apiKey: env.TELNYX_API_KEY,
-						baseUrl: env.TELNYX_API_BASE_URL
-					},
-					voiceApplicationId: env.TELNYX_VOICE_APPLICATION_ID,
-					connectionId: env.TELNYX_CONNECTION_ID
-				}
+				getBearerToken(request)
 			);
-
-			return Response.json({
-				sync
+			if (!authorization.authorized) {
+				return portalJson({
+					error: authorization.failure === "forbidden"
+						? "Administrative role required"
+						: "Valid administrative portal session required"
+				}, authorization.failure === "forbidden" ? 403 : 401);
+			}
+			return portalJson({
+				reconciliation: await reconcileSystemNumbers(
+					env.nomorescamcalls_db,
+					systemNumberProviderConfig(env)
+				)
 			});
 		}
 
@@ -523,15 +533,18 @@ export default {
 		if (request.method === "POST" && provisionLineMatch) {
 			try {
 				const messagingConfig = telnyxMessagingConfig(env);
-				return Response.json({
-					provisioning: await provisionProtectedLine(
+				const provisioning = await provisionProtectedLine(
 						env.nomorescamcalls_db,
 						Number(provisionLineMatch[1]),
 						{
 							provider: createTelnyxSmsProvider(messagingConfig)
 						}
-					)
-				});
+					);
+				ctx.waitUntil(maintainSystemNumberPool(
+					env.nomorescamcalls_db,
+					systemNumberProviderConfig(env)
+				));
+				return Response.json({ provisioning });
 			} catch (error) {
 				return Response.json({
 					error: error instanceof Error ? error.message : "Protected-line provisioning failed",
@@ -663,15 +676,18 @@ export default {
 
 			try {
 				const messagingConfig = telnyxMessagingConfig(env);
-				return portalJson({
-					provisioning: await provisionProtectedLine(
+				const provisioning = await provisionProtectedLine(
 						env.nomorescamcalls_db,
 						line.id,
 						{
 							provider: createTelnyxSmsProvider(messagingConfig)
 						}
-					)
-				});
+					);
+				ctx.waitUntil(maintainSystemNumberPool(
+					env.nomorescamcalls_db,
+					systemNumberProviderConfig(env)
+				));
+				return portalJson({ provisioning });
 			} catch (error) {
 				return portalJson({
 					error: error instanceof Error ? error.message : "Protected-line provisioning failed",
@@ -1881,5 +1897,23 @@ export default {
 		return new Response("Not Found", {
 			status: 404
 		});
+	},
+	async scheduled(
+		controller: ScheduledController,
+		env: Env,
+		ctx: ExecutionContext
+	): Promise<void> {
+		ctx.waitUntil((async () => {
+			if (controller.cron === "0 9 * * *") {
+				await reconcileSystemNumbers(
+					env.nomorescamcalls_db,
+					systemNumberProviderConfig(env)
+				);
+			}
+			await maintainSystemNumberPool(
+				env.nomorescamcalls_db,
+				systemNumberProviderConfig(env)
+			);
+		})());
 	}
 } satisfies ExportedHandler<Env>;

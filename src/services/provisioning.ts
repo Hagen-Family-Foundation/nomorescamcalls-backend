@@ -15,9 +15,9 @@ import {
 	type ProtectedLineRecord
 } from "./protectedLines";
 import {
-	releaseScreeningNumberForProtectedLine,
-	reserveAvailableScreeningNumber
-} from "./screeningNumberInventory";
+	assignOldestReadySystemNumber,
+	releaseSystemNumberForProtectedLine
+} from "./systemNumberPool";
 import {
 	releaseSipCredentialForProtectedLine,
 	reserveAvailableSipCredential
@@ -37,7 +37,7 @@ export interface ProvisionProtectedLineResult {
 	provisioningStatus: "provisioned" | "already_provisioned";
 	forwardingInstructions: {
 		protectedPhoneNumber: string;
-		screeningNumber: string;
+		systemNumber: string;
 		forwardingStatus: CustomerProtectedLineRecord["forwardingStatus"];
 		instructions: string;
 	};
@@ -66,12 +66,12 @@ async function provisionedResult(
 	provisioningStatus: "provisioned" | "already_provisioned",
 	provider?: CustomerCommunicationProvider
 ): Promise<ProvisionProtectedLineResult> {
-	if (!protectedLine.screeningNumber) {
-		throw new Error("Provisioned Protected Line is missing its screening number");
+	if (!protectedLine.systemNumber) {
+		throw new Error("Provisioned Protected Line is missing its System Number");
 	}
 
 	const destination = selectAccountCommunicationDestination(account);
-	const instructions = `For protected line ${protectedLine.protectedPhoneNumber}, forward calls to ${protectedLine.screeningNumber}. After forwarding is set, confirm this exact line in the portal.`;
+	const instructions = `For protected line ${protectedLine.protectedPhoneNumber}, forward calls to ${protectedLine.systemNumber}. After forwarding is set, confirm this exact line in the portal.`;
 	let delivery = await findLatestCustomerCommunication(db, {
 		protectedLineId: protectedLine.id,
 		purpose: "forwarding_instructions"
@@ -114,7 +114,7 @@ async function provisionedResult(
 		provisioningStatus,
 		forwardingInstructions: {
 			protectedPhoneNumber: protectedLine.protectedPhoneNumber,
-			screeningNumber: protectedLine.screeningNumber,
+			systemNumber: protectedLine.systemNumber,
 			forwardingStatus: protectedLine.forwardingStatus,
 			instructions
 		},
@@ -123,7 +123,7 @@ async function provisionedResult(
 			{ name: "existing_account_found", status: "complete" },
 			{ name: "existing_location_found", status: "complete" },
 			{ name: "existing_protected_line_found", status: "complete" },
-			{ name: "screening_number_assigned", status: "complete" },
+			{ name: "system_number_assigned", status: "complete" },
 			{ name: "sip_credential_assigned", status: "complete" },
 			{ name: "forwarding_instructions_created", status: "complete" },
 			{ name: "forwarding_confirmation_required", status: "complete" }
@@ -170,7 +170,7 @@ export async function provisionProtectedLine(
 	}
 
 	if (
-		existingLine.screeningNumber
+		existingLine.systemNumber
 		&& existingLine.sipUsername
 		&& existingLine.provisioningStatus === "provisioned"
 	) {
@@ -183,7 +183,7 @@ export async function provisionProtectedLine(
 		);
 	}
 
-	if (existingLine.screeningNumber || existingLine.sipUsername) {
+	if (existingLine.systemNumber || existingLine.sipUsername) {
 		throw new ProtectedLineProvisioningError(
 			"Protected line has incomplete provisioning state",
 			"incomplete_provisioning_state"
@@ -191,11 +191,10 @@ export async function provisionProtectedLine(
 	}
 
 	try {
-		const assignedScreeningNumber =
-			await reserveAvailableScreeningNumber(
+		const assignedSystemNumber =
+			await assignOldestReadySystemNumber(
 				db,
-				existingLine.id,
-				existingLine.userId
+				existingLine.id
 			);
 
 		const assignedSipCredential =
@@ -208,7 +207,7 @@ export async function provisionProtectedLine(
 		const protectedLine = await assignProtectedLineResources(
 			db,
 			existingLine.id,
-			assignedScreeningNumber.phoneNumber,
+			assignedSystemNumber.phoneNumber,
 			assignedSipCredential.sipUsername
 		);
 
@@ -224,7 +223,7 @@ export async function provisionProtectedLine(
 
 		if (
 			currentLine?.provisioningStatus === "provisioned"
-			&& currentLine.screeningNumber
+			&& currentLine.systemNumber
 			&& currentLine.sipUsername
 		) {
 			return provisionedResult(
@@ -236,7 +235,7 @@ export async function provisionProtectedLine(
 			);
 		}
 
-		await releaseScreeningNumberForProtectedLine(db, lineId);
+		await releaseSystemNumberForProtectedLine(db, lineId);
 		await releaseSipCredentialForProtectedLine(db, lineId);
 		await markProtectedLineProvisioningFailed(db, lineId);
 
